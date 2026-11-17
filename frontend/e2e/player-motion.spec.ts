@@ -49,9 +49,11 @@ test('Now Playing: the cover eases in on a new song (not on open), panels cross-
   expect(await anim(page, '.vx-np-tabpanel')).toBe('vx-np-fade');
   const rows = page.locator('.vx-upnext > li');
   await expect(rows.first()).toBeVisible();
-  expect(await rows.first().evaluate((el) => getComputedStyle(el).animationName)).toBe('vx-np-rise');
+  // Polled: the queue refill can replace the rows between the locate and the read, and a
+  // replaced (detached) row reads an empty animationName.
+  await expect.poll(() => anim(page, '.vx-upnext > li')).toBe('vx-np-rise');
   // How many rows Up next holds depends on the queue refill timing; the first one always carries its index.
-  expect(await rows.first().evaluate((el) => getComputedStyle(el).getPropertyValue('--i').trim())).toBe('0');
+  await expect.poll(() => rows.first().evaluate((el) => getComputedStyle(el).getPropertyValue('--i').trim())).toBe('0');
 
   // Play ⇄ pause: the glyph springs in. Polled: while the (blocked) audio
   // buffers, the button swaps its glyph for a spinner and back, so a read can

@@ -50,6 +50,27 @@ describe('POST /api/ai/keep', () => {
     expect(fake.rows('ai_messages').some((m) => m.id === A2)).toBe(false);
   });
 
+  it('a part kept as the page closed gives way to a fuller text or how it really ended, never to less', async () => {
+    const fake = seed();
+    const reply = () => fake.rows('ai_messages').find((m) => m.id === A1);
+    // The keepalive save on pagehide: trimmed, no reasoning.
+    await keep(body({ text: 'Kafka splits', thinking: undefined, stopReason: 'aborted' }));
+    expect(reply()).toMatchObject({ content: [{ type: 'text', text: 'Kafka splits' }], stop_reason: 'aborted' });
+    // A shorter or different text never replaces it.
+    expect(await (await keep(body({ text: 'Kafka', stopReason: 'aborted' }))).json()).toEqual({ ok: true, saved: false });
+    expect(await (await keep(body({ text: 'Something else that is longer', stopReason: 'aborted' }))).json()).toEqual({ ok: true, saved: false });
+    // The draft from the device, the next time the page opens: the whole text.
+    expect(await (await keep(body({ stopReason: 'aborted' }))).json()).toEqual({ ok: true, saved: true });
+    expect(reply()).toMatchObject({ content: [{ type: 'text', text: 'Kafka splits a topic into partitions' }], thinking: 'Plan it.', stop_reason: 'aborted' });
+    // The same text once more with how it ended.
+    expect(await (await keep(body({ stopReason: 'end' }))).json()).toEqual({ ok: true, saved: true });
+    expect(reply()).toMatchObject({ stop_reason: 'end' });
+    // A reply that ended is never replaced, not even by a longer one.
+    expect(await (await keep(body({ text: 'Kafka splits a topic into partitions, and more', stopReason: 'aborted' }))).json()).toEqual({ ok: true, saved: false });
+    expect(reply()?.content).toEqual([{ type: 'text', text: 'Kafka splits a topic into partitions' }]);
+    expect(fake.rows('ai_messages').filter((m) => m.id === A1)).toHaveLength(1);
+  });
+
   it('only for the account\'s own chat and a real question in it', async () => {
     seed();
     expect((await keep(body(), '2002')).status).toBe(404);

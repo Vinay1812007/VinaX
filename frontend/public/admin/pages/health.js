@@ -354,19 +354,48 @@
   function reason(kind) { return REST_REASON[kind] || (kind ? fmt.label(kind) : '—'); }
   function until(iso) { return iso ? h('span', { title: fmt.full(iso) }, 'until ' + fmt.time(iso)) : null; }
 
-  /** The free models found in each AI company's own list (refreshed every 6 hours; README.md (VinaX AI) "Found models"). */
-  function discoveryCard(disc, providers) {
-    var on = disc.enabled;
-    var byId = {};
-    arr(disc.providers).forEach(function (p) { byId[p.provider] = p; });
-    var rows = providers.filter(function (p) { return p.configured; }).map(function (p) {
-      var st = byId[p.id];
-      var off = on === false || (on && typeof on === 'object' && on[p.id] === false);
-      var status = off ? ui.muted('Switched off') : !st ? ui.muted('Not checked yet') : st.ok ? ui.pill(fmt.plural(st.count, 'model') + ' ✓', 'ok') : ui.pill('List failed' + (st.count ? ' · showing ' + fmt.num(st.count) + ' from before' : ''), 'warn');
-      return [p.name, h('span', status, st && st.fetchedAt ? ui.muted(' · checked ' + fmt.ago(st.fetchedAt)) : null)];
+  var SEARCH_NAME = { tavily: 'Tavily', serper: 'Serper' };
+  var SEARCH_FAIL = {
+    not_configured: 'No search key, or the daily limit is 0', daily_limit: 'Today’s searches are used up',
+    timeout: 'Too slow (no answer in 8 s)', empty: 'Answered, but found nothing'
+  };
+  function searchFail(r) {
+    if (r.reason === 'failed') return r.status ? 'Refused (HTTP ' + r.status + ')' + (r.status === 401 || r.status === 403 ? ': check the key' : r.status === 429 || r.status === 432 || r.status === 433 ? ': credits or rate limit' : '') : 'Could not be reached';
+    return SEARCH_FAIL[r.reason] || fmt.label(r.reason || 'failed');
+  }
+
+  /** The search API (Tavily or Serper) and the owner's Test search: one real search, counted like any other. */
+  function searchCard(api) {
+    var result = h('div', { 'aria-live': 'polite' });
+    var name = SEARCH_NAME[api.provider] || fmt.label(api.provider || 'tavily');
+    function test() {
+      VX.mount(result, ui.muted('Searching…'));
+      return VX.api.post('/api/admin/ai-search', {}, { timeout: 20000 }).then(function (res) {
+        var r = obj(res.data);
+        if (!res.ok) return VX.mount(result, ui.pill(res.message || 'Failed', 'bad'));
+        var who = SEARCH_NAME[r.provider] || name;
+        VX.mount(result, r.ok
+          ? h('span', ui.pill('Working ✓', 'ok'), ' ' + fmt.plural(r.count, 'result') + ' in ' + fmt.ms(r.ms) + ' from ' + who, r.site ? ui.muted(' · first: ' + r.site) : null)
+          : h('span', ui.pill(searchFail(r), 'bad'), ui.muted(' · ' + who + (r.ms ? ' · ' + fmt.ms(r.ms) : ''))));
+      });
+    }
+    return ui.card({
+      title: 'Web search', sub: 'Test search runs one real search, the way a chat does. It counts as one of today’s searches.',
+      actions: [VX.can('edit') ? ui.button('Test search', { kind: 'primary', small: true, icon: 'search', disabled: !api.configured, onClick: test }) : null],
+      body: [
+        ui.dl([
+          ['Search service', api.configured ? h('span', ui.pill('Set ✓', 'ok'), ' ' + name) : ui.pill('Not set up', 'warn')],
+          ['Searches today', api.usedToday == null ? '—' : fmt.num(api.usedToday) + ' of ' + fmt.num(api.dailyLimit)]
+        ]),
+        result
+      ]
     });
-    return ui.card({ title: 'Free models found automatically', sub: 'Each AI company’s own list is read every 6 hours; its free chat models join the model menu under “More from …”. Switch one off below in Features & AI, or all of them with "discover": false.',
-      body: rows.length ? ui.dl(rows) : h('p.muted', 'No AI company has a key yet.') });
+  }
+
+  /** "82% 👍 · 17" from a model's thumbs in the window, or null with none. */
+  function scoreOf(f) {
+    var up = num(f && f.up), down = num(f && f.down), total = up + down;
+    return total ? { share: up / total, total: total, up: up, down: down } : null;
   }
 
   function renderAi(host, ctx) {
@@ -399,6 +428,10 @@
         return next();
       }
       var g = obj(search.grounding), api = obj(search.api);
+      // The listeners' thumbs on each model's replies (POST /api/ai/feedback); null when the database cannot say.
+      var fb = d.feedback && typeof d.feedback === 'object' ? d.feedback : null;
+      var fbDays = fb ? num(fb.days) || 30 : 30;
+      models.forEach(function (m) { m.score = fb ? scoreOf(obj(fb.models)[m.id]) : null; });
       return [
         st.enabled ? ui.notice('VinaX AI is open to everyone signed in with Google.', 'ok')
           : ui.notice(testers ? 'VinaX AI is only open to ' + fmt.plural(testers, 'tester') + ' right now.' : 'VinaX AI is switched off for everyone.', 'warn'),
@@ -417,14 +450,22 @@
             { key: 'lastError', label: 'Last problem', sort: false, render: function (p) { var e = p.lastError; return e ? h('span', reason(e.kind), ui.muted(' · ' + fmt.ago(e.at))) : 'None'; } }
           ]
         }) }),
-        ui.card({ title: 'Models', sub: 'Testing sends each switched-on model one tiny message. It uses a little free allowance, so it only runs when you press it.',
+        ui.card({ title: 'Models', sub: 'Testing sends each switched-on model one tiny message. It uses a little free allowance, so it only runs when you press it. Thumbs up is the share of people’s ratings of each model’s replies that were thumbs up, over the last ' + fbDays + ' days. A model joins the menu only when its id is added to APPROVED_MODELS in models.ts.',
           actions: [progress, VX.can('edit') ? ui.button('Test all models', { kind: 'primary', small: true, icon: 'refresh', disabled: !testable.length, onClick: testAll }) : null],
           pad: false,
           body: ui.dataTable({
             rows: models, exportName: 'vinax-ai-models', search: models.length > 12 ? 'Search models…' : false, rowId: function (m) { return m.id; },
             columns: [
               { key: 'name', label: 'Model', always: true, render: function (m) { return h('div', h('div.cell-main', m.name), h('div.cell-sub', m.provider)); } },
-              { key: 'group', label: 'In the model menu', render: function (m) { return m.discovered ? h('span', 'Yes', ui.muted(' · found automatically')) : m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
+              { key: 'group', label: 'In the model menu', render: function (m) { return m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
+              { key: 'score', label: 'Thumbs up', align: 'right',
+                sortVal: function (m) { return m.score ? m.score.share : -1; },
+                csv: function (m) { return m.score ? Math.round(m.score.share * 100) + '% of ' + m.score.total : ''; },
+                render: function (m) {
+                  if (!m.score) return ui.muted(fb ? 'No ratings' : '—');
+                  return h('div', { title: fmt.num(m.score.up) + ' up, ' + fmt.num(m.score.down) + ' down in the last ' + fbDays + ' days' },
+                    h('div.cell-main', fmt.ratio(m.score.share, 0)), h('div.cell-sub', fmt.plural(m.score.total, 'rating')));
+                } },
               { key: 'ownerEnabled', label: 'Switched on', render: function (m) {
                 // Paused: on the approved list but failed the live check, so offered nowhere until it is moved back (models.ts PAUSED_MODELS).
                 if (m.paused) return h('span', ui.pill('Paused', 'warn'), ui.muted(' · failed the live check; the daily model check (or Test) brings it back once it answers'));
@@ -444,7 +485,7 @@
               } }
             ]
           }) }),
-        discoveryCard(obj(d.discovery), providers),
+        searchCard(api),
         ui.card({ title: 'Voice', body: ui.dl([
           ['Talk instead of typing', voice.dictation ? ui.pill('Available ✓', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],
           ['Read answers aloud', voice.readAloud ? ui.pill('Available ✓', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],

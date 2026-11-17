@@ -3,6 +3,9 @@
  * loud. Music pauses while it is open. Captions show what each side says;
  * when it closes, the conversation is saved into the chat as ordinary
  * messages (POST /api/ai/live-transcript) and the chat reloads to show it.
+ * When the page itself closes mid-call (pagehide), the transcript so far is
+ * sent with keepalive (keepOnLeave.ts); going to the background is not
+ * closing, and neither ends nor saves the call.
  * With web search on, the sources of the latest reply show under the
  * captions; the globe button switches search (Live voice reconnects).
  * The model, the voice and the language can be switched here at any time,
@@ -19,6 +22,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { saveLiveTranscript, voiceNotice } from '../api';
+import { sendKeepalive, transcriptKeepaliveBody } from '../keepOnLeave';
 import { cleanMicLabel, listMics, micNotice, silentMicNotice, type MicDevice, type MicProblem } from '../mic';
 import { personalOf, usePrefs } from '../prefs';
 import { holdMusic } from '../musicHold';
@@ -108,6 +112,8 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
   const orb = useRef<HTMLSpanElement>(null);
   const endButton = useRef<HTMLButtonElement>(null);
   const closing = useRef(false);
+  /** The page closed mid-call and the transcript went with keepalive: closing later does not save it twice. */
+  const left = useRef(false);
 
   const save = async (s: LiveSession): Promise<string | null> => {
     const turns = s.transcript.turns();
@@ -128,7 +134,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     closing.current = true;
     const s = session.current;
     s?.stop();
-    onClose(s ? await save(s) : null);
+    onClose(s && !left.current ? await save(s) : null);
   };
 
   // Back closes the full-screen call; in the background it is left alone.
@@ -166,7 +172,17 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     session.current = s;
     frames.current = new FrameShare((jpeg) => { s.sendFrame(jpeg); }, () => setShare(null));
     void s.start();
+    // The page is closing (not going to the background): send what was said so far.
+    const onPageHide = () => {
+      if (closing.current || left.current || !s.model) return;
+      const turns = s.transcript.turns();
+      if (!turns.length) return;
+      const wire = transcriptKeepaliveBody({ conversationId, ...(conversationId && parentMessageId ? { parentMessageId } : {}), model: s.model.id, turns });
+      if (wire && sendKeepalive('/live-transcript', wire)) left.current = true;
+    };
+    window.addEventListener('pagehide', onPageHide);
     return () => {
+      window.removeEventListener('pagehide', onPageHide);
       frames.current?.stop();
       s.stop();
       release();

@@ -9,6 +9,13 @@
  *     text, thinking?, model?: "<registry id>", stopReason: "aborted" | "error" | "end" | "length",
  *     continued?: true }   // a Continue: `text` is the whole reply, the saved one plus what followed
  *   → 200 { ok: true, saved: boolean }   (saved false: the reply was already saved, or there was no text)
+ *
+ * The page also sends this with keepalive when it closes mid-reply
+ * (keepOnLeave.ts: text trimmed under 64 KB, stopReason "aborted") and
+ * again from a draft on the device the next time it opens. So a part kept
+ * that way is replaced by a fuller text that carries it on, or by the same
+ * text with how it really ended; and the chat's own end-of-stream save
+ * replaces it (chat.ts). A reply that ended is never cut down.
  *   → 400 bad_request · 401 signed_out · 404 not_found · 413 too_long · 429 rate_limited · 503 unavailable
  *
  * The chat streams the provider's bytes straight to the page (passthrough.ts),
@@ -24,7 +31,7 @@ import { dbConfigured } from '../../_lib/db';
 import { MODELS, modelById } from '../../_lib/ai/models';
 import { artifactsOf } from '../../_lib/ai/artifacts';
 import { THINK_MAX } from '../../_lib/ai/think';
-import { getConversation, insertMessage, isUuid, listMessages, updateConversation, updateMessage } from '../../_lib/ai/store';
+import { getConversation, insertMessage, isUuid, listMessages, replaceKeptPart, updateConversation, updateMessage } from '../../_lib/ai/store';
 import { textOf } from '../../_lib/ai/history';
 import { MAX_TEXT_CHARS, onRequestOptions as chatOptions } from './chat';
 import type { AiEnv } from '../../_lib/ai/types';
@@ -79,8 +86,26 @@ export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> =>
     await updateConversation(env, sub, conversationId, { updated_at: new Date().toISOString(), active_leaf_id: assistantMessageId });
     return json({ ok: true, saved: true });
   }
-  // Already saved (the reply ended on the server after all), or nothing to keep.
-  if (existing || !text.trim()) return json({ ok: true, saved: false });
+  if (!text.trim()) return json({ ok: true, saved: false });
+  if (existing) {
+    // A part kept when the page went away: a fuller text (or the same one, now with how it ended) takes its place.
+    const before = existing.role === 'assistant' && existing.parent_id === userMessageId && existing.stop_reason === 'aborted' ? textOf(existing.content) : null;
+    const fuller = before !== null && text.startsWith(before) && (text.length > before.length || stopReason !== 'aborted');
+    // Otherwise already saved (the reply ended on the server after all): left as it is.
+    if (!fuller) return json({ ok: true, saved: false });
+    const replaced = await replaceKeptPart(env, conversationId, assistantMessageId, {
+      content: [{ type: 'text', text }],
+      artifacts: found.length ? found : null,
+      thinking: thinking ?? existing.thinking,
+      ...(spec ? { model_id: spec.id, provider: spec.provider } : {}),
+      stop_reason: stopReason,
+    });
+    if (!replaced.ok) return json({ error: 'unavailable' }, 503);
+    // No row: the chat saved the whole reply a moment ago.
+    if (!replaced.rows.length) return json({ ok: true, saved: false });
+    await updateConversation(env, sub, conversationId, { updated_at: new Date().toISOString(), active_leaf_id: assistantMessageId });
+    return json({ ok: true, saved: true });
+  }
 
   const saved = await insertMessage(env, {
     id: assistantMessageId, conversation_id: conversationId, parent_id: userMessageId, role: 'assistant',

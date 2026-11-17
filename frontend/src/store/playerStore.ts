@@ -108,7 +108,8 @@ export interface PlayerState {
   /** `quiet` (1.14): no "Added to queue" snackbar; Listen Together says who added it instead. */
   enqueue(song: Song, opts?: { quiet?: boolean }): void;
   enqueueNext(song: Song): void;
-  enqueueAll(songs: Song[]): void;
+  /** `quiet`: no snackbar; a caller that adds a list in parts (the VinaX AI playlist card) says it once. */
+  enqueueAll(songs: Song[], opts?: { quiet?: boolean }): void;
   removeAt(index: number): void;
   moveInQueue(from: number, to: number): void;
   /** Package D5 — drop this row and everything after it (future rows only). */
@@ -1021,11 +1022,11 @@ export const usePlayerStore = create<PlayerState>()(
           if (queue.length === 0) get().playQueue([song]);
         },
 
-        enqueueAll: (songs) => {
+        enqueueAll: (songs, opts) => {
           const existing = new Set(get().queue.slice(get().index).map((s) => s.id));
           const fresh = stripExplicit(songs).filter((s) => !existing.has(s.id));
           if (!fresh.length) {
-            toast('Already in queue');
+            if (!opts?.quiet) toast('Already in queue');
             return;
           }
           const current = get().queue;
@@ -1034,7 +1035,7 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
           if (current.length && at === get().index + 1) preloadUpcoming();
-          toast(`Added ${fresh.length} songs to queue`);
+          if (!opts?.quiet) toast(`Added ${fresh.length} song${fresh.length === 1 ? '' : 's'} to queue`);
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
         },
 

@@ -7,9 +7,7 @@ export interface ModelLabel {
 }
 
 export interface PickerModel extends ModelLabel {
-  /** The curated groups, then `more-<provider>`: free models found in that provider's own list. */
-  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare' | 'claude'
-    | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
+  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare' | 'claude';
   description: string;
   flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean; pdf?: boolean };
   available: boolean;
@@ -39,9 +37,6 @@ export interface ReplyRoute {
   /** Auto only: the kind of message it judged this to be. */
   route?: { task: string; complexity: 'simple' | 'normal' | 'hard' };
 }
-
-/** A free model found in its provider's list (not curated): kept out of short menus such as Retry. */
-export const isFoundModel = (m: Pick<PickerModel, 'group'>): boolean => typeof m.group === 'string' && m.group.startsWith('more-');
 
 export interface ModelsResponse {
   enabled: boolean;
@@ -155,6 +150,16 @@ export interface ChatMessage {
   local?: boolean;
   /** While Create image is making this reply's picture. */
   imaging?: boolean;
+  /** The listener's thumbs on this reply (POST /api/ai/feedback). */
+  feedback?: MessageFeedback | null;
+}
+
+/** Thumbs up or down on a reply; a thumbs down may say why. */
+export type FeedbackReason = 'wrong' | 'not_helpful' | 'too_slow' | 'other';
+export interface MessageFeedback {
+  rating: 'up' | 'down';
+  reason?: FeedbackReason;
+  note?: string;
 }
 
 /** One message as GET /api/ai/conversations/:id sends it. */
@@ -169,6 +174,8 @@ export interface ServerMessage {
   stopReason: StopReason | null;
   sources?: SourcesInfo | null;
   createdAt: string;
+  /** The listener's own rating of this reply, when they gave one. */
+  feedback?: MessageFeedback;
 }
 
 /** One row of the conversation list. */

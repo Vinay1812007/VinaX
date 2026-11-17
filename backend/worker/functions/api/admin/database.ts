@@ -53,6 +53,7 @@ export const TABLE_NAMES: Record<string, { name: string; about: string }> = {
   ai_messages: { name: 'VinaX AI messages', about: 'The messages inside those chats.' },
   ai_attachments: { name: 'VinaX AI files', about: 'Pictures and documents users added to chats.' },
   ai_daily_usage: { name: 'VinaX AI daily limits', about: 'How much of each daily allowance was used.' },
+  ai_feedback: { name: 'VinaX AI ratings', about: 'Thumbs up and down users gave AI replies, with the model that wrote each one.' },
 };
 
 /** The large tables whose row counts come from the database's quick estimate. */
@@ -69,6 +70,7 @@ function keptFor(table: string, r: ReturnType<typeof retentionOf>): string {
     case 'rooms': case 'room_members': return 'Until the room is empty';
     case 'ai_daily_usage': return '90 days';
     case 'ai_conversations': case 'ai_messages': case 'ai_attachments': return 'Until the user deletes it';
+    case 'ai_feedback': return 'Until the user deletes their account';
     default: return 'Forever';
   }
 }

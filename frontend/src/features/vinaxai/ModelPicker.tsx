@@ -1,7 +1,6 @@
 /**
  * VinaX AI — the model picker in the composer: Auto first, then the curated
- * groups, then the free models the server found in each provider's own list
- * ("More from …"), each model with a one-line description and badges. Models that
+ * groups, each model with a one-line description and badges. Models that
  * cannot answer now are shown greyed with the reason; Claude models this
  * account may not use are shown locked. A long list gets a
  * search box above it (name, provider or description); ↓ moves into the list.
@@ -15,8 +14,6 @@ import type { ModelKind, PickerModel } from './types';
 
 export const GROUP_LABELS: Record<PickerModel['group'], string> = {
   fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', claude: 'Claude', more: 'More models', cloudflare: 'Cloudflare',
-  'more-groq': 'More from Groq', 'more-gemini': 'More from Gemini', 'more-openrouter': 'More from OpenRouter',
-  'more-nvidia': 'More from NVIDIA', 'more-cloudflare': 'More from Cloudflare',
 };
 
 /** More models than this and the picker gets a search box. */

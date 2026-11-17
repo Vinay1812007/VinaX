@@ -689,7 +689,54 @@ begin
   assert jsonb_array_length(v -> 'byDay') >= 1 and jsonb_array_length(v -> 'byEmoji') = 3, 'stats_reactions: by day and by emoji';
   assert not has_table_privilege('anon', 'public.song_reactions', 'select'), 'anon cannot read song reactions';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 23, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 24, 'meta.schema.version';
+  -- v24: thumbs on VinaX AI replies. One per reply per account (changeable), the per-model score,
+  -- kept when the chat goes, gone with the account, locked like every table.
+  insert into accounts (id, email) values ('check_fb', 'fb@example.com');
+  insert into ai_conversations (id, account_id, title) values ('00000000-0000-4000-8000-00000000c0f0', 'check_fb', 'Check rated chat');
+  insert into ai_feedback (message_id, account_id, conversation_id, model_id, provider, rating, reason, note) values
+    ('00000000-0000-4000-8000-00000000c0f1', 'check_fb', '00000000-0000-4000-8000-00000000c0f0', 'check:model-a', 'groq', 'up', null, null),
+    ('00000000-0000-4000-8000-00000000c0f2', 'check_fb', '00000000-0000-4000-8000-00000000c0f0', 'check:model-a', 'groq', 'up', null, null),
+    ('00000000-0000-4000-8000-00000000c0f3', 'check_fb', '00000000-0000-4000-8000-00000000c0f0', 'check:model-b', 'nvidia', 'down', 'wrong', 'Got the raga wrong');
+  insert into ai_feedback (message_id, account_id, conversation_id, model_id, provider, rating, reason) values
+    ('00000000-0000-4000-8000-00000000c0f2', 'check_fb', '00000000-0000-4000-8000-00000000c0f0', 'check:model-a', 'groq', 'down', 'too_slow')
+    on conflict (message_id, account_id) do update set rating = excluded.rating, reason = excluded.reason, updated_at = now();
+  assert (select count(*) from ai_feedback where account_id = 'check_fb') = 3, 'ai_feedback: one rating per reply per account';
+  update ai_feedback set updated_at = now() - interval '40 days' where message_id = '00000000-0000-4000-8000-00000000c0f3';
+  v := ai_feedback_stats(30);
+  assert jsonb_typeof(v) = 'array', 'ai_feedback_stats: an array';
+  select count(*) into n from jsonb_array_elements(v) e
+    where e ->> 'model' = 'check:model-a' and (e ->> 'up')::int = 1 and (e ->> 'down')::int = 1 and (e -> 'reasons' ->> 'too_slow')::int = 1;
+  assert n = 1, 'ai_feedback_stats: ups, downs and reasons per model';
+  select count(*) into n from jsonb_array_elements(v) e where e ->> 'model' = 'check:model-b';
+  assert n = 0, 'ai_feedback_stats: only the last p_days days';
+  select count(*) into n from jsonb_array_elements(ai_feedback_stats(60)) e where e ->> 'model' = 'check:model-b' and (e -> 'reasons' ->> 'wrong')::int = 1;
+  assert n = 1, 'ai_feedback_stats: a longer window counts the older rating';
+  begin
+    insert into ai_feedback (message_id, account_id, rating) values ('00000000-0000-4000-8000-00000000c0f4', 'check_fb', 'meh');
+    assert false, 'ai_feedback.rating is up or down';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_feedback (message_id, account_id, rating, reason) values ('00000000-0000-4000-8000-00000000c0f4', 'check_fb', 'down', 'rude');
+    assert false, 'ai_feedback.reason is one of four';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_feedback (message_id, account_id, rating, note) values ('00000000-0000-4000-8000-00000000c0f4', 'check_fb', 'down', repeat('x', 301));
+    assert false, 'ai_feedback.note is at most 300 characters';
+  exception when check_violation then null;
+  end;
+  assert (table_counts() ->> 'ai_feedback')::int >= 3, 'table_counts: ai_feedback';
+  delete from ai_conversations where id = '00000000-0000-4000-8000-00000000c0f0';
+  select count(*) into n from ai_feedback where account_id = 'check_fb' and conversation_id is null;
+  assert n = 3, 'ai_feedback: deleting the chat keeps the ratings, without the link';
+  v := delete_listener(null, 'check_fb');
+  assert (v ->> 'aiFeedback')::int = 3 and (v ->> 'account')::int = 1, 'delete_listener: VinaX AI ratings went with the account';
+  assert not exists (select 1 from ai_feedback where account_id = 'check_fb'), 'ai_feedback: none left after delete_listener';
+  assert (select relforcerowsecurity from pg_class where relname = 'ai_feedback'), 'ai_feedback: row level security forced';
+  assert not has_table_privilege('anon', 'public.ai_feedback', 'select'), 'anon cannot read VinaX AI ratings';
+  assert not has_function_privilege('anon', 'public.ai_feedback_stats(integer)', 'execute'), 'anon cannot call ai_feedback_stats';
   -- v20: email + password sign-in. bcrypt in the database, the hash in its own locked table.
   insert into accounts (id, email, name) values ('check_pw', 'Pw@Example.com', 'Pw');
   assert account_set_password('check_nobody', 'long-enough') = false, 'account_set_password: no account';

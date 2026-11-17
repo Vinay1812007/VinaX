@@ -8,11 +8,12 @@
  *         search: { api: { configured, provider, dailyLimit, usedToday }, grounding: { configured, dailyLimit, usedToday } },
  *         voice: { dictation, readAloud, live, resting: [{ model, until }] },
  *         utility: [{ id, name, provider, kind: guard|embedding|parse|aqa, configured }],
- *         discovery: { enabled: true | false | { "<provider>": false },
- *                      providers: [{ provider, ok, count, fetchedAt, error }] },
+ *         feedback: { days: 30, models: { "<model id>": { up, down } } } | null,
  *         checkedAt }
- *     `models` holds the curated registry, then the free models found in the
- *     providers' lists (`discovered: true`, _lib/ai/discovery.ts).
+ *     `models` is the curated registry (models.ts); a model joins it only by
+ *     its id in APPROVED_MODELS. `feedback`: the listeners' thumbs up and
+ *     down on each model's replies in the last 30 days (ai_feedback, schema
+ *     24; POST /api/ai/feedback), null when the database cannot say.
  *   POST /api/admin/ai { model: "<registry id>" }
  *     → { model, ok, ms, firstTokenMs, kind?, status? }
  *     One tiny request ("Reply with OK") to that model. A failure rests it
@@ -29,7 +30,6 @@ import { readJsonCapped } from '../../_lib/body';
 import { db, dbConfigured, q } from '../../_lib/db';
 import { PROVIDER_NAMES, PROVIDERS, providerConfigured } from '../../_lib/ai/adapters';
 import { aiSettings, pickerRegistryFor, sanitizeAiSettings } from '../../_lib/ai/config';
-import { discoveredModels, discoverySnapshot } from '../../_lib/ai/discovery';
 import { clearRest, coolingUntil, cooldownSnapshot } from '../../_lib/ai/cooldown';
 import { isApproved, MODELS, PAUSED_MODELS, UTILITY_MODELS, ladderModels, modelById } from '../../_lib/ai/models';
 import { runChat } from '../../_lib/ai/router';
@@ -48,12 +48,27 @@ async function usedToday(env: Env): Promise<Record<string, number> | null> {
   return Object.fromEntries(r.rows.map((row) => [row.kind, Number(row.count) || 0]));
 }
 
+/** How many days of thumbs the models table scores. */
+export const FEEDBACK_DAYS = 30;
+
+/** Each model's thumbs up and down in the last FEEDBACK_DAYS days (ai_feedback_stats, schema 24); null when the database cannot say. */
+async function feedbackScores(env: Env): Promise<{ days: number; models: Record<string, { up: number; down: number }> } | null> {
+  if (!dbConfigured(env)) return null;
+  const r = await db.rpc<Array<{ model: unknown; up: unknown; down: unknown }> | null>(env, 'ai_feedback_stats', { p_days: FEEDBACK_DAYS });
+  if (!r.ok || !Array.isArray(r.value)) return null;
+  const models: Record<string, { up: number; down: number }> = {};
+  for (const row of r.value) {
+    if (typeof row?.model !== 'string' || !row.model) continue;
+    models[row.model] = { up: Math.max(0, Number(row.up) || 0), down: Math.max(0, Number(row.down) || 0) };
+  }
+  return { days: FEEDBACK_DAYS, models };
+}
+
 export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = ctx;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   const now = Date.now();
   const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
-  const found = settings.discover === false ? [] : await discoveredModels(env, settings.discover, { waitUntil: ctx.waitUntil });
   const registry = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
   const snap = cooldownSnapshot(now);
   const restOf = (key: string) => snap.rests.find((r) => r.key === key) ?? null;
@@ -65,7 +80,7 @@ export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?
     lastError: snap.lastErrors[id] ?? null,
   }));
   const overrides = settings.models as Record<string, { enabled?: unknown; order?: unknown }>;
-  const models = [...MODELS, ...found].map((spec) => {
+  const models = MODELS.map((spec) => {
     const until = coolingUntil(spec, now);
     const own = restOf(`${spec.provider}|${spec.upstream}`) ?? restOf(`${spec.provider}|*`);
     const o = overrides[spec.id];
@@ -79,24 +94,23 @@ export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?
       configured: providerConfigured(env, spec.provider),
       restingUntil: until > now ? new Date(until).toISOString() : null,
       restKind: until > now ? own?.kind ?? null : null,
-      ...(spec.discovered ? { discovered: true } : {}),
       // Approved but paused after failing the live check (models.ts): offered nowhere, but the owner can test it;
       // `revived`: its latest daily check passed, so it is in the model menu again (modelCheck.ts).
       ...(PAUSED_MODELS.has(spec.id) ? (settings.revived.includes(spec.id) ? { revived: true } : { paused: true }) : {}),
     };
   });
-  const used = await usedToday(env);
+  const [used, feedback] = await Promise.all([usedToday(env), feedbackScores(env)]);
   return adminJson({
     settings: { enabled: settings.enabled, testers: settings.testers, search: settings.search, overrides: Object.keys(settings.models).length },
     providers,
     models,
     search: {
-      api: { configured: searchConfigured(env), provider: providerOf(env), dailyLimit: dailyLimit(env), usedToday: used ? used.search ?? 0 : null },
+      api: { configured: searchConfigured(env, settings.limits.searchesPerDay), provider: providerOf(env), dailyLimit: dailyLimit(env, settings.limits.searchesPerDay), usedToday: used ? used.search ?? 0 : null },
       grounding: { configured: ladderModels(registry, 'grounded').some((s) => providerConfigured(env, s.provider)), dailyLimit: GROUNDING_DAILY_LIMIT, usedToday: used ? used.grounding ?? 0 : null },
     },
     voice: { ...voiceAvailability(env), resting: voiceRestSnapshot(now) },
     utility: UTILITY_MODELS.map((x) => ({ id: x.id, name: x.name, provider: PROVIDER_NAMES[x.provider], kind: x.kind, configured: providerConfigured(env, x.provider) })),
-    discovery: { enabled: settings.discover, providers: discoverySnapshot() },
+    feedback,
     checkedAt: new Date(now).toISOString(),
   });
 };
@@ -141,14 +155,10 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const read = await readJsonCapped<{ model?: unknown } | null>(request, 4 * 1024);
   if (!read.ok) return badRequest();
   const id = read.value && typeof read.value === 'object' ? read.value.model : null;
-  // A curated model, or one found in its provider's current list (switched off or not: the owner may test it);
-  // approved models only (models.ts APPROVED_MODELS), like everywhere else, and the paused ones,
-  // so the owner can see when one answers again before moving it back.
-  let spec = modelById(MODELS, id);
-  if (!spec && typeof id === 'string') {
-    const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
-    spec = settings.discover === false ? null : modelById(await discoveredModels(env, settings.discover), id);
-  }
+  // A curated model (switched off or not: the owner may test it); approved models only (models.ts
+  // APPROVED_MODELS), like everywhere else, and the paused ones, so the owner can see when one answers
+  // again before moving it back.
+  const spec = modelById(MODELS, id);
   if (!spec || !(isApproved(spec.id) || PAUSED_MODELS.has(spec.id))) return badRequest('unknown_model');
   if (!providerConfigured(env, spec.provider)) return adminJson({ model: spec.id, ok: false, ms: 0, firstTokenMs: null, kind: 'not_configured', status: null });
   const r = await probeModel(env, spec);

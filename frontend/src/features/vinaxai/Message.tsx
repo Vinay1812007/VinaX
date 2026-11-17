@@ -2,8 +2,9 @@
  * VinaX AI — one message. The listener's sits in a soft bubble on the
  * right, with Edit on hover (an edit becomes a new version beside the old
  * one). VinaX AI's is full-width prose with its reasoning folded above it and
- * its actions below: Copy, Retry (with a model menu), Continue when it was
- * cut off, and the model that answered. Messages with more than one version
+ * its actions below: Copy, Read aloud, thumbs up and down (Feedback.tsx),
+ * Retry (with a model menu), Continue when it was cut off, and the model
+ * that answered. Messages with more than one version
  * get a ‹ 2 / 3 › switcher.
  */
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -21,8 +22,9 @@ import { ReplyActionsContext } from './ChoiceBlocks';
 import { usePrefs } from './prefs';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon, ThinkIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
-import { isFoundModel, type ChatMessage, type PickerModel } from './types';
+import type { ChatMessage, PickerModel } from './types';
 import { THINKING_LABELS } from './ThinkingPicker';
+import { useReplyFeedback } from './Feedback';
 
 export const thoughtLabel = (ms: number | null): string => (ms == null ? 'Thought process' : `Thought for ${Math.max(1, Math.round(ms / 1000))}s`);
 
@@ -212,7 +214,7 @@ function RetryMenu({ models, onRetry }: { models: PickerModel[]; onRetry(choice?
           }}
         >
           {item('auto', 'Retry with Auto', { mode: 'auto' })}
-          {models.filter((m) => m.available && !isFoundModel(m)).map((m) => item(m.id, `Retry with ${m.name}`, { mode: 'model', model: m.id }))}
+          {models.filter((m) => m.available).map((m) => item(m.id, `Retry with ${m.name}`, { mode: 'model', model: m.id }))}
         </div>
       )}
     </span>
@@ -303,6 +305,8 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
   const actions = useMemo(() => ({ live, answer: onAnswer }), [live, onAnswer]);
+  const feedback = useReplyFeedback(message);
+  const rateable = !live && !!text && !picture && !error;
   return (
     <ReplyActionsContext.Provider value={actions}>
     <div className="vx-ai-turn vx-ai-turn-reply" data-message-id={message.id} aria-busy={live || undefined}>
@@ -363,6 +367,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
             </button>
           )}
           {canReadAloud && text && !picture && <ReadAloudButton id={message.id} text={text} />}
+          {rateable && feedback.buttons}
           {onRetry && !error && !picture && <RetryMenu models={models} onRetry={onRetry} />}
           {cutOff && !error && onContinue && (
             <button type="button" className="vx-ai-chip vx-ai-continue" onClick={onContinue}>
@@ -372,6 +377,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
           <RouteInfo message={message} />
         </div>
       )}
+      {rateable && feedback.panel}
     </div>
     </ReplyActionsContext.Provider>
   );

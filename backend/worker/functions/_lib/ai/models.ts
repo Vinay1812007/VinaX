@@ -77,8 +77,8 @@ const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 
 /**
  * The owner's approved free models (2026-11-12), as registry ids: nothing
  * else may be offered in the picker, put in a ladder or called for a chat
- * (config.ts filters every registry through `isApproved`, the found models
- * of discovery.ts included). NVIDIA and Workers AI ids were matched against
+ * (config.ts filters every registry through `isApproved`); adding an id
+ * here is the only way a model joins. NVIDIA and Workers AI ids were matched against
  * each provider's live list that day; Groq and Gemini ids are the owner's.
  * Left out on purpose: models that failed the owner's live check the same
  * day (Groq Qwen 3.8 27B and GPT-OSS 20B, Gemini 3.5 Flash Lite, GPT-OSS 20B
@@ -384,11 +384,8 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   grounded: [],
 };
 
-/** The curated groups, then one group per provider for the free models found in its list (discovery.ts). */
-export const PICKER_GROUPS: readonly ModelGroup[] = [
-  'fast', 'balanced', 'smart', 'vision', 'code', 'claude', 'more', 'cloudflare',
-  'more-groq', 'more-gemini', 'more-openrouter', 'more-nvidia', 'more-cloudflare',
-];
+/** The picker's groups, in order. */
+export const PICKER_GROUPS: readonly ModelGroup[] = ['fast', 'balanced', 'smart', 'vision', 'code', 'claude', 'more', 'cloudflare'];
 
 export interface ModelOverride {
   enabled?: boolean;

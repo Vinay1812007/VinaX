@@ -49,8 +49,6 @@ const STYLES: Array<{ value: ReplyStyle; label: string }> = [
 
 const GROUP_LABEL: Record<string, string> = {
   fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', claude: 'Claude', cloudflare: 'Cloudflare', more: 'More models',
-  'more-groq': 'More from Groq', 'more-gemini': 'More from Gemini', 'more-openrouter': 'More from OpenRouter',
-  'more-nvidia': 'More from NVIDIA', 'more-cloudflare': 'More from Cloudflare',
 };
 const SEARCH: Array<{ value: WebSearch; label: string }> = [
   { value: 'auto', label: 'Auto: when you ask about something current' },

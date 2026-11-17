@@ -12,7 +12,7 @@ import { onRequestGet as modelsGet } from '../functions/api/ai/models';
 import { onRequestGet as adminGet } from '../functions/api/admin/ai';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
-import { _resetDiscovery } from '../functions/_lib/ai/discovery';
+import { _resetOpenRouterList } from '../functions/_lib/ai/openRouterList';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import type { AiEnv, ModelSpec } from '../functions/_lib/ai/types';
 
@@ -21,7 +21,7 @@ const DEEPSEEK = 'nvidia:deepseek-ai/deepseek-v4.1-flash';
 const GLM = 'nvidia:z-ai/glm-5.3-flash';
 const GEMINI38 = 'gemini:gemini-3.8-flash';
 
-beforeEach(() => { resetSettingsMemo(); _resetRateLimitsForTests(); _resetDiscovery(); });
+beforeEach(() => { resetSettingsMemo(); _resetRateLimitsForTests(); _resetOpenRouterList(); });
 
 describe('the daily check', () => {
   it('asks each paused model with a key once, passes only a quick answer, and writes the results', async () => {

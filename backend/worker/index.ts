@@ -28,6 +28,7 @@ import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_ai from './functions/api/admin/ai';
+import * as m_api_admin_ai_search from './functions/api/admin/ai-search';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_releases from './functions/api/admin/releases';
 // 14.0 — the database-backed console routes and the scheduled jobs.
@@ -74,6 +75,7 @@ import * as m_api_auth_email_login from './functions/api/auth/email/login';
 import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_chat from './functions/api/ai/chat';
 import * as m_api_ai_keep from './functions/api/ai/keep';
+import * as m_api_ai_feedback from './functions/api/ai/feedback';
 import * as m_api_ai_models from './functions/api/ai/models';
 import * as m_api_ai_conversations from './functions/api/ai/conversations';
 import * as m_api_ai_export from './functions/api/ai/export';
@@ -171,6 +173,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/outreach': m_api_admin_outreach,
   '/api/admin/musicapi': m_api_admin_musicapi,
   '/api/admin/ai': m_api_admin_ai,
+  '/api/admin/ai-search': m_api_admin_ai_search,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/releases': m_api_admin_releases,
   '/api/admin/overview': m_api_admin_overview,
@@ -212,6 +215,7 @@ const EXACT: Record<string, Mod> = {
   '/api/account/data': m_api_account_data,
   '/api/ai/chat': m_api_ai_chat,
   '/api/ai/keep': m_api_ai_keep,
+  '/api/ai/feedback': m_api_ai_feedback,
   '/api/ai/models': m_api_ai_models,
   '/api/ai/conversations': m_api_ai_conversations,
   '/api/ai/export': m_api_ai_export,

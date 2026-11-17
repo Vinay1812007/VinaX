@@ -11,6 +11,8 @@
  *                 cached 15 min (news) / 60 min, under a global daily cap
  *                 (SEARCH_DAILY_LIMIT, default 100, 0 = off), resting a day
  *                 after the provider refuses the key or the credits run out
+ *   testSearch    the owner's Test search (POST /api/admin/ai-search): one
+ *                 real search, cache skipped, under the same daily cap
  *   placeMarkers  turns Gemini grounding's supports into [n] markers in the
  *                 answer text
  *
@@ -212,6 +214,56 @@ export async function searchWeb(env: AiEnv, query: string, topic: Topic, now = D
     } catch { /* caching is best-effort */ }
   }
   return { ok: true, sources: out.sources, cached: false, provider };
+}
+
+/** The owner's Test search (Health → VinaX AI): a plain question any search API can answer. */
+export const TEST_QUERY = 'Carnatic music ragas';
+
+export interface SearchTest {
+  ok: boolean;
+  provider: Provider;
+  /** Results the provider gave (at most MAX_RESULTS, after toSources). */
+  count: number;
+  /** Time the provider took to answer (0 when it was never asked). */
+  ms: number;
+  /** Why it failed: no key or the limit is 0, today's allowance is used up, the provider refused or did not answer, or it answered with nothing. */
+  reason?: 'not_configured' | 'daily_limit' | 'failed' | 'timeout' | 'empty';
+  /** The provider's HTTP status, when it answered. */
+  status?: number | null;
+  /** The first result's site, to show the answer is real. */
+  site?: string | null;
+}
+
+/**
+ * One real search, as the chat would make it, for the owner's console. The
+ * cache is skipped so the provider is really asked, and it takes one from
+ * today's allowance (SEARCH_DAILY_LIMIT, or the owner's searches a day) like
+ * any search. A provider resting after a refusal is asked anyway: an answer
+ * ends the rest, a refusal starts it again. Never throws.
+ */
+export async function testSearch(env: AiEnv, opts: { query?: string; topic?: Topic; ownerCap?: number | null; now?: number } = {}): Promise<SearchTest> {
+  const provider = providerOf(env);
+  const ownerCap = opts.ownerCap ?? null;
+  if (!searchConfigured(env, ownerCap)) return { ok: false, provider, count: 0, ms: 0, reason: 'not_configured', status: null };
+  if (!(await takeDaily(env, 'search', dailyLimit(env, ownerCap)))) return { ok: false, provider, count: 0, ms: 0, reason: 'daily_limit', status: null };
+  const query = (opts.query ?? '').replace(/\s+/g, ' ').trim().slice(0, QUERY_MAX) || TEST_QUERY;
+  const now = opts.now ?? Date.now();
+  const t0 = Date.now();
+  let out: Awaited<ReturnType<typeof callProvider>>;
+  try {
+    out = await callProvider(env, provider, query, opts.topic ?? 'general');
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    return { ok: false, provider, count: 0, ms: Date.now() - t0, reason: timedOut ? 'timeout' : 'failed', status: null };
+  }
+  const ms = Date.now() - t0;
+  if (!out.ok) {
+    if ([401, 402, 403, 429, 432, 433].includes(out.status)) resting.set(provider, now + PROVIDER_REST_MS);
+    return { ok: false, provider, count: 0, ms, reason: 'failed', status: out.status };
+  }
+  resting.delete(provider);
+  if (!out.sources.length) return { ok: false, provider, count: 0, ms, reason: 'empty', status: 200 };
+  return { ok: true, provider, count: out.sources.length, ms, status: 200, site: out.sources[0].site || null };
 }
 
 // --------------------------------------------------------------- markers

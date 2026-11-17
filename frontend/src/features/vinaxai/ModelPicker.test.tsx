@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { badgesOf, contextLabel, ModelPicker } from './ModelPicker';
-import { isFoundModel, type PickerModel } from './types';
+import type { PickerModel } from './types';
 
 afterEach(cleanup);
 
@@ -124,26 +124,20 @@ describe('Escape belongs to the overlay that has focus', () => {
   });
 });
 
-describe('free models found in the providers’ lists', () => {
-  const FOUND = [
+describe('groups and search', () => {
+  const MANY = [
     ...MODELS,
-    ...Array.from({ length: 10 }, (_, i) => m(`openrouter:x${i}/m:free`, `Found ${i}`, 'more-openrouter', { provider: 'OpenRouter', description: 'Meta · 131K context' })),
-    m('groq:gemma2-9b-it', 'Gemma2 9B', 'more-groq', { description: 'Google · 8K context' }),
+    ...Array.from({ length: 10 }, (_, i) => m(`openrouter:x${i}/m:free`, `Extra ${i}`, 'more', { provider: 'OpenRouter', description: 'Meta · 131K context' })),
+    m('cloudflare:a', 'Llama CF', 'cloudflare', { provider: 'Workers AI' }),
   ];
 
-  it('come after the curated groups under “More from …”, and the search finds them by group', () => {
-    render(<ModelPicker models={FOUND} value="auto" onChange={vi.fn()} />);
+  it('lists the curated groups with their names, and the search finds a model by its group', () => {
+    render(<ModelPicker models={MANY} value="auto" onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
     const heads = screen.getAllByRole('group').map((g) => document.getElementById(g.getAttribute('aria-labelledby')!)?.textContent);
-    expect(heads).toEqual(['Balanced', 'Fast', 'Vision', 'More from OpenRouter', 'More from Groq']);
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'more from groq' } });
-    expect(screen.getAllByRole('option').map((o) => o.querySelector('.vx-ai-opt-name')?.textContent)).toEqual(['Gemma2 9B']);
-  });
-
-  it('isFoundModel tells them from the curated ones', () => {
-    expect(isFoundModel({ group: 'more-nvidia' })).toBe(true);
-    expect(isFoundModel({ group: 'more' })).toBe(false);
-    expect(isFoundModel({ group: 'cloudflare' })).toBe(false);
+    expect(heads).toEqual(['Balanced', 'Fast', 'Vision', 'More models', 'Cloudflare']);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'cloudflare' } });
+    expect(screen.getAllByRole('option').map((o) => o.querySelector('.vx-ai-opt-name')?.textContent)).toEqual(['Llama CF']);
   });
 });
 

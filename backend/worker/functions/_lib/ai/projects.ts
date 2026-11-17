@@ -123,10 +123,16 @@ export interface ProjectContext {
   chars: number;
 }
 
-/** The chat's project, or null (none, gone, or the database did not answer: the chat goes on without it). */
-export async function loadProjectContext(env: DbEnv, accountId: string, projectId: string | null | undefined): Promise<ProjectContext | null> {
+/**
+ * The chat's project, or null (none, gone, or the database did not answer: the chat goes on without it).
+ * `files: false` skips the knowledge files (Live voice uses only the instructions).
+ */
+export async function loadProjectContext(env: DbEnv, accountId: string, projectId: string | null | undefined, opts: { files?: boolean } = {}): Promise<ProjectContext | null> {
   if (!projectId) return null;
-  const [p, f] = await Promise.all([getProject(env, accountId, projectId), projectFiles(env, accountId, projectId)]);
+  const [p, f] = await Promise.all([
+    getProject(env, accountId, projectId),
+    opts.files === false ? Promise.resolve<Rows<AttachmentRow>>({ ok: true, rows: [] }) : projectFiles(env, accountId, projectId),
+  ]);
   if (!p.ok || !p.value) return null;
   const files = f.ok ? f.rows : [];
   return { project: p.value, files, chars: files.reduce((n, a) => n + (a.extracted_text?.length ?? 0), 0) };

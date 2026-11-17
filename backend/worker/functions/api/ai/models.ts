@@ -25,10 +25,9 @@
  * unless the session's account is one of claudeAccess.ts's; a locked model
  * never says whether the key is set.
  *
- * The curated models come first, then the free models found in each
- * provider's own list (`more-<provider>` groups, _lib/ai/discovery.ts),
- * unless the owner set `discover: false`. A provider's list that fails
- * leaves the curated picker as it is.
+ * Only the curated, approved models (models.ts APPROVED_MODELS) are listed;
+ * a curated OpenRouter model that OpenRouter's free list no longer has is
+ * left out (_lib/ai/openRouterList.ts).
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, json } from '../../_lib/authShared';

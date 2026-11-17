@@ -5,8 +5,9 @@
  *   /vinaxai/project/:id   one project: a composer that starts a chat in it,
  *                          its chats, its instructions and its files
  *
- * Every chat in a project follows its instructions and can read its files
- * (README.md (VinaX AI) → Projects). Loaded only when a project page opens.
+ * Every chat in a project follows its instructions and can read its files;
+ * Live voice follows the first 2,000 characters of the instructions and
+ * never reads the files (README.md (VinaX AI) → Projects). Loaded only when a project page opens.
  */
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -174,7 +175,7 @@ function Knowledge({ projectId, detail }: { projectId: string; detail: ProjectDe
         </button>
         <input ref={input} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files?.length) up.add(e.target.files); e.target.value = ''; }} />
       </div>
-      <p className="vx-ai-proj-hint">Every chat in this project can read these. Text, code, PDFs and images.</p>
+      <p className="vx-ai-proj-hint">Every chat in this project can read these. Text, code, PDFs and images. Live voice doesn’t read them.</p>
       <p className="vx-ai-proj-usage">{count(files.length, 'file', 'files')} of {limits.files} · {fmtChars(limits.usedChars)} of {fmtChars(limits.chars)} characters of text</p>
       {(files.length > 0 || up.uploads.length > 0) && (
         <ul className="vx-ai-proj-files" aria-label="Project files">
@@ -249,7 +250,7 @@ function Instructions({ project }: { project: Project }): ReactNode {
           <div className="vx-ai-field">
             <label htmlFor="vx-ai-proj-instr" className="sr-only">Project instructions</label>
             <textarea id="vx-ai-proj-instr" rows={8} autoFocus maxLength={PROJECT_LIMITS.instructions} aria-describedby="vx-ai-proj-instr-hint" value={text} placeholder="Answer as a music teacher. Use sargam notation. Keep replies under 200 words…" onChange={(e) => setText(e.target.value)} />
-            <small id="vx-ai-proj-instr-hint">Every chat in this project follows these. {fmtChars(text.length)} of {fmtChars(PROJECT_LIMITS.instructions)} characters.</small>
+            <small id="vx-ai-proj-instr-hint">Every chat in this project follows these. Live voice follows the first 2,000 characters. {fmtChars(text.length)} of {fmtChars(PROJECT_LIMITS.instructions)} characters.</small>
           </div>
           {error && <p className="vx-ai-share-error" role="alert">{error}</p>}
           <div className="vx-ai-dialog-row">

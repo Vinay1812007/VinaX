@@ -9,19 +9,19 @@
  *     limits: { messagesPerMinute, imagesPerMessage, filesPerMessage, filesPerChat,
  *               pdfMB, pdfPages, textMB, searchesPerDay },   // see LIMIT_RANGES
  *     models: { "<model id>": { enabled, order } },
- *     discover: true,             // off by default; true = free models found in the providers' lists join the picker;
- *                                 // false = none, { "<provider>": false } = not that provider's
  *     dailyLimit: 25,             // messages per person per day (UTC); missing = no limit
  *     images: { enabled, perDay } } // Create image (images.ts): off unless enabled; perDay per person (default 10)
  *
- * Values are sanitised here, so a bad value can never break the chat.
+ * Values are sanitised here, so a bad value can never break the chat. An
+ * old `discover` key (model discovery, removed 2026-11-17) is ignored: a
+ * model joins only by its id in models.ts APPROVED_MODELS.
  */
 import { setting } from '../settings';
 import type { DbEnv } from '../db';
-import { applyOverrides, isApproved, modelById, MODELS, PAUSED_MODELS } from './models';
-import { DISCOVERY_PROVIDERS, discoveredModels, openRouterListed, type DiscoverOptions } from './discovery';
+import { applyOverrides, isApproved, MODELS, PAUSED_MODELS } from './models';
+import { openRouterListed, type ListOptions } from './openRouterList';
 import { sanitizeImages, type ImageSettings } from './images';
-import type { AiEnv, ModelSpec, ProviderId } from './types';
+import type { AiEnv, ModelSpec } from './types';
 
 export interface AiSettings {
   enabled: boolean;
@@ -33,8 +33,6 @@ export interface AiSettings {
   /** The owner's instructions, added to every reply's system prompt ('' = none). */
   instructions: string;
   limits: AiLimits;
-  /** Found free models in the picker: true (all), false (none), or the providers switched off. */
-  discover: boolean | Partial<Record<ProviderId, false>>;
   /** Paused models whose latest daily check passed (modelCheck.ts): in the model menu again, never in a ladder. */
   revived: string[];
   /** Create image (images.ts): off unless the owner switches it on; a daily cap per person. */
@@ -113,21 +111,7 @@ export function sanitizeAiSettings(raw: unknown, check: unknown = null, now = Da
   const testers = Array.isArray(v.testers) ? v.testers.filter((t): t is string => typeof t === 'string' && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === 'object' && !Array.isArray(v.models) ? (v.models as Record<string, unknown>) : {};
   const lim = typeof v.dailyLimit === 'number' && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(10_000, Math.floor(v.dailyLimit)) : null;
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
-}
-
-const DISCOVER_KEYS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];
-
-/**
- * Off unless the owner switches it on (`true`, or an object naming providers
- * to leave out): on 2026-11-12 70 of the 109 models found this way were gone
- * at their provider and most others were rate-limited or timed out.
- */
-function sanitizeDiscover(raw: unknown): AiSettings['discover'] {
-  if (raw === true) return true;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-  const off = DISCOVER_KEYS.filter((p) => (raw as Record<string, unknown>)[p] === false);
-  return off.length ? Object.fromEntries(off.map((p) => [p, false])) as Partial<Record<ProviderId, false>> : true;
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
 }
 
 export async function aiSettings(env: DbEnv): Promise<AiSettings> {
@@ -145,31 +129,14 @@ export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS
 const offeredId = (s: AiSettings, id: string): boolean => isApproved(id) || s.revived.includes(id);
 
 /**
- * The picker's registry: the curated models, then the free models found in
- * the providers' lists (discovery.ts), after the owner's switches, and only
- * the approved ones (models.ts `APPROVED_MODELS`). OpenRouter's free models
+ * The picker's registry: the curated models after the owner's switches, the
+ * approved ones only (models.ts `APPROVED_MODELS`). OpenRouter's free models
  * come and go: one its current list no longer has is left out without a
  * word (the list is read in the background, so this never waits for it; an
- * unknown list keeps them all). Any discovery failure leaves the curated
- * registry as it is.
+ * unknown list keeps them all).
  */
-export async function pickerRegistryFor(env: AiEnv, s: AiSettings, o: DiscoverOptions = {}): Promise<ModelSpec[]> {
-  const [found, listed] = await Promise.all([s.discover === false ? [] : discoveredModels(env, s.discover, o), openRouterListed(env, o)]);
+export async function pickerRegistryFor(env: AiEnv, s: AiSettings, o: ListOptions = {}): Promise<ModelSpec[]> {
+  const listed = await openRouterListed(env, o);
   const offered = (spec: ModelSpec): boolean => offeredId(s, spec.id) && (spec.provider !== 'openrouter' || !listed || listed.has(spec.upstream));
-  return applyOverrides([...MODELS, ...found].filter(offered), s.models);
-}
-
-/**
- * A model the listener picked that is not curated: it must be in the
- * provider's current list (found by discovery) and not switched off by the
- * owner. Only that provider's list is consulted. Arbitrary ids never get
- * through: null means `unknown_model`.
- */
-export async function foundModelFor(env: AiEnv, s: AiSettings, id: unknown, o: Omit<DiscoverOptions, 'only'> = {}): Promise<ModelSpec | null> {
-  if (typeof id !== 'string' || id.length > 200 || s.discover === false) return null;
-  const p = id.slice(0, id.indexOf(':')) as ProviderId;
-  if (!DISCOVERY_PROVIDERS.includes(p)) return null;
-  const found = await discoveredModels(env, s.discover, { ...o, only: [p] });
-  const spec = modelById(applyOverrides(found.filter((f) => isApproved(f.id)), s.models), id);
-  return spec?.discovered ? spec : null;
+  return applyOverrides(MODELS.filter(offered), s.models);
 }

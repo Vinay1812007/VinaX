@@ -149,6 +149,10 @@ export default function PrivacyPage() {
           reply, never into shared links, and only you can see them, in VinaX AI&rsquo;s Settings → Memory. Delete any
           note there, press Forget everything, switch memory or learning off, or start an incognito chat, which
           neither uses nor adds to memory. Deleting your account deletes your notes.
+          When you press thumbs up or down under a reply, VinaX keeps that rating with your account, with the reason
+          and note you add to a thumbs down and the model that wrote the reply, so the owner can see which models
+          answer well. The owner&rsquo;s console shows only totals per model. Press the same thumb again to take it back. A rating stays
+          after you delete the chat (without the link to it); deleting your account deletes your ratings.
         </p>
         <H>Listen Together</H>
         <p>

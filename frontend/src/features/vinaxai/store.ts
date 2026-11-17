@@ -6,10 +6,11 @@
  */
 import { create } from 'zustand';
 import { queryClient } from '@/services/queryClient';
-import { AiError, createImageTurn, imageNotice, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
+import { AiError, createImageTurn, imageNotice, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody, type KeepBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, unansweredQuestion, type ChatAction, type ChatState } from './chatState';
 import { personalOf, usePrefs } from './prefs';
 import { parseArtifacts, mayHaveArtifacts } from './artifacts';
+import { dropDraft, keepaliveBody, retryable, saveDraft, sendKeepalive } from './keepOnLeave';
 import type { FileRef, StreamEvent } from './types';
 
 interface Store extends ChatState {
@@ -65,6 +66,18 @@ function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'mode
 export type RunOutcome = { ok: true } | { ok: false; code: string; beforeStart: boolean };
 
 type Meta = Extract<StreamEvent, { event: 'meta' }>['data'];
+type Done = Extract<StreamEvent, { event: 'done' }>['data'];
+
+/** What the page shows of reply `meta`, as a keep request; null without answer text. */
+function keepBodyOf(meta: Meta, stopReason: KeepBody['stopReason']): KeepBody | null {
+  const reply = useChatStore.getState().messages[meta.assistantMessageId];
+  if (!reply || !reply.text.trim()) return null;
+  return {
+    conversationId: meta.conversationId, userMessageId: meta.userMessageId, assistantMessageId: meta.assistantMessageId,
+    text: reply.text, ...(reply.thinking ? { thinking: reply.thinking } : {}), model: meta.model.id, stopReason,
+    ...(meta.continued ? { continued: true } : {}),
+  };
+}
 
 /**
  * The Worker passes the model's bytes straight through, so a reply it did
@@ -74,15 +87,44 @@ type Meta = Extract<StreamEvent, { event: 'meta' }>['data'];
  * for a Continue, the whole reply (the saved part plus what followed).
  * Resolves true when it was saved.
  */
-function keepSeen(meta: Meta | null, stopReason: 'aborted' | 'error' | 'end' | 'length'): Promise<boolean> {
-  if (!meta) return Promise.resolve(false);
-  const reply = useChatStore.getState().messages[meta.assistantMessageId];
-  if (!reply || !reply.text.trim()) return Promise.resolve(false);
-  return keepReply({
-    conversationId: meta.conversationId, userMessageId: meta.userMessageId, assistantMessageId: meta.assistantMessageId,
-    text: reply.text, ...(reply.thinking ? { thinking: reply.thinking } : {}), model: meta.model.id, stopReason,
-    ...(meta.continued ? { continued: true } : {}),
-  }).then((r) => { refreshList(); return r.saved === true; }).catch(() => false);
+function keepSeen(meta: Meta | null, stopReason: KeepBody['stopReason']): Promise<boolean> {
+  const body = meta ? keepBodyOf(meta, stopReason) : null;
+  if (!body) return Promise.resolve(false);
+  // Kept on the device too until the save gets through (the page may close first: keepOnLeave.ts).
+  saveDraft(body);
+  return keepReply(body).then((r) => { dropDraft(body.assistantMessageId); refreshList(); return r.saved === true; }).catch((e: unknown) => {
+    if (!retryable(e)) dropDraft(body.assistantMessageId);
+    return false;
+  });
+}
+
+/** The reply being written right now, for a page that goes away in the middle of it. */
+let writing: { meta: Meta | null; done: Done | null } | null = null;
+
+/**
+ * The page is closing (pagehide) or being frozen (freeze) while a reply is
+ * written: send what it shows to the keep route with keepalive, and keep a
+ * draft on the device for the next open (keepOnLeave.ts). A reply the
+ * Worker saves itself (`done` without `saved: false`) needs neither.
+ * Backgrounding is not leaving: a reply goes on in the background.
+ */
+export function keepOnLeave(): void {
+  const w = writing;
+  if (!w?.meta || (w.done && w.done.saved !== false)) return;
+  flush();
+  const body = keepBodyOf(w.meta, w.done ? w.done.stopReason : 'aborted');
+  if (!body) return;
+  saveDraft(body);
+  const wire = keepaliveBody(body);
+  if (wire) sendKeepalive('/keep', wire);
+}
+
+let watching = false;
+function watchLeave(): void {
+  if (watching || typeof window === 'undefined') return;
+  watching = true;
+  window.addEventListener('pagehide', keepOnLeave);
+  document.addEventListener('freeze', keepOnLeave);
 }
 
 /** No answer text arrived for this reply (only reasoning, or nothing). */
@@ -108,8 +150,11 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
   inflight?.abort();
   const ctl = new AbortController();
   inflight = ctl;
+  watchLeave();
   let meta: Meta | null = null;
-  let done: Extract<StreamEvent, { event: 'done' }>['data'] | null = null;
+  let done: Done | null = null;
+  const seen: { meta: Meta | null; done: Done | null } = { meta: null, done: null };
+  writing = seen;
   const failAfterStart = (code: string): void => {
     enqueue({ event: 'error', data: { code, message: code === 'network' ? 'The connection dropped before the reply finished.' : noticeFor(code), retryable: true } });
     enqueue({ event: 'done', data: { stopReason: 'error' } });
@@ -141,20 +186,22 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
     await Promise.race([
       streamChat(body, (ev) => {
         if (ctl.signal.aborted) return; // late events after Stop are ignored
-        if (ev.event === 'meta') meta = ev.data;
-        if (ev.event === 'done') done = ev.data;
+        if (ev.event === 'meta') meta = seen.meta = ev.data;
+        if (ev.event === 'done') done = seen.done = ev.data;
         enqueue(ev);
       }, ctl.signal),
       stopped,
     ]);
     flush();
-    const finished = done as Extract<StreamEvent, { event: 'done' }>['data'] | null;
+    const finished = done as Done | null;
     if (!finished) {
       if (meta) return await brokeOff('network');
       dispatch({ type: 'fail', code: 'network', message: noticeFor('network') });
       return { ok: false, code: 'network', beforeStart: true };
     }
     const m = meta as Meta | null;
+    // Saved by the Worker (over any part kept when the page was frozen): no draft is needed.
+    if (m && finished.saved !== false) dropDraft(m.assistantMessageId);
     // Not saved by the Worker: save it from here (and before a Continue, which needs it saved).
     const kept = finished.saved === false ? await keepSeen(m, finished.stopReason) : true;
     if (finished.stopReason === 'length' && kept && m && autoLeft > 0 && cutInsideArtifact(m.assistantMessageId)) {
@@ -175,6 +222,7 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
     return { ok: false, code, beforeStart: true };
   } finally {
     if (inflight === ctl) inflight = null;
+    if (writing === seen) writing = null;
   }
 }
 

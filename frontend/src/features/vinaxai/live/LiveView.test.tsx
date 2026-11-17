@@ -15,6 +15,10 @@ const h = vi.hoisted(() => ({
   state: 'listening',
   setSpeaker: vi.fn(async (on: boolean) => (on ? 'speaker' : 'earpiece')),
   muted: [] as boolean[],
+  turns: [] as Array<{ role: 'user' | 'assistant'; text: string }>,
+  model: null as null | { id: string; name: string },
+  keep: vi.fn((_path: string, _body: string) => true),
+  save: vi.fn(),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -26,11 +30,12 @@ vi.mock('@capacitor/core', () => ({
   registerPlugin: () => ({}),
 }));
 vi.mock('../musicHold', () => ({ holdMusic: () => () => undefined }));
-vi.mock('../api', () => ({ saveLiveTranscript: vi.fn(), voiceNotice: (c: string) => c }));
+vi.mock('../api', () => ({ saveLiveTranscript: h.save, voiceNotice: (c: string) => c }));
+vi.mock('../keepOnLeave', () => ({ sendKeepalive: h.keep, transcriptKeepaliveBody: (b: unknown) => JSON.stringify(b) }));
 vi.mock('./liveSession', () => ({
   LiveSession: class {
-    transcript = { turns: () => [] };
-    model = null;
+    transcript = { turns: () => h.turns };
+    model = h.model;
     search = false;
     constructor(opts: { speaker?: boolean }, private readonly cb: { onRoute?(r: string | null): void; onState(s: string): void }) {
       h.opts = opts;
@@ -66,6 +71,10 @@ beforeEach(() => {
   h.setSpeaker.mockClear();
   h.setOptions.mockClear();
   h.state = 'listening';
+  h.turns = [];
+  h.model = null;
+  h.keep.mockClear();
+  h.save.mockClear();
   localStorage.clear();
   usePrefs.getState().set({ liveSpeaker: true });
 });
@@ -183,5 +192,24 @@ describe('Live voice: in the background, with music, and showing things', () => 
     view();
     expect(await screen.findByRole('button', { name: 'Show a photo' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Share screen' })).toBeNull();
+  });
+
+  it('the page closing mid-call sends the transcript with keepalive, once; going to the background does not', async () => {
+    h.model = { id: 'live:gemini', name: 'Gemini Live' };
+    h.turns = [{ role: 'user', text: 'Hi' }, { role: 'assistant', text: 'Hello!' }];
+    const onClose = vi.fn();
+    render(<LiveView conversationId={null} parentMessageId={null} thinking={false} voice="Kore" model="auto" micId="" onClose={onClose} />);
+    await screen.findByRole('button', { name: 'End' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(h.keep).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pagehide'));
+    expect(h.keep).toHaveBeenCalledTimes(1);
+    expect(h.keep.mock.calls[0][0]).toBe('/live-transcript');
+    expect(JSON.parse(h.keep.mock.calls[0][1])).toEqual({ conversationId: null, model: 'live:gemini', turns: h.turns });
+    // Back from the page cache: ending the call does not save it a second time.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'End' })); });
+    expect(h.save).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledWith(null);
   });
 });

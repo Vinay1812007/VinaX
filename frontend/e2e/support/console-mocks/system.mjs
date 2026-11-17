@@ -54,8 +54,10 @@ export default {
     ],
     search: { grounding: { usedToday: 12, dailyLimit: 450, configured: true }, api: { usedToday: 3, dailyLimit: 100, configured: true, provider: 'tavily' } },
     voice: { dictation: true, readAloud: true, live: false },
+    feedback: { days: 30, models: { 'groq:gpt-oss-20b': { up: 14, down: 3 } } },
   }),
   'POST /api/admin/ai': () => ({ ok: true, firstTokenMs: 420 }),
+  'POST /api/admin/ai-search': () => ({ ok: true, provider: 'tavily', count: 6, ms: 840, status: 200, site: 'en.wikipedia.org' }),
   'GET /api/admin/releases': () => ({
     configured: true, release: { tag: 'v1.8.3', name: 'VinaX 1.8.3', notes: 'VinaX AI settings, Claude-style replies and live previews.', assets: [{ name: 'vinax-1.8.3.apk', url: 'https://github.com/x/y/releases/download/v1.8.3/vinax.apk' }] },
     live: { version: '1.8.3', build: 183, minBuild: 170 },

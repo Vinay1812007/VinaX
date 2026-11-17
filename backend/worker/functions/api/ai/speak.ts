@@ -12,17 +12,19 @@
  *       kind 2  base64 audio: "<mime>\n<base64>" (Gemini: WAV, or 16-bit PCM when the mime says L16)
  *       kind 3  stopped:      {"error": "voice_busy" | "voice_unavailable"} (a later piece failed; nothing follows)
  *   → 400 bad_request · 401 signed_out · 413 too_long
- *   → 429 rate_limited | voice_busy · 503 ai_not_configured | ai_disabled | unavailable | voice_unavailable
+ *   → 429 rate_limited | voice_busy · 503 ai_not_configured | ai_disabled | unavailable | voice_unavailable | language_unavailable
  *
  * Who reads: Groq Orpheus for short replies (Arabic text gets the Arabic
- * model), one Gemini voice for long ones (see planSpeech). When an engine
- * fails mid-way the rest of the text goes to the next one. Nothing is stored.
+ * model), one Gemini voice for long ones and for text in an Indian script
+ * (see planSpeech). When an engine fails mid-way the rest of the text goes
+ * to the next one. Indian-script text never falls back to Orpheus English:
+ * with no Gemini TTS model free it answers language_unavailable. Nothing is stored.
  */
 import { CORS, json } from '../../_lib/authShared';
 import { readJsonCapped } from '../../_lib/body';
 import { voiceFailure, voiceGate } from '../../_lib/ai/voiceGate';
 import {
-  DEFAULT_LIVE_VOICE, DEFAULT_READ_VOICE, GEMINI_TTS_CHARS, geminiSpeak, geminiTtsModels, LIVE_VOICES, noteVoiceFailure, orpheusSpeak, planSpeech, READ_VOICES, splitSpeech,
+  DEFAULT_LIVE_VOICE, DEFAULT_READ_VOICE, GEMINI_TTS_CHARS, geminiSpeak, geminiTtsModels, isMostlyIndic, LIVE_VOICES, noteVoiceFailure, orpheusSpeak, planSpeech, READ_VOICES, splitSpeech,
   type SpeechAudio,
 } from '../../_lib/ai/voice';
 import { asProviderError, type ProviderError } from '../../_lib/ai/errors';
@@ -77,7 +79,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     live: (LIVE_VOICES as readonly string[]).includes(body.liveVoice as string) ? (body.liveVoice as string) : DEFAULT_LIVE_VOICE,
   };
   const plan = planSpeech(env, text, voices);
-  if (!plan) return voiceFailure([]);
+  if (!plan) return isMostlyIndic(text) ? json({ error: 'language_unavailable' }, 503) : voiceFailure([]);
 
   // The reading, piece by piece, moving to the next engine when one fails.
   let { engine, model, voice } = plan;

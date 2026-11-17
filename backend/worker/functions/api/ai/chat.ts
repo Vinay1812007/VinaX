@@ -59,7 +59,7 @@ import {
 } from '../../_lib/ai/attachments';
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { ADAPTERS, anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
-import { aiOpenFor, aiSettings, foundModelFor, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
+import { aiOpenFor, aiSettings, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
 import { claudeAllowed, isLockedModel } from '../../_lib/ai/claudeAccess';
 import { isCooling, noteFailure } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
@@ -78,7 +78,7 @@ import { artifactsOf } from '../../_lib/ai/artifacts';
 import { getProject, knowledgeFor, loadProjectContext, longKnowledge, withKnowledge } from '../../_lib/ai/projects';
 import { learnCandidates, learnFromChat, markIncognito, memoryBlock, memoryFor, NO_MEMORY, shouldLearn } from '../../_lib/ai/memory';
 import {
-  createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
+  createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, replaceKeptPart, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
 } from '../../_lib/ai/store';
 import { ProviderError } from '../../_lib/ai/errors';
@@ -242,8 +242,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   let candidates: ModelSpec[];
   let ladder: LadderName | null = null;
   if (mode === 'model') {
-    // A curated model, or a free one found in its provider's current list (never an arbitrary id).
-    const spec = modelById(registry, body.model) ?? (await foundModelFor(env, settings, body.model, { waitUntil: ctx.waitUntil }));
+    // A curated, approved model (never an arbitrary id).
+    const spec = modelById(registry, body.model);
     if (!spec || spec.group === null || !providerConfigured(env, spec.provider)) return json({ error: 'unknown_model' }, 400);
     // Claude: only the accounts in claudeAccess.ts (the picker shows it locked to everyone else).
     if (isLockedModel(spec) && !(await claudeAllowed(env, sub))) return json({ error: 'model_locked' }, 403);
@@ -657,13 +657,15 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         });
       }
     } else if (savedReply) {
-      await insertMessage(env, {
-        id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: 'assistant',
-        content: [{ type: 'text', text: finalText }], thinking: thinking || null, thinking_ms: thinkMs,
+      const reply = {
+        content: [{ type: 'text' as const, text: finalText }], thinking: thinking || null, thinking_ms: thinkMs,
         sources: searched,
         artifacts: (() => { const found = artifactsOf(finalText); return found.length ? found : null; })(),
         model_id: model.id, provider: model.provider, stop_reason: stop, usage,
-      });
+      };
+      const put = await insertMessage(env, { id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: 'assistant', ...reply });
+      // 23505: the page kept a part of it while it was frozen or closing (keep.ts); the whole reply takes its place.
+      if (!put.ok && put.code === '23505') await replaceKeptPart(env, conversation.id, assistantId, reply);
     }
     // Nothing to move when the question (or a new chat's row) never got in.
     if (userOk) {

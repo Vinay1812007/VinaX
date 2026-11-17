@@ -23,7 +23,7 @@
  * minute or two.
  *
  * Cached ten minutes, in this instance's memory and the edge cache
- * (`caches.default`, as `ai/discovery.ts` does), so the Dashboard, Server
+ * (`caches.default`, as `ai/openRouterList.ts` does), so the Dashboard, Server
  * Checks and the 5-minute alert check share one query. A failed query is
  * remembered for two minutes so a broken key is not asked every request.
  * Never throws.

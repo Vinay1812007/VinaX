@@ -16,8 +16,16 @@ import { PREFS_KEY, usePrefs } from './prefs';
 import type { VoiceInfo } from './types';
 import { Composer } from './Composer';
 import type { Dictation } from './useVoiceDictation';
+import { voiceNotice } from './api';
 
 afterEach(cleanup);
+
+describe('voiceNotice: what a failed voice request says', () => {
+  it('a reply in a language Read aloud can’t voice right now says so', () => {
+    expect(voiceNotice('language_unavailable')).toBe('Can’t read this language aloud right now. Try again later.');
+    expect(voiceNotice('voice_unavailable')).toBe('Voice isn’t available right now. Try again later.');
+  });
+});
 
 describe('speechText: a reply as words to say', () => {
   it('drops code, citations, link addresses and markup, keeps the words', () => {

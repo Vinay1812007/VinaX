@@ -7,7 +7,7 @@ import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser, type ChatStreamItem } from './sse';
 import { WireReader, wireOf } from './wire';
-import type { ConversationSummary, GalleryArtifact, GalleryItem, MemoryItem, MemoryPrefs, MemoryState, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
+import type { ConversationSummary, GalleryArtifact, GalleryItem, MemoryItem, MemoryPrefs, MemoryState, MessageFeedback, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 import { setFileLimits } from './files';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
@@ -272,6 +272,7 @@ export const saveLiveTranscript = (body: { conversationId: string | null; parent
 export function voiceNotice(code: string): string {
   switch (code) {
     case 'voice_busy': return 'Voice is busy right now. Try again in a minute.';
+    case 'language_unavailable': return 'Can’t read this language aloud right now. Try again later.';
     case 'rate_limited': return 'That’s a lot of voice requests at once. Wait a minute, then try again.';
     case 'too_large': return 'That recording is too long. Keep it under two minutes.';
     case 'unsupported_type': return 'That recording couldn’t be read. Try again.';
@@ -407,4 +408,9 @@ export interface KeepBody {
 
 export function keepReply(body: KeepBody): Promise<{ ok: boolean; saved: boolean }> {
   return call<{ ok: boolean; saved: boolean }>('/keep', { method: 'POST', body: JSON.stringify(body) });
+}
+
+/** Thumbs up or down on a saved reply, or null to take it back (POST /api/ai/feedback). */
+export function sendFeedback(body: { conversationId: string; messageId: string; rating: 'up' | 'down' | null; reason?: string; note?: string }): Promise<{ ok: true; feedback: MessageFeedback | null }> {
+  return call<{ ok: true; feedback: MessageFeedback | null }>('/feedback', { method: 'POST', body: JSON.stringify(body) });
 }

@@ -75,6 +75,15 @@ export function updateMessage(env: DbEnv, conversationId: string, id: string, pa
   return db.update<MessageRow>(env, 'ai_messages', q().eq('id', id).eq('conversation_id', conversationId), patch);
 }
 
+/**
+ * Put a fuller reply over the part the page kept when it went away
+ * (POST /api/ai/keep with stop_reason 'aborted'). Only that kind of row
+ * matches, so a reply that ended is never cut down; no rows back = nothing replaced.
+ */
+export function replaceKeptPart(env: DbEnv, conversationId: string, id: string, patch: Partial<Pick<MessageRow, 'content' | 'thinking' | 'thinking_ms' | 'sources' | 'artifacts' | 'model_id' | 'provider' | 'stop_reason' | 'usage'>>): Promise<Rows<MessageRow>> {
+  return db.update<MessageRow>(env, 'ai_messages', q().eq('id', id).eq('conversation_id', conversationId).eq('role', 'assistant').eq('stop_reason', 'aborted').select('id'), patch, { returning: true });
+}
+
 /** Every chat of the account with its messages, as one JSON document (`ai_export`). */
 export function exportChats(env: DbEnv, accountId: string): Promise<Value<unknown>> {
   return db.rpc<unknown>(env, 'ai_export', { p_account: accountId });

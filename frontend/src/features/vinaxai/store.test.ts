@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTO_CONTINUES, continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
 import { usePrefs } from './prefs';
+import { KEYS } from '@/constants/storage-keys';
+import { DRAFT_KEY, saveDraft } from './keepOnLeave';
 
 beforeEach(() => {
   resetChat();
@@ -204,6 +206,51 @@ describe('pass-through streams (the provider\'s own lines)', () => {
     await pending;
     await settle();
     expect(calls.find((c) => c.url.endsWith('/keep'))?.body).toMatchObject({ text: 'So far', stopReason: 'aborted' });
+  });
+
+  it('a page that closes or freezes mid-reply sends what it shows with keepalive, and keeps a draft until a save gets through', async () => {
+    localStorage.setItem(KEYS.account, JSON.stringify({ session: 'vx1.test', user: { name: 'Asha', email: 'asha@example.com', picture: null, username: 'asha' } }));
+    const enc = new TextEncoder();
+    const calls: Array<Call & { keepalive?: boolean; auth?: string }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown>, keepalive: init.keepalive, auth: (init.headers as Record<string, string>).authorization });
+      if (url.endsWith('/keep')) return new Response('{"ok":true,"saved":true}', { status: 200 });
+      return new Response(new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(enc.encode(sse([['meta', META]]) + line({ content: 'So far' })));
+          init.signal?.addEventListener('abort', () => c.error(new DOMException('Stopped', 'AbortError')));
+        },
+      }), { status: 200 });
+    }));
+    const pending = sendMessage('Explain Kafka');
+    for (let i = 0; i < 50 && !useChatStore.getState().messages.a1?.text; i++) await new Promise((r) => setTimeout(r, 5));
+    window.dispatchEvent(new Event('pagehide'));
+    document.dispatchEvent(new Event('freeze'));
+    const sent = calls.filter((c) => c.url.endsWith('/keep'));
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ keepalive: true, auth: 'Bearer vx1.test', body: { assistantMessageId: 'a1', text: 'So far', stopReason: 'aborted' } });
+    expect((JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '[]') as Array<{ body: { text: string } }>)[0].body.text).toBe('So far');
+    // The page stayed after all (a freeze it woke from): Stop saves it, and the draft goes.
+    stopReply();
+    await pending;
+    await settle();
+    await settle();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    // Nothing is being written now: leaving sends nothing.
+    window.dispatchEvent(new Event('pagehide'));
+    expect(calls.filter((c) => c.url.endsWith('/keep'))).toHaveLength(3);
+    localStorage.clear();
+  });
+
+  it('a reply the Worker saved needs no keep on leaving, and an older draft of it goes', async () => {
+    localStorage.setItem(KEYS.account, JSON.stringify({ session: 'vx1.test', user: { name: 'Asha', email: 'asha@example.com', picture: null, username: 'asha' } }));
+    saveDraft({ conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', text: 'So', stopReason: 'aborted' });
+    const calls = stub([sse([['meta', META]]) + line({ content: 'Whole.' }) + sse([['done', { stopReason: 'end', saved: true }]])]);
+    await sendMessage('Explain Kafka');
+    window.dispatchEvent(new Event('pagehide'));
+    expect(calls.some((c) => c.url.endsWith('/keep'))).toBe(false);
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    localStorage.clear();
   });
 
   it('sending the same question again after it went unanswered asks for a new answer, not a second copy', async () => {

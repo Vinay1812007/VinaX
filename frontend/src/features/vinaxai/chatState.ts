@@ -4,7 +4,7 @@
  * and each event of the reply stream. Pure, so it is tested directly
  * (chatState.test.ts); the Zustand store in store.ts only holds it.
  */
-import type { ChatMessage, FileRef, Marker, ServerConversation, ServerMessage, StreamEvent } from './types';
+import type { ChatMessage, FileRef, Marker, MessageFeedback, ServerConversation, ServerMessage, StreamEvent } from './types';
 
 /** The text with grounding's markers written in as [n] (they arrive after the text). */
 export function applyMarkers(text: string, markers: Marker[]): string {
@@ -57,7 +57,9 @@ export type ChatAction =
   | { type: 'fail'; code: string; message: string }
   | { type: 'dismiss' }
   | { type: 'project'; projectId: string | null }
-  | { type: 'incognito'; on: boolean };
+  | { type: 'incognito'; on: boolean }
+  /** The listener rated a reply (or took the rating back). */
+  | { type: 'feedback'; messageId: string; feedback: MessageFeedback | null };
 
 export const initialChat = (): ChatState => ({
   conversationId: null, title: null, projectId: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null, incognito: false,
@@ -138,6 +140,7 @@ export function fromServer(m: ServerMessage): ChatMessage {
       .map((p) => ({ id: p.id!, name: p.name ?? 'file', kind: p.kind ?? 'text', mime: p.mime ?? '', size: p.size ?? 0, ...(p.pages ? { pages: p.pages } : {}) })),
     thinking: m.thinking ?? '', thinkingMs: m.thinkingMs, model: m.model, stopReason: m.stopReason, error: null, createdAt: m.createdAt,
     sources: m.sources && Array.isArray(m.sources.items) ? m.sources : null,
+    ...(m.feedback && (m.feedback.rating === 'up' || m.feedback.rating === 'down') ? { feedback: m.feedback } : {}),
   };
 }
 
@@ -253,6 +256,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'select-leaf':
       if (state.streaming || !state.messages[action.leafId]) return state;
       return { ...state, leafId: action.leafId };
+
+    case 'feedback': {
+      const m = state.messages[action.messageId];
+      if (!m || m.role !== 'assistant') return state;
+      return { ...state, messages: { ...state.messages, [m.id]: { ...m, feedback: action.feedback } } };
+    }
 
     case 'stopped': {
       if (!state.streaming) return state;

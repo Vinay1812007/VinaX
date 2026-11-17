@@ -2,7 +2,8 @@
  * VinaX AI — one conversation of the signed-in listener.
  *
  *   GET    /api/ai/conversations/<id> → 200 { conversation, messages: [...] }  the whole tree
- *          (conversation.incognito: true for a chat that never uses memory)
+ *          (conversation.incognito: true for a chat that never uses memory; a reply the listener
+ *          rated has feedback: { rating, reason?, note? }, POST /api/ai/feedback)
  *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId?, projectId? } → 200 { conversation }
  *          projectId: a project of the account (move the chat into it) or null (out of its project)
  *   DELETE /api/ai/conversations/<id> → 200 { ok: true }   hidden now, purged a day later; its shared link goes now
@@ -14,7 +15,8 @@ import { readJsonCapped } from '../../../_lib/body';
 import { rateLimitAsync } from '../../../_lib/ratelimit';
 import { PROVIDER_NAMES } from '../../../_lib/ai/adapters';
 import { MODELS, modelById } from '../../../_lib/ai/models';
-import { DISCOVERY_PROVIDERS, knownDiscovered, prettyName } from '../../../_lib/ai/discovery';
+import { prettyName } from '../../../_lib/ai/modelName';
+import { feedbackIn } from '../../../_lib/ai/feedback';
 import {
   deleteConversation, getConversation, isUuid, listMessages, publicConversation, publicMessage, updateConversation, type ConversationRow,
 } from '../../../_lib/ai/store';
@@ -49,24 +51,30 @@ const label = (modelId: string): { name: string; provider: string } | null => {
   if (live) return live;
   // A picture from Create image (POST /api/ai/images).
   if (modelId === IMAGE_MODEL_ID) return IMAGE_MODEL_LABEL;
-  // A free model found in its provider's list: its name when this instance knows the list, else one made from the id.
-  const spec = modelById(MODELS, modelId) ?? knownDiscovered(modelId);
+  const spec = modelById(MODELS, modelId);
   if (spec) return { name: spec.name, provider: PROVIDER_NAMES[spec.provider] };
+  // A model no longer in the registry (dropped, or found by the old model discovery): a name made from its id.
   const p = modelId.slice(0, modelId.indexOf(':')) as ProviderId;
-  return DISCOVERY_PROVIDERS.includes(p) ? { name: prettyName(modelId.slice(p.length + 1)), provider: PROVIDER_NAMES[p] } : null;
+  const upstream = modelId.slice(p.length + 1);
+  return Object.prototype.hasOwnProperty.call(PROVIDER_NAMES, p) && upstream ? { name: prettyName(upstream), provider: PROVIDER_NAMES[p] } : null;
 };
 
 export const onRequestGet = async (ctx: Ctx): Promise<Response> => {
   const o = await owned(ctx, 'ai-conversation');
   if (o instanceof Response) return o;
-  // The incognito flag is read on its own, so a database without it still opens chats.
-  const [m, inc] = await Promise.all([
+  // The incognito flag and the listener's thumbs (schema 24) are read on their own, so a database without them still opens chats.
+  const [m, inc, rated] = await Promise.all([
     listMessages(ctx.env, o.conv.id),
     db.one<{ incognito: boolean | null }>(ctx.env, 'ai_conversations', q().eq('id', o.conv.id).select('incognito')),
+    feedbackIn(ctx.env, o.sub, o.conv.id).catch(() => null),
   ]);
   if (!m.ok) return json({ error: 'unavailable' }, 503);
   const incognito = inc.ok && inc.value?.incognito === true;
-  return json({ conversation: { ...publicConversation(o.conv), ...(incognito ? { incognito: true } : {}) }, messages: m.rows.map((r) => publicMessage(r, label)) });
+  const messages = m.rows.map((r) => {
+    const fb = r.role === 'assistant' ? rated?.[r.id] : undefined;
+    return fb ? { ...publicMessage(r, label), feedback: fb } : publicMessage(r, label);
+  });
+  return json({ conversation: { ...publicConversation(o.conv), ...(incognito ? { incognito: true } : {}) }, messages });
 };
 
 export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {

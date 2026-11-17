@@ -9,7 +9,8 @@
  *               Gemini through its Files API, so the Worker never base64s it).
  *   Read aloud  Groq Orpheus (English, or Arabic for Arabic text; 200
  *               characters a request, WAV) → Gemini TTS (3.8 Flash, 3.8
- *               Flash-Lite, 2.5 Flash preview).
+ *               Flash-Lite, 2.5 Flash preview). Text in an Indian script
+ *               goes straight to Gemini TTS.
  *   Live        Gemini Live over a WebSocket from the browser, with a
  *               one-use token from POST /v1beta/auth_tokens (never the key).
  *
@@ -147,6 +148,22 @@ export function isMostlyArabic(text: string): boolean {
 }
 
 /**
+ * The Indian scripts Orpheus English cannot read: Devanagari (Hindi,
+ * Marathi…), Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and
+ * Malayalam. Vowel signs are marks, not letters, so both are counted; the
+ * scripts' own digits and dandas are not (English with Devanagari numbers
+ * stays English).
+ */
+const INDIC = /(?=[\p{L}\p{M}])[\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Gurmukhi}\p{Script=Gujarati}\p{Script=Oriya}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Kannada}\p{Script=Malayalam}]/gu;
+
+/** Text mostly in an Indian script, read by Gemini TTS (multilingual) whatever its length. */
+export function isMostlyIndic(text: string): boolean {
+  const letters = text.match(/[\p{L}\p{M}]/gu)?.length ?? 0;
+  const indic = text.match(INDIC)?.length ?? 0;
+  return letters > 0 && indic / letters > 0.5;
+}
+
+/**
  * Split text into pieces of at most `max` characters, at sentence ends when
  * it can, then at commas, then at spaces (a word longer than `max` is cut).
  */
@@ -275,13 +292,19 @@ export const geminiTtsModels = (env: AiEnv, now = Date.now()): string[] => (gemi
  * Choose who reads. Orpheus (the brief's voice) reads short replies; a long
  * one is read by one Gemini voice from start to end, because Orpheus takes
  * 200 characters a request and its free allowance is a few requests a
- * minute: switching voices half-way through a reply sounds broken.
+ * minute: switching voices half-way through a reply sounds broken. Text in
+ * an Indian script always goes to Gemini (Orpheus reads only English and
+ * Arabic); with no Gemini model free there is no plan (the route answers
+ * language_unavailable, see isMostlyIndic).
  */
 export function planSpeech(env: AiEnv, text: string, voices: { read: string; live: string }, now = Date.now()): SpeechPlan | null {
+  const gemini = geminiTtsModels(env, now);
+  if (isMostlyIndic(text)) {
+    return gemini.length ? { engine: 'gemini', model: gemini[0], voice: voices.live, pieces: splitSpeech(text, GEMINI_TTS_CHARS) } : null;
+  }
   const arabic = isMostlyArabic(text);
   const orpheus = arabic ? TTS_ARABIC : TTS_ENGLISH;
   const orpheusOk = !!groqKey(env) && !voiceResting(orpheus, now);
-  const gemini = geminiTtsModels(env, now);
   if (orpheusOk && (text.length <= ORPHEUS_REPLY_MAX || !gemini.length)) {
     return { engine: 'orpheus', model: orpheus, voice: arabic ? ARABIC_VOICE : voices.read, pieces: splitSpeech(text, ORPHEUS_MAX_CHARS) };
   }

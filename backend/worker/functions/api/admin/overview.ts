@@ -14,9 +14,9 @@ import { adminGet } from '../../_lib/adminRoute';
 import { db, q, firstFailure } from '../../_lib/db';
 import { intIn } from '../../_lib/edge';
 import { analyticsConfigured, readRequestUsage, REQUESTS_BAD_SHARE, REQUESTS_WARN_SHARE, type CfAnalyticsEnv } from '../../_lib/cfAnalytics';
+import { SCHEMA_WANTED } from './session';
 
 /** The schema.sql version this console is written against. */
-const SCHEMA_WANTED = 18;
 
 interface Kpis {
   activeNow?: number; playingNow?: number; users?: number; listeners?: number; accounts?: number; newListeners24h?: number;

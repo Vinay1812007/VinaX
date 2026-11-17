@@ -13,7 +13,8 @@
  *     lean?: true,               // without the speed settings (the model refused them), and without music control
  *     music?: true,              // music control: the setup carries LIVE_MUSIC_TOOLS (the page runs them in its player)
  *     personal?: { name?, about?, instructions?, style? }, // VinaX AI settings → Personalisation, never stored
- *     conversationId?, incognito?, // whose memory applies (none in an incognito chat)
+ *     conversationId?, incognito?, // whose memory applies (none in an incognito chat); a chat in a
+ *                                  // project brings the project's instructions (LIVE_PROJECT_CHARS, no knowledge files)
  *     voice?: "<Gemini voice>", timezone?, locale? }
  *
  *   → 200 { token, url, setup, model: { id, name }, search, tuned, music, expiresAt }
@@ -31,8 +32,10 @@ import { aiSettings } from '../../_lib/ai/config';
 import {
   ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_SEARCH_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
-import { chatContextBlock, firstNameOf, languageReminder, transcriptionLanguages, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
+import { chatContextBlock, firstNameOf, languageReminder, transcriptionLanguages, ownerBlock, personalBlock, projectBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
 import { memoryBlock, memoryFor } from '../../_lib/ai/memory';
+import { loadProjectContext } from '../../_lib/ai/projects';
+import { getConversation } from '../../_lib/ai/store';
 import { asProviderError } from '../../_lib/ai/errors';
 import type { AiEnv } from '../../_lib/ai/types';
 
@@ -51,6 +54,36 @@ export function liveCandidates(thinking: boolean, skip: readonly string[], now =
   const searchers = search ? LIVE_MODELS.filter((m) => LIVE_SEARCH_MODELS.includes(m.id)) : [];
   const all = [...(first ? [first] : []), ...searchers, ...(thinking ? [LIVE_THINKING_MODEL] : []), ...LIVE_MODELS];
   return all.filter((m, i) => all.findIndex((x) => x.id === m.id) === i && !skip.includes(m.id) && !voiceResting(m.id, now));
+}
+
+/** Characters of a project's instructions a Live setup carries (the setup is kept small). */
+export const LIVE_PROJECT_CHARS = 2_000;
+
+/**
+ * The project block for Live voice: the chat's project name and its
+ * instructions, cut to LIVE_PROJECT_CHARS at a word, never its knowledge
+ * files (the model is told so, to point the listener to the typed chat).
+ */
+export function liveProjectBlock(p: { name: string; instructions?: string | null }): string {
+  let instructions = (p.instructions ?? '').trim();
+  if (instructions.length > LIVE_PROJECT_CHARS) {
+    const cut = instructions.slice(0, LIVE_PROJECT_CHARS);
+    const space = cut.lastIndexOf(' ');
+    instructions = `${space > LIVE_PROJECT_CHARS * 0.8 ? cut.slice(0, space) : cut} […]`;
+  }
+  return [
+    projectBlock({ name: p.name, instructions, documents: [], notes: [] }, 0),
+    "The project's files are not part of a Live voice call. If the user asks about them, say they can ask in the typed chat.",
+  ].join('\n');
+}
+
+/** The Live call's project block, or null (no chat, no project, or the database did not answer). */
+async function liveProject(env: AiEnv, sub: string, conversationId: string | null): Promise<string | null> {
+  if (!conversationId) return null;
+  const conv = await getConversation(env, sub, conversationId);
+  if (!conv.ok || !conv.value?.project_id) return null;
+  const ctx = await loadProjectContext(env, sub, conv.value.project_id, { files: false });
+  return ctx ? liveProjectBlock(ctx.project) : null;
 }
 
 export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Promise<Response> => {
@@ -73,16 +106,18 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const heard = transcriptionLanguages(body.language, safeLocale(body.locale));
   const personal = sanitizePersonal(body.personal);
   const conversationId = typeof body.conversationId === 'string' && UUID.test(body.conversationId) ? body.conversationId : null;
-  const [account, memory] = await Promise.all([
+  const [account, memory, project] = await Promise.all([
     accountOf(env, gate.sub),
     memoryFor(env, gate.sub, conversationId, body.incognito === true).catch(() => null),
+    liveProject(env, gate.sub, conversationId).catch(() => null),
   ]);
   const accountName = firstNameOf(account.ok ? account.value?.name : null);
-  // What the model is told besides the spoken prompt, in the chat's order:
-  // the owner's instructions, the listener's preferences, memory, then the
-  // typed chat and the call so far.
+  // What the model is told besides the spoken prompt: the owner's
+  // instructions, the chat's project, the listener's preferences, memory,
+  // then the typed chat and the call so far.
   const extra = [
     ownerBlock(settings.instructions),
+    project,
     personalBlock(personal),
     memory ? memoryBlock(memory, '', { voice: true }) : null,
     chatContextBlock(body.context),

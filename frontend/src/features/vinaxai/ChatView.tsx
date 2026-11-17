@@ -26,6 +26,7 @@ import { useLiveCall } from './live/liveCall';
 import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
+import { finishDraft } from './keepOnLeave';
 import { usePrefs } from './prefs';
 import { SideRail, Sidebar } from './Sidebar';
 import { continueReply, createImage, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
@@ -56,6 +57,12 @@ export function greeting(hour: number, name: string | null): string {
   const part = hour < 5 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   return name ? `${part}, ${name}` : part;
 }
+
+/** The page's drafts of replies kept when it last closed, sent (or given up on after 4 s). */
+const draftSaved = (): Promise<unknown> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([finishDraft(), new Promise((r) => { timer = setTimeout(r, 4_000); })]).finally(() => clearTimeout(timer));
+};
 
 /** The empty state's chips: each fills the composer with a starter, never sends. */
 export const STARTERS: Array<{ label: string; text: string; icon: (p: { className?: string }) => ReactNode }> = [
@@ -163,7 +170,8 @@ export function ChatView(): ReactNode {
 
   // Open the conversation in the address, unless it is already the one on screen.
   const needLoad = !!id && id !== conversationId;
-  const conv = useQuery({ queryKey: ['vinaxai', 'conversation', id], queryFn: () => getConversation(id!), enabled: needLoad, staleTime: 0, gcTime: 0, retry: (n, e) => !(e instanceof AiError && e.status === 404) && n < 1 });
+  // A reply kept on this device when the page last closed mid-reply is saved first (keepOnLeave.ts; never waits long).
+  const conv = useQuery({ queryKey: ['vinaxai', 'conversation', id], queryFn: async () => { await draftSaved(); return getConversation(id!); }, enabled: needLoad, staleTime: 0, gcTime: 0, retry: (n, e) => !(e instanceof AiError && e.status === 404) && n < 1 });
   useEffect(() => {
     if (needLoad && conv.data && conv.data.conversation.id === id) dispatch({ type: 'load', conversation: conv.data.conversation, messages: conv.data.messages });
   }, [needLoad, conv.data, id, dispatch]);
@@ -187,6 +195,13 @@ export function ChatView(): ReactNode {
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
+  // Replies kept on this device when the page last closed mid-reply are saved now (once per page load).
+  useEffect(() => { void finishDraft(); }, []);
+  // The now-playing pill's "Ask about this song": fills the composer, never sends (like the starters).
+  const askAbout = (text: string) => {
+    setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, '')} ${text}` : text));
+    requestAnimationFrame(() => composer.current?.focus());
+  };
 
   // Voice: dictation into the draft, Read aloud, Live voice and its settings.
   const voice = models.data?.voice;
@@ -556,7 +571,7 @@ export function ChatView(): ReactNode {
             {incognito && !empty && <span className="vx-ai-incognito-badge"><IncognitoIcon className="w-4 h-4" /> Incognito</span>}
           </div>
           <div className="vx-ai-header-end">
-            <NowPlayingPill />
+            <NowPlayingPill onAsk={askAbout} />
             {canShare && (
               <button type="button" className="vx-ai-share-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
                 <ShareIcon className="w-4 h-4" />

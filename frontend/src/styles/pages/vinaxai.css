@@ -72,6 +72,16 @@
 .vx-ai-np-open { display: flex; align-items: center; gap: 8px; min-width: 0; padding-right: 4px; border-radius: inherit; }
 .vx-ai-np-open img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .vx-ai-np-title { font-size: 0.8125rem; color: rgb(var(--ink-200)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-np-ask {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: rgb(var(--ink-200));
+  flex-shrink: 0;
+}
+.vx-ai-np-ask:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
 .vx-ai-np-toggle {
   display: inline-grid;
   place-items: center;
@@ -256,6 +266,20 @@
 }
 .vx-ai-act:hover { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
 .vx-ai-model { margin-left: 8px; font-size: 0.75rem; color: rgb(var(--ink-400)); }
+/* Thumbs down: "What went wrong?" under the action row (Feedback.tsx). */
+.vx-ai-fb {
+  width: min(100%, 520px); margin-top: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: var(--surface-2);
+}
+.vx-ai-fb-q { margin: 0; font-size: 0.875rem; font-weight: 600; color: rgb(var(--ink-100)); }
+.vx-ai-fb-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.vx-ai-fb textarea {
+  width: 100%; resize: vertical; padding: 8px 12px; font: inherit; font-size: 0.875rem; line-height: 1.5;
+  border-radius: var(--vx-radius-control); border: 1px solid var(--glass-border); background: rgb(var(--ink-850)); color: rgb(var(--ink-100));
+}
+.vx-ai-fb-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.vx-ai-fb-count { margin-right: auto; font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vx-ai-fb-said { margin: 6px 0 0; font-size: 0.8125rem; color: var(--text-3); }
 
 /* ------------------------------------------------------------- markdown */
 .vx-ai-md { line-height: 1.7; overflow-wrap: anywhere; font-size: 1rem; }
@@ -1434,11 +1458,11 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   .vx-ai-jump { animation: vx-ai-jump-in var(--dur-base) var(--ease-standard) backwards; }
 
   /* Press and hover. */
-  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-np-toggle,
+  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-np-toggle, .vx-ai-np-ask,
     .vx-ai-code-copy, .vx-ai-live-btn, .vx-ai-back, .vx-ai-new, .vx-ai-row-more, .vx-ai-cite, .vx-ai-tabs button, .vx-ai-jump) {
     transition: transform var(--dur-quick) var(--ease-standard), background-color 140ms ease, color 140ms ease, opacity 140ms ease;
   }
-  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-np-toggle, .vx-ai-code-copy, .vx-ai-back, .vx-ai-new, .vx-ai-row-more):active:not(:disabled) { transform: scale(0.92); }
+  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-np-toggle, .vx-ai-np-ask, .vx-ai-code-copy, .vx-ai-back, .vx-ai-new, .vx-ai-row-more):active:not(:disabled) { transform: scale(0.92); }
   :is(.vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-live-btn, .vx-ai-tabs button):active:not(:disabled) { transform: scale(0.97); }
   .vx-ai-jump:active { transform: translateX(-50%) scale(0.92); }
   .vx-ai-composer { transition: border-color var(--vx-motion-fast) ease, box-shadow var(--vx-motion-normal) var(--vx-ai-ease); }
@@ -1583,5 +1607,7 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-scrim::before {
 .vx-ai-playlist-n { font-size: var(--type-meta); font-variant-numeric: tabular-nums; color: var(--text-3); }
 .vx-ai-playlist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text-1); }
 .vx-ai-playlist-artist { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); color: var(--text-3); }
+.vx-ai-playlist-list li.is-missing .vx-ai-playlist-title { color: var(--text-3); font-weight: 400; }
+.vx-ai-playlist-list li.is-missing .vx-ai-playlist-artist { font-style: italic; }
 .vx-ai-playlist-more { width: 100%; min-height: 44px; border-top: 1px solid var(--line-1); color: var(--accent-text); font-weight: 700; font-size: var(--type-meta); }
 .vx-ai-playlist-more:hover { background: var(--surface-3); }

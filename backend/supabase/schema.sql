@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 23
+-- VinaX database · schema version 24
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -51,6 +51,9 @@
 --  people I follow join my room") and `jam_code`, the room the listener
 --  hosts, which references rooms and goes with the room; room_sweep also
 --  clears a code whose room has been idle 15 minutes)
+--  version 24 adds ai_feedback, section 9: the listeners' thumbs up and down
+--  on VinaX AI replies, and ai_feedback_stats for the console's per-model
+--  score
 --  12. security
 -- =============================================================================
 
@@ -975,6 +978,56 @@ create table if not exists ai_memory_prefs (
 
 alter table ai_conversations add column if not exists incognito boolean not null default false;
 
+-- Version 24: thumbs up and down on VinaX AI replies (POST /api/ai/feedback).
+-- One rating per reply per account, changeable; a thumbs down may carry a
+-- reason and a short note. model_id and provider are the reply's own, copied
+-- by the Worker, so the console can score each model (ai_feedback_stats).
+-- No link to ai_messages: a rating outlives its chat (the purge clears
+-- conversation_id) so the score keeps counting; it goes with the account.
+create table if not exists ai_feedback (
+  message_id       uuid not null,
+  account_id       text not null references accounts (id) on delete cascade,
+  conversation_id  uuid references ai_conversations (id) on delete set null,
+  model_id         text,
+  provider         text,
+  rating           text not null,
+  reason           text,
+  note             text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  primary key (message_id, account_id),
+  constraint ai_feedback_rating check (rating in ('up', 'down')),
+  constraint ai_feedback_reason check (reason is null or reason in ('wrong', 'not_helpful', 'too_slow', 'other')),
+  constraint ai_feedback_note_len check (note is null or char_length(note) <= 300)
+);
+create index if not exists ai_feedback_model_idx on ai_feedback (updated_at, model_id);
+create index if not exists ai_feedback_conversation_idx on ai_feedback (conversation_id) where conversation_id is not null;
+create index if not exists ai_feedback_account_idx on ai_feedback (account_id);
+
+-- Each model's thumbs in the last p_days days (1–365): [{ model, up, down,
+-- reasons: { wrong, not_helpful, too_slow, other } }], most rated first.
+create or replace function ai_feedback_stats(p_days integer default 30)
+returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'model', t.model_id, 'up', t.up, 'down', t.down,
+           'reasons', jsonb_build_object('wrong', t.wrong, 'not_helpful', t.not_helpful, 'too_slow', t.too_slow, 'other', t.other))
+         order by t.up + t.down desc, t.model_id), '[]'::jsonb)
+  from (
+    select model_id,
+           count(*) filter (where rating = 'up') as up,
+           count(*) filter (where rating = 'down') as down,
+           count(*) filter (where reason = 'wrong') as wrong,
+           count(*) filter (where reason = 'not_helpful') as not_helpful,
+           count(*) filter (where reason = 'too_slow') as too_slow,
+           count(*) filter (where reason = 'other') as other
+    from ai_feedback
+    where model_id is not null
+      and updated_at >= now() - make_interval(days => greatest(1, least(coalesce(p_days, 30), 365)))
+    group by model_id
+  ) t;
+$$;
+
 -- ------------------------------------------------------------- 10. views --
 
 -- Everyone the console lists, ONE ROW PER PERSON: a signed-in listener is one
@@ -1650,6 +1703,7 @@ declare
   v_listener text := coalesce(p_listener, (select listener_id from accounts where id = p_account));
   v_account  text := coalesce(p_account, (select account_id from listeners where id = p_listener), (select id from accounts where listener_id = p_listener limit 1));
   n_events bigint := 0; n_members bigint := 0; n_feedback bigint := 0; n_listener bigint := 0; n_account bigint := 0;
+  n_ai_feedback bigint := 0;
 begin
   if v_listener is not null then
     delete from events where listener_id = v_listener; get diagnostics n_events = row_count;
@@ -1658,13 +1712,14 @@ begin
     delete from song_reactions where listener_id = v_listener; -- v19: the device's reactions go with it
   end if;
   if v_account is not null then
+    delete from ai_feedback where account_id = v_account; get diagnostics n_ai_feedback = row_count; -- v24
     delete from accounts where id = v_account; get diagnostics n_account = row_count;
   end if;
   if v_listener is not null then
     delete from listeners where id = v_listener; get diagnostics n_listener = row_count;
   end if;
   return jsonb_build_object('listener', n_listener, 'account', n_account, 'events', n_events,
-                            'memberships', n_members, 'feedbackDetached', n_feedback);
+                            'memberships', n_members, 'feedbackDetached', n_feedback, 'aiFeedback', n_ai_feedback);
 end;
 $$;
 
@@ -2415,6 +2470,7 @@ language sql stable set search_path = public, pg_temp as $$
     'ai_shares', (select count(*) from ai_shares),
     'ai_projects', (select count(*) from ai_projects),
     'ai_memories', (select count(*) from ai_memories),
+    'ai_feedback', (select count(*) from ai_feedback),
     'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass)
   );
 $$;
@@ -2707,6 +2763,7 @@ begin
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
     'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
+    'ai_feedback',
     'owner_notes', 'outreach', 'song_reactions', 'account_passwords', 'email_codes']
   loop
     execute format('alter table public.%I enable row level security', t);
@@ -2728,7 +2785,7 @@ begin
                         'stats_engagement', 'stats_retention', '_device_key', 'listen_time', '_listen_spans', '_window_start', 'stats_top_listeners', 'stats_at_risk', 'stats_listening', 'stats_funnel', 'stats_skips', 'stats_errors', 'stats_trending', 'stats_searches',
                         'listener_profile', 'delete_listener', 'room_request', 'room_control', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
-                        'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
+                        'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily', 'ai_feedback_stats',
                         'profile_extras', 'owner_tags',
                         '_outreach_people', 'outreach_recap', 'outreach_winback', 'outreach_release_people', 'outreach_summary',
                         'song_reaction_counts', 'stats_reactions',
@@ -2746,7 +2803,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 23, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 23, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 24, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 24, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 23 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 24 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

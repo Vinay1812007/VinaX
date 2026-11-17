@@ -275,7 +275,7 @@ var SETTING_KEYS = [
   { key: "announcement", group: "Home & promotion", title: "Announcement", note: "Pop-up shown when the app opens: { title, body, button, link, show: once | always | daily, platforms, popup, start, end, enabled, ts }. The notification sender writes a plain one too.", shape: "object" },
   { key: "support-faq", group: "App", title: "Help center FAQ", note: "Questions and answers shown in Help Center, with a category and an on/off switch each.", shape: "array" },
   { key: "flags", group: "App", title: "Feature switches", note: "Feature switches the app reads: { listenTogether }. Off hides the feature.", shape: "boolean-map" },
-  { key: "vinax-ai", group: "App", title: "VinaX AI", note: "VinaX AI: { enabled, testers: [Google account], search, models: { model: { enabled, order } }, discover, dailyLimit, images: { enabled, perDay } } \u2014 off for everyone but the testers until enabled; discover: false hides the free models found in the providers\u2019 lists; images turns on Create image (off by default, perDay pictures per person, default 10).", shape: "object" },
+  { key: "vinax-ai", group: "App", title: "VinaX AI", note: "VinaX AI: { enabled, testers: [Google account], search, models: { model: { enabled, order } }, dailyLimit, images: { enabled, perDay } } \u2014 off for everyone but the testers until enabled; a model joins only by its id in models.ts APPROVED_MODELS; images turns on Create image (off by default, perDay pictures per person, default 10).", shape: "object" },
   { key: "min-version", group: "App", title: "Minimum app build", note: "Oldest app allowed: { android | web | ios: { minVersion, mode: suggest | force }, message, build (older Android apps) }.", shape: "object" },
   { key: "site-mode", group: "Operations", title: "Site mode", note: "How the app runs: normal, read-only (people can listen but changes are not saved) or maintenance (everyone sees a maintenance screen).", shape: "object" },
   { key: "maintenance-window", group: "Operations", title: "Maintenance window", note: "A planned maintenance time: the app warns people beforehand and shows the maintenance screen while it lasts.", shape: "object" },
@@ -1686,8 +1686,8 @@ function sourceKey(request) {
 __name(sourceKey, "sourceKey");
 function presentedToken(request) {
   const header = request.headers.get("x-admin-token") ?? "";
-  const bearer3 = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  return header || bearer3;
+  const bearer2 = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return header || bearer2;
 }
 __name(presentedToken, "presentedToken");
 function checkLocally(request, env, token) {
@@ -3915,6 +3915,7 @@ var onRequestGet8 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/admin/ai.ts
 var ai_exports = {};
 __export(ai_exports, {
+  FEEDBACK_DAYS: () => FEEDBACK_DAYS,
   onRequestGet: () => onRequestGet9,
   onRequestPost: () => onRequestPost3,
   probeModel: () => probeModel
@@ -4908,21 +4909,7 @@ var LADDERS = {
   /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding (none work now; see above). */
   grounded: []
 };
-var PICKER_GROUPS = [
-  "fast",
-  "balanced",
-  "smart",
-  "vision",
-  "code",
-  "claude",
-  "more",
-  "cloudflare",
-  "more-groq",
-  "more-gemini",
-  "more-openrouter",
-  "more-nvidia",
-  "more-cloudflare"
-];
+var PICKER_GROUPS = ["fast", "balanced", "smart", "vision", "code", "claude", "more", "cloudflare"];
 function applyOverrides(models, overrides) {
   const o = overrides && typeof overrides === "object" && !Array.isArray(overrides) ? overrides : {};
   const get2 = /* @__PURE__ */ __name((id) => {
@@ -4957,797 +4944,30 @@ function ladderModels(models, name) {
 }
 __name(ladderModels, "ladderModels");
 
-// functions/_lib/ai/cooldown.ts
-var RATE_DEFAULT_MS = 6e4;
-var RATE_MAX_MS = 10 * 6e4;
-var QUOTA_DEFAULT_MS = 6 * 60 * 6e4;
-var QUOTA_MAX_MS = 24 * 60 * 6e4;
-var GONE_MS = 60 * 6e4;
-var AUTH_MS = 10 * 6e4;
-var FORBIDDEN_MS = 10 * 6e4;
-var UPSTREAM_MS = 3e4;
-var rests = /* @__PURE__ */ new Map();
-var lastErrors = /* @__PURE__ */ new Map();
-var modelKey = /* @__PURE__ */ __name((spec) => `${spec.provider}|${spec.upstream}`, "modelKey");
-var providerKey = /* @__PURE__ */ __name((provider) => `${provider}|*`, "providerKey");
-function restFor(err, now = Date.now()) {
-  switch (err.kind) {
-    case "rate":
-      return { scope: "model", until: now + Math.min(RATE_MAX_MS, Math.max(1e3, err.retryAfterMs ?? RATE_DEFAULT_MS)) };
-    case "quota": {
-      const until = err.untilMs ?? (err.retryAfterMs != null && err.retryAfterMs > RATE_MAX_MS ? now + err.retryAfterMs : now + QUOTA_DEFAULT_MS);
-      return { scope: "model", until: Math.min(now + QUOTA_MAX_MS, until) };
-    }
-    case "gone":
-      return { scope: "model", until: err.untilMs ?? now + GONE_MS };
-    case "auth":
-      return { scope: "provider", until: now + AUTH_MS };
-    case "forbidden":
-      return { scope: "model", until: now + FORBIDDEN_MS };
-    case "upstream":
-      return { scope: "model", until: now + UPSTREAM_MS };
-    default:
-      return null;
-  }
-}
-__name(restFor, "restFor");
-function noteFailure(spec, err, now = Date.now()) {
-  lastErrors.set(spec.provider, { kind: err.kind, status: err.status, at: now });
-  const rest = restFor(err, now);
-  if (!rest) return;
-  const key = rest.scope === "provider" || spec.provider === "cloudflare" && err.kind === "quota" ? providerKey(spec.provider) : modelKey(spec);
-  const existing = rests.get(key);
-  if (existing && existing.until >= rest.until) return;
-  rests.set(key, { until: rest.until, kind: err.kind, at: now });
-}
-__name(noteFailure, "noteFailure");
-function coolingUntil(spec, now = Date.now()) {
-  const a = rests.get(modelKey(spec));
-  const b = rests.get(providerKey(spec.provider));
-  const until = Math.max(a && a.until > now ? a.until : 0, b && b.until > now ? b.until : 0);
-  return until;
-}
-__name(coolingUntil, "coolingUntil");
-var isCooling = /* @__PURE__ */ __name((spec, now = Date.now()) => coolingUntil(spec, now) > now, "isCooling");
-function cooldownSnapshot(now = Date.now()) {
-  const list2 = [];
-  for (const [key, r] of rests) if (r.until > now) list2.push({ key, kind: r.kind, until: new Date(r.until).toISOString() });
-  const errs = {};
-  for (const [p, e] of lastErrors) errs[p] = { kind: e.kind, status: e.status, at: new Date(e.at).toISOString() };
-  return { rests: list2, lastErrors: errs };
-}
-__name(cooldownSnapshot, "cooldownSnapshot");
-function clearRest(spec) {
-  rests.delete(modelKey(spec));
-  rests.delete(providerKey(spec.provider));
-}
-__name(clearRest, "clearRest");
-
-// functions/_lib/ai/voice.ts
-var GROQ = "https://api.groq.com/openai/v1";
-var GEMINI = "https://generativelanguage.googleapis.com";
-var STT_GROQ_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"];
-var STT_GEMINI_MODELS = ["gemini-3.5-transcribe", "gemini-3.8-flash"];
-var TTS_ENGLISH = "canopylabs/orpheus-v1-english";
-var TTS_ARABIC = "canopylabs/orpheus-arabic-saudi";
-var TTS_GEMINI_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"];
-var READ_VOICES = ["troy", "autumn", "diana", "hannah", "austin", "daniel"];
-var DEFAULT_READ_VOICE = "troy";
-var ARABIC_VOICE = "abdullah";
-var LIVE_VOICES = [
-  "Kore",
-  "Puck",
-  "Charon",
-  "Aoede",
-  "Fenrir",
-  "Leda",
-  "Orus",
-  "Zephyr",
-  "Sulafat",
-  "Achird",
-  "Callirrhoe",
-  "Autonoe",
-  "Enceladus",
-  "Iapetus",
-  "Umbriel",
-  "Algieba",
-  "Despina",
-  "Erinome",
-  "Algenib",
-  "Rasalgethi",
-  "Laomedeia",
-  "Achernar",
-  "Alnilam",
-  "Schedar",
-  "Gacrux",
-  "Pulcherrima",
-  "Zubenelgenubi",
-  "Vindemiatrix",
-  "Sadachbia",
-  "Sadaltager"
-];
-var DEFAULT_LIVE_VOICE = "Kore";
-var LIVE_MODELS = [
-  { id: "gemini-3.8-live", name: "Gemini 3.8 Live" },
-  { id: "gemini-3.1-flash-live-preview", name: "Gemini 3.1 Flash Live" },
-  { id: "gemini-2.5-flash-native-audio-latest", name: "Gemini 2.5 Flash Native Audio" },
-  { id: "gemini-2.5-flash-native-audio-preview-12-2025", name: "Gemini 2.5 Flash Native Audio (Dec 2025)" },
-  { id: "gemini-2.5-flash-native-audio-preview-09-2025", name: "Gemini 2.5 Flash Native Audio (Sep 2025)" }
-];
-var LIVE_THINKING_MODEL = { id: "gemini-3.8-live-extended-thinking", name: "Gemini 3.8 Live (Extended thinking)" };
-var LIVE_SEARCH_MODELS = [
-  "gemini-2.5-flash-native-audio-latest",
-  "gemini-2.5-flash-native-audio-preview-12-2025",
-  "gemini-2.5-flash-native-audio-preview-09-2025"
-];
-var ALL_LIVE_MODELS = [...LIVE_MODELS, LIVE_THINKING_MODEL];
-var LIVE_ID_PREFIX = "gemini-live:";
-function liveLabel(modelId) {
-  if (!modelId.startsWith(LIVE_ID_PREFIX)) return null;
-  const id = modelId.slice(LIVE_ID_PREFIX.length);
-  const m2 = ALL_LIVE_MODELS.find((x) => x.id === id);
-  return m2 ? { name: m2.name, provider: "Google Gemini" } : null;
-}
-__name(liveLabel, "liveLabel");
-var LIVE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
-var ORPHEUS_MAX_CHARS = 200;
-var GEMINI_TTS_CHARS = 600;
-var ORPHEUS_REPLY_MAX = 800;
-var groqKey = /* @__PURE__ */ __name((env) => env.GROQ_API_KEY?.trim() || null, "groqKey");
-var geminiKey = /* @__PURE__ */ __name((env) => env.GEMINI_API_KEY?.trim() || null, "geminiKey");
-var voiceAvailability = /* @__PURE__ */ __name((env) => ({
-  dictation: !!groqKey(env) || !!geminiKey(env),
-  readAloud: !!groqKey(env) || !!geminiKey(env),
-  live: !!geminiKey(env)
-}), "voiceAvailability");
-var rests2 = /* @__PURE__ */ new Map();
-function voiceResting(model, now = Date.now()) {
-  const until = rests2.get(model) ?? 0;
-  return until > now;
-}
-__name(voiceResting, "voiceResting");
-function noteVoiceFailure(model, err, now = Date.now()) {
-  const rest = restFor(err, now);
-  if (!rest) return;
-  if ((rests2.get(model) ?? 0) < rest.until) rests2.set(model, rest.until);
-}
-__name(noteVoiceFailure, "noteVoiceFailure");
-function voiceRestSnapshot(now = Date.now()) {
-  return [...rests2].filter(([, until]) => until > now).map(([model, until]) => ({ model, until: new Date(until).toISOString() }));
-}
-__name(voiceRestSnapshot, "voiceRestSnapshot");
-function isMostlyArabic(text2) {
-  const letters = text2.match(/\p{L}/gu)?.length ?? 0;
-  const arabic = text2.match(/\p{Script=Arabic}/gu)?.length ?? 0;
-  return letters > 0 && arabic / letters > 0.5;
-}
-__name(isMostlyArabic, "isMostlyArabic");
-function splitSpeech(text2, max) {
-  const clean2 = text2.replace(/\s+/g, " ").trim();
-  if (!clean2) return [];
-  const sentences = clean2.match(/[^.!?…。؟]+(?:[.!?…。؟]+["'”’)]*|$)\s*/g) ?? [clean2];
-  const units = [];
-  for (const s of sentences.map((x) => x.trim()).filter(Boolean)) {
-    if (s.length <= max) {
-      units.push(s);
-      continue;
-    }
-    let rest = s;
-    while (rest.length > max) {
-      const window = rest.slice(0, max + 1);
-      let at = Math.max(window.lastIndexOf(", "), window.lastIndexOf("; "), window.lastIndexOf("\u060C "));
-      if (at < max / 3) at = window.lastIndexOf(" ");
-      if (at < max / 3) at = max - 1;
-      units.push(rest.slice(0, at + 1).trim());
-      rest = rest.slice(at + 1).trim();
-    }
-    if (rest) units.push(rest);
-  }
-  const out = [];
-  for (const u2 of units) {
-    const last = out[out.length - 1];
-    if (last && last.length + 1 + u2.length <= max) out[out.length - 1] = `${last} ${u2}`;
-    else out.push(u2);
-  }
-  return out;
-}
-__name(splitSpeech, "splitSpeech");
-var TTS_TIMEOUT_MS = 25e3;
-async function orpheusSpeak(env, model, voice, text2, signal) {
-  const key = groqKey(env);
-  if (!key) throw new ProviderError("not_configured");
-  const timeout = AbortSignal.timeout(TTS_TIMEOUT_MS);
-  const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
-  try {
-    const res = await fetch(`${GROQ}/audio/speech`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ model, input: text2, voice, response_format: "wav" }),
-      signal: sig
-    });
-    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (!bytes.length) throw new ProviderError("empty");
-    return { kind: "file", bytes, mime: "audio/wav" };
-  } catch (e) {
-    throw asProviderError(e, sig);
-  }
-}
-__name(orpheusSpeak, "orpheusSpeak");
-function inlineAudio(body) {
-  const key = body.search(/"data"\s*:\s*"/);
-  if (key < 0) return null;
-  const start = body.indexOf('"', body.indexOf(":", key)) + 1;
-  const end = body.indexOf('"', start);
-  if (start <= 0 || end <= start) return null;
-  const mime = /"mimeType"\s*:\s*"([^"]{1,100})"/.exec(body)?.[1] ?? "audio/wav";
-  return { data: body.slice(start, end), mime };
-}
-__name(inlineAudio, "inlineAudio");
-async function geminiSpeak(env, model, voice, text2, signal) {
-  const key = geminiKey(env);
-  if (!key) throw new ProviderError("not_configured");
-  const shapes = [{ voice }, { prebuiltVoiceConfig: { voiceName: voice } }];
-  let last = new ProviderError("upstream");
-  for (const voiceConfig of shapes) {
-    const timeout = AbortSignal.timeout(TTS_TIMEOUT_MS);
-    const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
-    try {
-      const res = await fetch(`${GEMINI}/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: text2 }] }],
-          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig } }
-        }),
-        signal: sig
-      });
-      if (!res.ok) {
-        last = classifyHttp(res.status, res.headers, await errorText(res));
-        if (last.kind === "bad_request") continue;
-        throw last;
-      }
-      const audio = inlineAudio(await res.text());
-      if (!audio || !audio.data) throw new ProviderError("empty");
-      return { kind: "base64", data: audio.data, mime: audio.mime };
-    } catch (e) {
-      throw asProviderError(e, sig);
-    }
-  }
-  throw last;
-}
-__name(geminiSpeak, "geminiSpeak");
-var geminiTtsModels = /* @__PURE__ */ __name((env, now = Date.now()) => geminiKey(env) ? TTS_GEMINI_MODELS.filter((m2) => !voiceResting(m2, now)) : [], "geminiTtsModels");
-function planSpeech(env, text2, voices, now = Date.now()) {
-  const arabic = isMostlyArabic(text2);
-  const orpheus = arabic ? TTS_ARABIC : TTS_ENGLISH;
-  const orpheusOk = !!groqKey(env) && !voiceResting(orpheus, now);
-  const gemini3 = geminiTtsModels(env, now);
-  if (orpheusOk && (text2.length <= ORPHEUS_REPLY_MAX || !gemini3.length)) {
-    return { engine: "orpheus", model: orpheus, voice: arabic ? ARABIC_VOICE : voices.read, pieces: splitSpeech(text2, ORPHEUS_MAX_CHARS) };
-  }
-  if (gemini3.length) return { engine: "gemini", model: gemini3[0], voice: voices.live, pieces: splitSpeech(text2, GEMINI_TTS_CHARS) };
-  return null;
-}
-__name(planSpeech, "planSpeech");
-var STT_TIMEOUT_MS = 3e4;
-function clipName(mime) {
-  if (mime.includes("webm")) return "clip.webm";
-  if (mime.includes("ogg") || mime.includes("opus")) return "clip.ogg";
-  if (mime.includes("mp4") || mime.includes("m4a") || mime.includes("aac")) return "clip.m4a";
-  if (mime.includes("mpeg") || mime.includes("mp3")) return "clip.mp3";
-  if (mime.includes("wav")) return "clip.wav";
-  if (mime.includes("flac")) return "clip.flac";
-  return "clip.webm";
-}
-__name(clipName, "clipName");
-var AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "video/webm"];
-var MAX_CLIP_BYTES = 25 * 1024 * 1024;
-var MAX_GEMINI_CLIP_BYTES = 20 * 1024 * 1024;
-async function groqTranscribe(env, model, clip3, mime) {
-  const key = groqKey(env);
-  if (!key) throw new ProviderError("not_configured");
-  const form = new FormData();
-  form.append("file", new Blob([clip3], { type: mime }), clipName(mime));
-  form.append("model", model);
-  form.append("response_format", "json");
-  form.append("temperature", "0");
-  const sig = AbortSignal.timeout(STT_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${GROQ}/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${key}` }, body: form, signal: sig });
-    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-    const j = await res.json().catch(() => null);
-    if (!j || typeof j.text !== "string") throw new ProviderError("upstream");
-    return j.text.trim();
-  } catch (e) {
-    throw asProviderError(e, sig);
-  }
-}
-__name(groqTranscribe, "groqTranscribe");
-async function geminiUpload(key, clip3, mime) {
-  const start = await fetch(`${GEMINI}/upload/v1beta/files`, {
-    method: "POST",
-    headers: {
-      "x-goog-api-key": key,
-      "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": "start",
-      "X-Goog-Upload-Header-Content-Length": String(clip3.length),
-      "X-Goog-Upload-Header-Content-Type": mime,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({ file: { display_name: "dictation" } }),
-    signal: AbortSignal.timeout(15e3)
-  });
-  const url = start.headers.get("x-goog-upload-url");
-  if (!start.ok || !url) throw classifyHttp(start.status, start.headers, await errorText(start));
-  await start.body?.cancel().catch(() => void 0);
-  const done = await fetch(url, {
-    method: "POST",
-    headers: { "content-length": String(clip3.length), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" },
-    body: clip3,
-    signal: AbortSignal.timeout(STT_TIMEOUT_MS)
-  });
-  if (!done.ok) throw classifyHttp(done.status, done.headers, await errorText(done));
-  const j = await done.json().catch(() => null);
-  const uri = j?.file?.uri;
-  if (typeof uri !== "string" || !uri) throw new ProviderError("upstream");
-  return uri;
-}
-__name(geminiUpload, "geminiUpload");
-function replyText(j) {
-  const parts = j?.candidates?.[0]?.content?.parts ?? [];
-  return parts.filter((p) => typeof p.text === "string" && p.thought !== true).map((p) => p.text).join("").trim();
-}
-__name(replyText, "replyText");
-var TRANSCRIBE_PROMPT = "Transcribe this audio exactly as spoken, in the language spoken. Reply with the transcript only: no labels, no timestamps, no notes. If nothing is said, reply with nothing.";
-async function geminiTranscribe(env, clip3, mime, models) {
-  const key = geminiKey(env);
-  if (!key) throw new ProviderError("not_configured");
-  let uri;
-  try {
-    uri = await geminiUpload(key, clip3, mime);
-  } catch (e) {
-    throw asProviderError(e);
-  }
-  let last = new ProviderError("upstream");
-  for (const model of models) {
-    const sig = AbortSignal.timeout(STT_TIMEOUT_MS);
-    try {
-      const parts = [{ fileData: { mimeType: mime, fileUri: uri } }];
-      if (model !== "gemini-3.5-transcribe") parts.push({ text: TRANSCRIBE_PROMPT });
-      const res = await fetch(`${GEMINI}/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "content-type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts }] }),
-        signal: sig
-      });
-      if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-      const text2 = replyText(await res.json().catch(() => null));
-      if (!text2 && model === "gemini-3.5-transcribe") {
-        last = new ProviderError("empty");
-        continue;
-      }
-      return { text: text2, model };
-    } catch (e) {
-      last = asProviderError(e, sig);
-      noteVoiceFailure(model, last);
-    }
-  }
-  throw last;
-}
-__name(geminiTranscribe, "geminiTranscribe");
-var LIVE_SILENCE_MS = 500;
-function quickThinking(model) {
-  if (model === "gemini-3.1-flash-live-preview") return { thinkingLevel: "minimal" };
-  if (model.startsWith("gemini-2.5-flash-native-audio")) return { thinkingBudget: 0 };
-  return null;
-}
-__name(quickThinking, "quickThinking");
-var LIVE_MUSIC_TOOLS = [
-  {
-    name: "play_music",
-    description: "Search VinaX for music and play the best match now: a song, an artist, an album, a mood or a genre. Returns what started playing, or that nothing was found.",
-    parameters: { type: "object", properties: { query: { type: "string", description: 'What to play, in a few words, e.g. "Yaman flute", "AR Rahman", "calm lo-fi", "Shape of You".' } }, required: ["query"] }
-  },
-  { name: "pause_music", description: "Pause the music that is playing." },
-  { name: "resume_music", description: "Carry on playing the paused song." },
-  { name: "next_song", description: "Skip to the next song in the queue." },
-  { name: "previous_song", description: "Go back to the previous song (or the start of this one)." },
-  { name: "now_playing", description: "Say which song is loaded, by whom, and whether it is playing." }
-];
-function liveSetup(model, voice, prompt, search = false, tuned = false, heard = [], music = false) {
-  const tools = [...search ? [{ googleSearch: {} }] : [], ...music ? [{ functionDeclarations: LIVE_MUSIC_TOOLS }] : []];
-  const thinking = tuned ? quickThinking(model) : null;
-  return {
-    model: `models/${model}`,
-    generationConfig: {
-      responseModalities: ["AUDIO"],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
-      ...thinking ? { thinkingConfig: thinking } : {}
-    },
-    systemInstruction: { parts: [{ text: prompt }] },
-    // The listener's language for the captions (a lean setup leaves it out too).
-    inputAudioTranscription: tuned && heard.length ? { languageCodes: [...heard] } : {},
-    outputAudioTranscription: {},
-    contextWindowCompression: { slidingWindow: {} },
-    ...tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: "END_SENSITIVITY_HIGH", silenceDurationMs: LIVE_SILENCE_MS } } } : {},
-    ...tools.length ? { tools } : {}
-  };
-}
-__name(liveSetup, "liveSetup");
-var LIVE_START_WINDOW_MS = 2 * 6e4;
-var LIVE_TOKEN_TTL_MS = 30 * 6e4;
-function tokenBodies(setup, now = Date.now()) {
-  const times = { uses: 1, expireTime: new Date(now + LIVE_TOKEN_TTL_MS).toISOString(), newSessionExpireTime: new Date(now + LIVE_START_WINDOW_MS).toISOString() };
-  const config = {
-    responseModalities: setup.generationConfig.responseModalities,
-    speechConfig: setup.generationConfig.speechConfig,
-    systemInstruction: setup.systemInstruction,
-    inputAudioTranscription: setup.inputAudioTranscription,
-    outputAudioTranscription: {},
-    contextWindowCompression: setup.contextWindowCompression,
-    ...setup.generationConfig.thinkingConfig ? { thinkingConfig: setup.generationConfig.thinkingConfig } : {},
-    ...setup.realtimeInputConfig ? { realtimeInputConfig: setup.realtimeInputConfig } : {},
-    // The token is locked to the search tool too, so the page can't add it.
-    ...setup.tools ? { tools: setup.tools } : {}
-  };
-  return [
-    { shape: "constraints", body: { ...times, liveConnectConstraints: { model: setup.model, config } } },
-    { shape: "setup", body: { ...times, bidiGenerateContentSetup: setup } },
-    { shape: "plain", body: times }
-  ];
-}
-__name(tokenBodies, "tokenBodies");
-var goodShape = null;
-async function mintLiveToken(env, setup, now = Date.now()) {
-  const key = geminiKey(env);
-  if (!key) throw new ProviderError("not_configured");
-  let last = new ProviderError("upstream");
-  const bodies = tokenBodies(setup, now);
-  const known = bodies.findIndex((b) => b.shape === goodShape);
-  if (known > 0) bodies.unshift(...bodies.splice(known, 1));
-  for (const { shape: shape4, body } of bodies) {
-    const sig = AbortSignal.timeout(1e4);
-    try {
-      const res = await fetch(`${GEMINI}/v1beta/auth_tokens`, {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: sig
-      });
-      if (!res.ok) {
-        last = classifyHttp(res.status, res.headers, await errorText(res));
-        if (last.kind === "bad_request") continue;
-        throw last;
-      }
-      const j = await res.json().catch(() => null);
-      if (typeof j?.name !== "string" || !j.name) throw new ProviderError("upstream");
-      goodShape = shape4;
-      return { token: j.name, shape: shape4, expiresAt: body.expireTime };
-    } catch (e) {
-      throw asProviderError(e, sig);
-    }
-  }
-  throw last;
-}
-__name(mintLiveToken, "mintLiveToken");
-
-// functions/_lib/ai/discovery.ts
-var DISCOVERY_TTL_MS = 6 * 60 * 6e4;
-var DISCOVERY_RETRY_MS = 15 * 6e4;
-var DISCOVERY_FETCH_MS = 5e3;
-var DISCOVERY_WAIT_MS = 3e3;
-var MAX_FOUND_PER_PROVIDER = 300;
-var DISCOVERY_PROVIDERS = ["groq", "gemini", "openrouter", "nvidia", "cloudflare"];
-var DISCOVERY_GROUPS = {
-  groq: "more-groq",
-  gemini: "more-gemini",
-  openrouter: "more-openrouter",
-  nvidia: "more-nvidia",
-  cloudflare: "more-cloudflare"
-};
+// functions/_lib/ai/openRouterList.ts
+var LIST_TTL_MS = 6 * 60 * 6e4;
+var LIST_RETRY_MS = 15 * 6e4;
+var LIST_FETCH_MS = 5e3;
+var MAX_LISTED = 300;
 var SAFE_ID = /^[A-Za-z0-9@][A-Za-z0-9@._:/+-]{0,159}$/;
-var NOT_CHAT_ANYWHERE = /guard|embed|rerank|whisper|safety|retriev|moderat|transcri|orpheus|playai|text-to-speech|speech-to|native-audio|imagen|diffusion|computer-use|deep-research|nemoretriever|reward|flux|dreamshaper|-ocr|ocr-|vision-encoder/i;
-var NOT_CHAT_WORD = /* @__PURE__ */ new Set([
-  "tts",
-  "asr",
-  "stt",
-  "ocr",
-  "live",
-  "image",
-  "images",
-  "audio",
-  "speech",
-  "clip",
-  "siglip",
-  "parse",
-  "veo",
-  "lyria",
-  "music",
-  "aqa",
-  "pii",
-  "bge",
-  "e5",
-  "detr",
-  "yolo",
-  "yolox",
-  "segformer",
-  "depth",
-  "deplot",
-  "kosmos",
-  "fuyu",
-  "paligemma",
-  "neva",
-  "vila",
-  "parakeet",
-  "canary",
-  "riva-asr",
-  "sdxl",
-  "lora-only",
-  "nv-embedqa",
-  "embedqa",
-  "reranker",
-  "jailbreak",
-  "topic",
-  "nemoguard"
-]);
-function isChatId(id) {
-  if (!SAFE_ID.test(id)) return false;
-  if (NOT_CHAT_ANYWHERE.test(id)) return false;
-  return !id.toLowerCase().split(/[-_./:]+/).some((w) => NOT_CHAT_WORD.has(w));
-}
-__name(isChatId, "isChatId");
-function knownIds() {
-  const ids = /* @__PURE__ */ new Set([...MODELS.map((m2) => m2.id), ...UTILITY_MODELS.map((u2) => u2.id)]);
-  for (const id of Object.values(LADDERS).flat()) ids.add(id);
-  for (const id of [...STT_GROQ_MODELS, TTS_ENGLISH, TTS_ARABIC]) ids.add(`groq:${id}`);
-  for (const id of [...TTS_GEMINI_MODELS, ...ALL_LIVE_MODELS.map((l) => l.id)]) ids.add(`gemini:${id}`);
-  return ids;
-}
-__name(knownIds, "knownIds");
-var own = /* @__PURE__ */ __name((o, k) => Object.prototype.hasOwnProperty.call(o, k), "own");
-var UPPER = {
-  gpt: "GPT",
-  oss: "OSS",
-  vl: "VL",
-  ai: "AI",
-  llm: "LLM",
-  moe: "MoE",
-  fp8: "FP8",
-  fp16: "FP16",
-  awq: "AWQ",
-  int4: "INT4",
-  int8: "INT8",
-  r1: "R1",
-  qwq: "QwQ",
-  glm: "GLM",
-  sql: "SQL",
-  xl: "XL",
-  xs: "XS",
-  xxl: "XXL",
-  ii: "II",
-  iii: "III",
-  hf: "HF",
-  it: "",
-  instruct: "",
-  deepseek: "DeepSeek",
-  openai: "OpenAI",
-  nvidia: "NVIDIA",
-  ibm: "IBM",
-  lfm: "LFM",
-  mistral: "Mistral",
-  phi: "Phi",
-  allam: "ALLaM"
-};
-function prettyName(upstream2) {
-  const last = upstream2.replace(/^@(?:cf|hf)\//, "").replace(/:free$/, "").split("/").pop() ?? upstream2;
-  const words = last.split(/[-_\s]+/).filter(Boolean).map((w) => {
-    const l = w.toLowerCase();
-    if (own(UPPER, l)) return UPPER[l];
-    if (/^a?\d+(?:\.\d+)?[bmkt]$/.test(l)) return l.toUpperCase();
-    if (/^[\d.]+$|^v\d/.test(l)) return l;
-    return l.charAt(0).toUpperCase() + l.slice(1);
-  }).filter(Boolean);
-  return (words.join(" ") || upstream2).slice(0, 80);
-}
-__name(prettyName, "prettyName");
-var VENDORS = {
-  "meta-llama": "Meta",
-  meta: "Meta",
-  openai: "OpenAI",
-  nvidia: "NVIDIA",
-  qwen: "Qwen",
-  mistralai: "Mistral AI",
-  mistral: "Mistral AI",
-  "deepseek-ai": "DeepSeek",
-  deepseek: "DeepSeek",
-  google: "Google",
-  microsoft: "Microsoft",
-  ibm: "IBM",
-  "ibm-granite": "IBM",
-  moonshotai: "Moonshot AI",
-  "z-ai": "Z.ai",
-  zai: "Z.ai",
-  thudm: "Zhipu",
-  "zai-org": "Z.ai",
-  anthropic: "Anthropic",
-  cohere: "Cohere",
-  "x-ai": "xAI",
-  minimax: "MiniMax",
-  minimaxai: "MiniMax",
-  baidu: "Baidu",
-  tencent: "Tencent",
-  alibaba: "Alibaba",
-  "stepfun-ai": "StepFun",
-  liquid: "Liquid AI",
-  "tngtech": "TNG",
-  "arcee-ai": "Arcee AI",
-  "nousresearch": "Nous Research",
-  "moonshot": "Moonshot AI"
-};
-function vendorName(raw) {
-  const v = (raw ?? "").trim();
-  if (!v || v.length > 40 || /^(?:system|organization-owner|user)$/i.test(v)) return void 0;
-  const k = v.toLowerCase();
-  if (own(VENDORS, k)) return VENDORS[k];
-  return k.split(/[-_\s]+/).map((w) => own(UPPER, w) ? UPPER[w] : w.charAt(0).toUpperCase() + w.slice(1)).filter(Boolean).join(" ") || void 0;
-}
-__name(vendorName, "vendorName");
-var num = /* @__PURE__ */ __name((v) => {
-  const n3 = typeof v === "string" ? Number(v) : v;
-  return typeof n3 === "number" && Number.isFinite(n3) && n3 > 0 ? Math.floor(n3) : null;
-}, "num");
 var obj2 = /* @__PURE__ */ __name((v) => v && typeof v === "object" && !Array.isArray(v) ? v : {}, "obj");
 var arr = /* @__PURE__ */ __name((v) => Array.isArray(v) ? v : [], "arr");
 var strs = /* @__PURE__ */ __name((v) => arr(v).filter((x) => typeof x === "string"), "strs");
-var REASONING_ID = /think|reason|(?:^|[-/])r1(?:$|[-:])|qwq|gpt-oss|magistral|qwen3/i;
-function parseGroq(body) {
-  return arr(obj2(body).data).map(obj2).flatMap((m2) => {
-    const id = typeof m2.id === "string" ? m2.id : "";
-    if (!id || m2.active === false || !isChatId(id)) return [];
-    return [{
-      upstream: id,
-      name: prettyName(id),
-      vendor: vendorName(String(m2.owned_by ?? id.split("/")[0] ?? "")),
-      contextTokens: num(m2.context_window),
-      maxOutput: num(m2.max_completion_tokens),
-      reasoning: REASONING_ID.test(id)
-    }];
-  });
-}
-__name(parseGroq, "parseGroq");
 var zero = /* @__PURE__ */ __name((v) => typeof v === "string" ? Number(v) === 0 && v.trim() !== "" : v === 0, "zero");
-function parseOpenRouter(body) {
+function parseOpenRouterFree(body) {
   const out = [];
   for (const m2 of arr(obj2(body).data).map(obj2)) {
     const id = typeof m2.id === "string" ? m2.id : "";
     const pricing = obj2(m2.pricing);
     const free = id.endsWith(":free") || zero(pricing.prompt) && zero(pricing.completion);
-    if (!id || !free || id.startsWith("openrouter/") || !isChatId(id)) continue;
-    const arch = obj2(m2.architecture);
-    const outMods = strs(arch.output_modalities);
+    if (!id || !free || id.startsWith("openrouter/") || !SAFE_ID.test(id)) continue;
+    const outMods = strs(obj2(m2.architecture).output_modalities);
     if (outMods.length && (outMods.some((x) => x !== "text") || !outMods.includes("text"))) continue;
-    const top = obj2(m2.top_provider);
-    const params = strs(m2.supported_parameters);
-    const rawName = typeof m2.name === "string" ? m2.name.replace(/\s*\(free\)\s*$/i, "").trim() : "";
-    const colon = rawName.indexOf(": ");
-    const name = (colon > 0 ? rawName.slice(colon + 2) : rawName).trim();
-    out.push({
-      upstream: id,
-      name: name && name.length <= 80 ? name : prettyName(id),
-      vendor: colon > 0 ? rawName.slice(0, colon).trim().slice(0, 40) : vendorName(id.split("/")[0]),
-      contextTokens: num(top.context_length) ?? num(m2.context_length),
-      maxOutput: num(top.max_completion_tokens),
-      vision: strs(arch.input_modalities).includes("image"),
-      reasoning: params.includes("reasoning") || params.includes("include_reasoning") || REASONING_ID.test(id)
-    });
-  }
-  const ids = new Set(out.map((m2) => m2.upstream));
-  return out.filter((m2) => m2.upstream.endsWith(":free") || !ids.has(`${m2.upstream}:free`));
-}
-__name(parseOpenRouter, "parseOpenRouter");
-function parseGemini(pages) {
-  const out = [];
-  for (const page of pages) {
-    for (const m2 of arr(obj2(page).models).map(obj2)) {
-      const id = typeof m2.name === "string" ? m2.name.replace(/^models\//, "") : "";
-      if (!id || !strs(m2.supportedGenerationMethods).includes("generateContent") || !isChatId(id)) continue;
-      const gemma = /^gemma/i.test(id);
-      const display = typeof m2.displayName === "string" ? m2.displayName.trim() : "";
-      out.push({
-        upstream: id,
-        name: display && display.length <= 80 ? display : prettyName(id),
-        vendor: gemma ? "Google Gemma" : void 0,
-        contextTokens: num(m2.inputTokenLimit),
-        maxOutput: num(m2.outputTokenLimit),
-        vision: !gemma,
-        pdf: !gemma,
-        thinking: !gemma && m2.thinking === true,
-        reasoning: !gemma && m2.thinking === true,
-        systemRole: !gemma
-      });
-    }
+    if (!out.includes(id)) out.push(id);
   }
   return out;
 }
-__name(parseGemini, "parseGemini");
-function parseNvidia(body) {
-  return arr(obj2(body).data).map(obj2).flatMap((m2) => {
-    const id = typeof m2.id === "string" ? m2.id : "";
-    if (!id || !isChatId(id)) return [];
-    return [{ upstream: id, name: prettyName(id), vendor: vendorName(String(m2.owned_by ?? id.split("/")[0] ?? "")), reasoning: REASONING_ID.test(id) }];
-  });
-}
-__name(parseNvidia, "parseNvidia");
-function parseWorkersAi(list2, now = Date.now()) {
-  return arr(list2).map(obj2).flatMap((m2) => {
-    const id = typeof m2.name === "string" ? m2.name : "";
-    const task = obj2(m2.task);
-    if (!id || !/^@(?:cf|hf)\//.test(id) || typeof task.name === "string" && task.name !== "Text Generation" || !isChatId(id)) return [];
-    const props = new Map(arr(m2.properties).map(obj2).map((p) => [String(p.property_id ?? ""), p.value]));
-    const retire = Date.parse(String(props.get("planned_deprecation_date") ?? ""));
-    if (Number.isFinite(retire) && retire <= now) return [];
-    return [{
-      upstream: id,
-      name: prettyName(id),
-      vendor: vendorName(id.split("/")[1]),
-      contextTokens: num(props.get("context_window")) ?? num(props.get("max_total_tokens")),
-      reasoning: REASONING_ID.test(id)
-    }];
-  });
-}
-__name(parseWorkersAi, "parseWorkersAi");
-var CONTEXT_CAP = { groq: 3e4, gemini: 6e5, openrouter: 1e5, nvidia: 1e5, cloudflare: 6e4 };
-var CONTEXT_UNKNOWN = 32e3;
-var OUTPUT_DEFAULT = 4096;
-var OUTPUT_MAX = 8192;
-var FLAGS2 = { vision: false, pdf: false, grounding: false, reasoning: false, artifacts: true, systemRole: true, thinkFormat: "none" };
-var fmtTokens = /* @__PURE__ */ __name((t) => t >= 1e6 ? `${Math.round(t / 1048576 * 10) / 10}M` : `${Math.round(t / 1e3)}K`, "fmtTokens");
-function toSpec(provider, f) {
-  const ctx = f.contextTokens && f.contextTokens > 0 ? f.contextTokens : null;
-  let maxOutput = Math.min(OUTPUT_MAX, Math.max(512, f.maxOutput ?? OUTPUT_DEFAULT));
-  if (ctx) maxOutput = Math.min(maxOutput, Math.max(512, Math.floor(ctx / 4)));
-  const cap = CONTEXT_CAP[provider] ?? CONTEXT_UNKNOWN;
-  const maxContextChars = ctx ? Math.max(4e3, Math.min(cap, (ctx - maxOutput) * 3)) : Math.min(cap, CONTEXT_UNKNOWN);
-  const thinkFormat = provider === "gemini" ? f.thinking ? "parts" : "none" : f.reasoning ? provider === "openrouter" ? "field" : "tags" : "none";
-  const description = [f.vendor, ctx ? `${fmtTokens(ctx)} context` : null].filter(Boolean).join(" \xB7 ") || "Free model";
-  return {
-    id: `${provider}:${f.upstream}`,
-    provider,
-    upstream: f.upstream,
-    name: f.name,
-    group: DISCOVERY_GROUPS[provider] ?? "more",
-    tier: "full",
-    description,
-    maxContextChars,
-    maxOutput,
-    discovered: true,
-    ...provider === "gemini" && f.thinking ? { params: { thinkingConfig: { includeThoughts: true } } } : {},
-    flags: { ...FLAGS2, vision: f.vision === true, pdf: f.pdf === true, reasoning: f.reasoning === true, systemRole: f.systemRole !== false, thinkFormat }
-  };
-}
-__name(toSpec, "toSpec");
-function discoveredSpecs(states) {
-  const known = knownIds();
-  const names2 = new Set(MODELS.map((m2) => m2.name.toLowerCase()));
-  const out = [];
-  for (const p of DISCOVERY_PROVIDERS) {
-    const st = states[p];
-    if (!st) continue;
-    for (const f of st.models.slice(0, MAX_FOUND_PER_PROVIDER)) {
-      const spec = toSpec(p, f);
-      if (known.has(spec.id)) continue;
-      known.add(spec.id);
-      let name = spec.name;
-      if (names2.has(name.toLowerCase())) name = `${name} (${PROVIDER_NAMES[p].replace(/^Google /, "")})`;
-      if (names2.has(name.toLowerCase())) name = `${spec.name} (${f.upstream})`.slice(0, 120);
-      names2.add(name.toLowerCase());
-      out.push({ ...spec, name });
-    }
-  }
-  return out;
-}
-__name(discoveredSpecs, "discoveredSpecs");
+__name(parseOpenRouterFree, "parseOpenRouterFree");
 function openRouterFreeEntries(text2) {
   const MARK = '{"id":"';
   const starts = [];
@@ -5779,182 +4999,92 @@ function openRouterFreeEntries(text2) {
   return { data };
 }
 __name(openRouterFreeEntries, "openRouterFreeEntries");
-async function getJson(url, headers, signal) {
-  const res = await fetch(url, { headers: { accept: "application/json", ...headers }, signal });
+var fetchOpenRouterFree = /* @__PURE__ */ __name(async (env, signal) => {
+  const res = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { accept: "application/json", authorization: `Bearer ${env.OPENROUTER_API_KEY?.trim() ?? ""}`, "HTTP-Referer": "https://www.vinaxmusic.online", "X-Title": "VinaX AI" },
+    signal
+  });
   if (!res.ok) throw new Error(`http_${res.status}`);
-  return res.json();
-}
-__name(getJson, "getJson");
-var bearer2 = /* @__PURE__ */ __name((key) => ({ authorization: `Bearer ${key?.trim() ?? ""}` }), "bearer");
-var FETCHERS = {
-  groq: /* @__PURE__ */ __name(async (env, signal) => parseGroq(await getJson("https://api.groq.com/openai/v1/models", bearer2(env.GROQ_API_KEY), signal)), "groq"),
-  openrouter: /* @__PURE__ */ __name(async (env, signal) => {
-    const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { accept: "application/json", ...bearer2(env.OPENROUTER_API_KEY), "HTTP-Referer": "https://www.vinaxmusic.online", "X-Title": "VinaX AI" },
-      signal
-    });
-    if (!res.ok) throw new Error(`http_${res.status}`);
-    return parseOpenRouter(openRouterFreeEntries(await res.text()));
-  }, "openrouter"),
-  nvidia: /* @__PURE__ */ __name(async (env, signal) => parseNvidia(await getJson("https://integrate.api.nvidia.com/v1/models", bearer2(env.NVIDIA_API_KEY), signal)), "nvidia"),
-  gemini: /* @__PURE__ */ __name(async (env, signal) => {
-    const pages = [];
-    let token = "";
-    for (let i = 0; i < 3; i++) {
-      const page = await getJson(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000${token ? `&pageToken=${encodeURIComponent(token)}` : ""}`, { "x-goog-api-key": env.GEMINI_API_KEY?.trim() ?? "" }, signal);
-      pages.push(page);
-      token = typeof obj2(page).nextPageToken === "string" ? String(obj2(page).nextPageToken) : "";
-      if (!token) break;
-    }
-    return parseGemini(pages);
-  }, "gemini"),
-  cloudflare: /* @__PURE__ */ __name(async (env) => {
-    const ai = env.AI;
-    if (!ai || typeof ai.models !== "function") throw new Error("no_search");
-    const all = [];
-    for (let page = 1; page <= 5; page++) {
-      const list2 = await ai.models({ task: "Text Generation", per_page: 100, page });
-      if (!Array.isArray(list2)) throw new Error("bad_list");
-      all.push(...list2);
-      if (list2.length < 100) break;
-    }
-    return parseWorkersAi(all);
-  }, "cloudflare")
-};
-var memo4 = /* @__PURE__ */ new Map();
-var inflight = /* @__PURE__ */ new Map();
-var cacheKey = /* @__PURE__ */ __name((p) => `https://vinax-ai-discovery.internal/v1/${p}`, "cacheKey");
+  return parseOpenRouterFree(openRouterFreeEntries(await res.text()));
+}, "fetchOpenRouterFree");
+var memo4 = null;
+var inflight = null;
+var CACHE_KEY = "https://vinax-ai-openrouter-list.internal/v1/free";
 var edgeCache = /* @__PURE__ */ __name(() => globalThis.caches?.default ?? null, "edgeCache");
-async function fromEdge(p, now) {
+async function fromEdge(now) {
   const cache = edgeCache();
   if (!cache) return null;
   try {
-    const hit = await cache.match(cacheKey(p));
+    const hit = await cache.match(CACHE_KEY);
     if (!hit) return null;
     const v = obj2(await hit.json());
     const at = Number(v.fetchedAt);
-    if (!Number.isFinite(at) || now - at >= DISCOVERY_TTL_MS || !Array.isArray(v.models)) return null;
-    const models = v.models.map(obj2).filter((m2) => typeof m2.upstream === "string" && typeof m2.name === "string" && isChatId(m2.upstream));
-    if (!models.length) return null;
-    return { at, ok: true, models: models.slice(0, MAX_FOUND_PER_PROVIDER), error: null, fetchedAt: at };
+    if (!Number.isFinite(at) || now - at >= LIST_TTL_MS) return null;
+    const ids = strs(v.ids).filter((id) => SAFE_ID.test(id)).slice(0, MAX_LISTED);
+    return ids.length ? { at, ids } : null;
   } catch {
     return null;
   }
 }
 __name(fromEdge, "fromEdge");
-async function toEdge(p, st) {
+async function toEdge(st) {
   const cache = edgeCache();
   if (!cache) return;
   try {
-    await cache.put(cacheKey(p), new Response(JSON.stringify({ fetchedAt: st.fetchedAt, models: st.models }), {
-      headers: { "content-type": "application/json", "cache-control": `public, max-age=${Math.floor(DISCOVERY_TTL_MS / 1e3)}` }
+    await cache.put(CACHE_KEY, new Response(JSON.stringify({ fetchedAt: st.at, ids: st.ids }), {
+      headers: { "content-type": "application/json", "cache-control": `public, max-age=${Math.floor(LIST_TTL_MS / 1e3)}` }
     }));
   } catch {
   }
 }
 __name(toEdge, "toEdge");
-async function refresh(env, p, now, fetchers) {
-  const prev = memo4.get(p);
-  const cached = await fromEdge(p, now);
-  if (cached) {
-    memo4.set(p, cached);
-    return cached;
-  }
+async function refresh(env, now, fetcher) {
+  const cached = await fromEdge(now);
+  if (cached) return memo4 = cached;
+  const prev = memo4;
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), DISCOVERY_FETCH_MS);
+  const timer = setTimeout(() => ac.abort(), LIST_FETCH_MS);
   let st;
   try {
-    const fetcher = fetchers[p];
-    if (!fetcher) throw new Error("not_discovered");
-    const models = (await fetcher(env, ac.signal)).slice(0, MAX_FOUND_PER_PROVIDER);
-    if (!models.length) throw new Error("empty");
-    st = { at: now, ok: true, models, error: null, fetchedAt: now };
-    await toEdge(p, st);
+    const ids = (await fetcher(env, ac.signal)).slice(0, MAX_LISTED);
+    if (!ids.length) throw new Error("empty");
+    st = { at: now, ids };
+    await toEdge(st);
   } catch (e) {
     const error = ac.signal.aborted ? "timeout" : e instanceof Error ? e.message.slice(0, 40) : "failed";
-    st = { at: now - DISCOVERY_TTL_MS + DISCOVERY_RETRY_MS, ok: false, models: prev?.models ?? [], error, fetchedAt: prev?.fetchedAt ?? null };
-    console.log(JSON.stringify({ route: "ai-discovery", provider: p, ok: false, error }));
+    st = { at: now - LIST_TTL_MS + LIST_RETRY_MS, ids: prev?.ids ?? [] };
+    console.log(JSON.stringify({ route: "ai-openrouter-list", ok: false, error }));
   } finally {
     clearTimeout(timer);
   }
-  memo4.set(p, st);
-  return st;
+  return memo4 = st;
 }
 __name(refresh, "refresh");
-function discoveryAllowed(setting2, p) {
-  if (setting2 === false) return false;
-  if (setting2 && typeof setting2 === "object" && !Array.isArray(setting2)) return setting2[p] !== false;
-  return true;
-}
-__name(discoveryAllowed, "discoveryAllowed");
-async function discoveryStates(env, discover, o = {}) {
-  const now = o.now ?? Date.now();
-  const fetchers = o.fetchers ?? FETCHERS;
-  const providers = (o.only ?? DISCOVERY_PROVIDERS).filter((p) => providerConfigured(env, p) && discoveryAllowed(discover, p));
-  const out = {};
-  const waits = [];
-  for (const p of providers) {
-    const st = memo4.get(p);
-    if (st && now - st.at < DISCOVERY_TTL_MS) {
-      out[p] = st;
-      continue;
-    }
-    let job = inflight.get(p);
-    if (!job) {
-      job = refresh(env, p, now, fetchers).finally(() => inflight.delete(p));
-      inflight.set(p, job);
-      o.waitUntil?.(job);
-    }
-    if (st && st.models.length) {
-      out[p] = st;
-      continue;
-    }
-    let timer;
-    waits.push(Promise.race([
-      job.then((s) => {
-        out[p] = s;
-      }),
-      new Promise((resolve) => {
-        timer = setTimeout(resolve, o.waitMs ?? DISCOVERY_WAIT_MS);
-      })
-    ]).finally(() => clearTimeout(timer)));
-  }
-  await Promise.all(waits);
-  return out;
-}
-__name(discoveryStates, "discoveryStates");
-async function discoveredModels(env, discover, o = {}) {
-  try {
-    return discoveredSpecs(await discoveryStates(env, discover, o));
-  } catch {
-    return [];
-  }
-}
-__name(discoveredModels, "discoveredModels");
 async function openRouterListed(env, o = {}) {
   try {
-    const st = (await discoveryStates(env, true, { ...o, only: ["openrouter"], waitMs: 0 })).openrouter;
-    return st && st.models.length ? new Set(st.models.map((f) => f.upstream)) : null;
+    if (!providerConfigured(env, "openrouter")) return null;
+    const now = o.now ?? Date.now();
+    let st = memo4;
+    if (!st || now - st.at >= LIST_TTL_MS) {
+      if (!inflight) {
+        inflight = refresh(env, now, o.fetcher ?? fetchOpenRouterFree).finally(() => {
+          inflight = null;
+        });
+        o.waitUntil?.(inflight);
+      }
+      const job = inflight;
+      let timer;
+      const fresh2 = await Promise.race([job, new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), 0);
+      })]).finally(() => clearTimeout(timer));
+      st = fresh2 ?? st;
+    }
+    return st && st.ids.length ? new Set(st.ids) : null;
   } catch {
     return null;
   }
 }
 __name(openRouterListed, "openRouterListed");
-function knownDiscovered(id) {
-  const p = id.split(":")[0];
-  if (!DISCOVERY_PROVIDERS.includes(p)) return null;
-  const st = memo4.get(p);
-  if (!st) return null;
-  return discoveredSpecs({ [p]: st }).find((s) => s.id === id) ?? null;
-}
-__name(knownDiscovered, "knownDiscovered");
-function discoverySnapshot() {
-  return DISCOVERY_PROVIDERS.flatMap((p) => {
-    const st = memo4.get(p);
-    return st ? [{ provider: p, ok: st.ok, count: st.models.length, fetchedAt: st.fetchedAt ? new Date(st.fetchedAt).toISOString() : null, error: st.error }] : [];
-  });
-}
-__name(discoverySnapshot, "discoverySnapshot");
 
 // functions/_lib/ai/images.ts
 var IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
@@ -6107,17 +5237,9 @@ function sanitizeAiSettings(raw, check = null, now = Date.now()) {
   const testers = Array.isArray(v.testers) ? v.testers.filter((t) => typeof t === "string" && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === "object" && !Array.isArray(v.models) ? v.models : {};
   const lim = typeof v.dailyLimit === "number" && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(1e4, Math.floor(v.dailyLimit)) : null;
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
 }
 __name(sanitizeAiSettings, "sanitizeAiSettings");
-var DISCOVER_KEYS = ["groq", "gemini", "openrouter", "nvidia", "cloudflare"];
-function sanitizeDiscover(raw) {
-  if (raw === true) return true;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
-  const off = DISCOVER_KEYS.filter((p) => raw[p] === false);
-  return off.length ? Object.fromEntries(off.map((p) => [p, false])) : true;
-}
-__name(sanitizeDiscover, "sanitizeDiscover");
 async function aiSettings(env) {
   const [raw, check] = await Promise.all([setting(env, AI_SETTING_KEY), setting(env, MODEL_CHECK_KEY)]);
   return sanitizeAiSettings(raw, check);
@@ -6127,20 +5249,77 @@ var aiOpenFor = /* @__PURE__ */ __name((s, accountId) => s.enabled || !!accountI
 var registryFor = /* @__PURE__ */ __name((s) => applyOverrides(MODELS.filter((spec) => offeredId(s, spec.id)), s.models), "registryFor");
 var offeredId = /* @__PURE__ */ __name((s, id) => isApproved(id) || s.revived.includes(id), "offeredId");
 async function pickerRegistryFor(env, s, o = {}) {
-  const [found, listed] = await Promise.all([s.discover === false ? [] : discoveredModels(env, s.discover, o), openRouterListed(env, o)]);
+  const listed = await openRouterListed(env, o);
   const offered = /* @__PURE__ */ __name((spec) => offeredId(s, spec.id) && (spec.provider !== "openrouter" || !listed || listed.has(spec.upstream)), "offered");
-  return applyOverrides([...MODELS, ...found].filter(offered), s.models);
+  return applyOverrides(MODELS.filter(offered), s.models);
 }
 __name(pickerRegistryFor, "pickerRegistryFor");
-async function foundModelFor(env, s, id, o = {}) {
-  if (typeof id !== "string" || id.length > 200 || s.discover === false) return null;
-  const p = id.slice(0, id.indexOf(":"));
-  if (!DISCOVERY_PROVIDERS.includes(p)) return null;
-  const found = await discoveredModels(env, s.discover, { ...o, only: [p] });
-  const spec = modelById(applyOverrides(found.filter((f) => isApproved(f.id)), s.models), id);
-  return spec?.discovered ? spec : null;
+
+// functions/_lib/ai/cooldown.ts
+var RATE_DEFAULT_MS = 6e4;
+var RATE_MAX_MS = 10 * 6e4;
+var QUOTA_DEFAULT_MS = 6 * 60 * 6e4;
+var QUOTA_MAX_MS = 24 * 60 * 6e4;
+var GONE_MS = 60 * 6e4;
+var AUTH_MS = 10 * 6e4;
+var FORBIDDEN_MS = 10 * 6e4;
+var UPSTREAM_MS = 3e4;
+var rests = /* @__PURE__ */ new Map();
+var lastErrors = /* @__PURE__ */ new Map();
+var modelKey = /* @__PURE__ */ __name((spec) => `${spec.provider}|${spec.upstream}`, "modelKey");
+var providerKey = /* @__PURE__ */ __name((provider) => `${provider}|*`, "providerKey");
+function restFor(err, now = Date.now()) {
+  switch (err.kind) {
+    case "rate":
+      return { scope: "model", until: now + Math.min(RATE_MAX_MS, Math.max(1e3, err.retryAfterMs ?? RATE_DEFAULT_MS)) };
+    case "quota": {
+      const until = err.untilMs ?? (err.retryAfterMs != null && err.retryAfterMs > RATE_MAX_MS ? now + err.retryAfterMs : now + QUOTA_DEFAULT_MS);
+      return { scope: "model", until: Math.min(now + QUOTA_MAX_MS, until) };
+    }
+    case "gone":
+      return { scope: "model", until: err.untilMs ?? now + GONE_MS };
+    case "auth":
+      return { scope: "provider", until: now + AUTH_MS };
+    case "forbidden":
+      return { scope: "model", until: now + FORBIDDEN_MS };
+    case "upstream":
+      return { scope: "model", until: now + UPSTREAM_MS };
+    default:
+      return null;
+  }
 }
-__name(foundModelFor, "foundModelFor");
+__name(restFor, "restFor");
+function noteFailure(spec, err, now = Date.now()) {
+  lastErrors.set(spec.provider, { kind: err.kind, status: err.status, at: now });
+  const rest = restFor(err, now);
+  if (!rest) return;
+  const key = rest.scope === "provider" || spec.provider === "cloudflare" && err.kind === "quota" ? providerKey(spec.provider) : modelKey(spec);
+  const existing = rests.get(key);
+  if (existing && existing.until >= rest.until) return;
+  rests.set(key, { until: rest.until, kind: err.kind, at: now });
+}
+__name(noteFailure, "noteFailure");
+function coolingUntil(spec, now = Date.now()) {
+  const a = rests.get(modelKey(spec));
+  const b = rests.get(providerKey(spec.provider));
+  const until = Math.max(a && a.until > now ? a.until : 0, b && b.until > now ? b.until : 0);
+  return until;
+}
+__name(coolingUntil, "coolingUntil");
+var isCooling = /* @__PURE__ */ __name((spec, now = Date.now()) => coolingUntil(spec, now) > now, "isCooling");
+function cooldownSnapshot(now = Date.now()) {
+  const list2 = [];
+  for (const [key, r] of rests) if (r.until > now) list2.push({ key, kind: r.kind, until: new Date(r.until).toISOString() });
+  const errs = {};
+  for (const [p, e] of lastErrors) errs[p] = { kind: e.kind, status: e.status, at: new Date(e.at).toISOString() };
+  return { rests: list2, lastErrors: errs };
+}
+__name(cooldownSnapshot, "cooldownSnapshot");
+function clearRest(spec) {
+  rests.delete(modelKey(spec));
+  rests.delete(providerKey(spec.provider));
+}
+__name(clearRest, "clearRest");
 
 // functions/_lib/ai/router.ts
 var LONG_THREAD_CHARS = 15e4;
@@ -6364,12 +5543,12 @@ async function takeDaily(env, kind, limit) {
   return r.ok && r.value === true;
 }
 __name(takeDaily, "takeDaily");
-async function cacheKey2(provider, topic, query2) {
+async function cacheKey(provider, topic, query2) {
   const digest2 = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(query2.toLowerCase()));
   const hex2 = [...new Uint8Array(digest2)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `https://vinax-ai-search.internal/${provider}/${topic}/${hex2}`;
 }
-__name(cacheKey2, "cacheKey");
+__name(cacheKey, "cacheKey");
 var edgeCache2 = /* @__PURE__ */ __name(() => {
   const c = globalThis.caches;
   return c?.default ?? null;
@@ -6379,7 +5558,7 @@ async function searchWeb(env, query2, topic, now = Date.now(), ownerCap = null) 
   const provider = providerOf(env);
   if ((resting.get(provider) ?? 0) > now) return { ok: false, reason: "resting" };
   const cache = edgeCache2();
-  const key = await cacheKey2(provider, topic, query2);
+  const key = await cacheKey(provider, topic, query2);
   try {
     const hit = cache ? await cache.match(key) : void 0;
     if (hit) {
@@ -6410,6 +5589,32 @@ async function searchWeb(env, query2, topic, now = Date.now(), ownerCap = null) 
   return { ok: true, sources: out.sources, cached: false, provider };
 }
 __name(searchWeb, "searchWeb");
+var TEST_QUERY = "Carnatic music ragas";
+async function testSearch(env, opts = {}) {
+  const provider = providerOf(env);
+  const ownerCap = opts.ownerCap ?? null;
+  if (!searchConfigured(env, ownerCap)) return { ok: false, provider, count: 0, ms: 0, reason: "not_configured", status: null };
+  if (!await takeDaily(env, "search", dailyLimit(env, ownerCap))) return { ok: false, provider, count: 0, ms: 0, reason: "daily_limit", status: null };
+  const query2 = (opts.query ?? "").replace(/\s+/g, " ").trim().slice(0, QUERY_MAX) || TEST_QUERY;
+  const now = opts.now ?? Date.now();
+  const t0 = Date.now();
+  let out;
+  try {
+    out = await callProvider(env, provider, query2, opts.topic ?? "general");
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    return { ok: false, provider, count: 0, ms: Date.now() - t0, reason: timedOut ? "timeout" : "failed", status: null };
+  }
+  const ms = Date.now() - t0;
+  if (!out.ok) {
+    if ([401, 402, 403, 429, 432, 433].includes(out.status)) resting.set(provider, now + PROVIDER_REST_MS);
+    return { ok: false, provider, count: 0, ms, reason: "failed", status: out.status };
+  }
+  resting.delete(provider);
+  if (!out.sources.length) return { ok: false, provider, count: 0, ms, reason: "empty", status: 200 };
+  return { ok: true, provider, count: out.sources.length, ms, status: 200, site: out.sources[0].site || null };
+}
+__name(testSearch, "testSearch");
 function charIndexOfByte(text2, byte) {
   const enc8 = new TextEncoder();
   let bytes = 0;
@@ -6459,6 +5664,425 @@ function applyMarkers(text2, markers) {
 }
 __name(applyMarkers, "applyMarkers");
 
+// functions/_lib/ai/voice.ts
+var GROQ = "https://api.groq.com/openai/v1";
+var GEMINI = "https://generativelanguage.googleapis.com";
+var STT_GROQ_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"];
+var STT_GEMINI_MODELS = ["gemini-3.5-transcribe", "gemini-3.8-flash"];
+var TTS_ENGLISH = "canopylabs/orpheus-v1-english";
+var TTS_ARABIC = "canopylabs/orpheus-arabic-saudi";
+var TTS_GEMINI_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"];
+var READ_VOICES = ["troy", "autumn", "diana", "hannah", "austin", "daniel"];
+var DEFAULT_READ_VOICE = "troy";
+var ARABIC_VOICE = "abdullah";
+var LIVE_VOICES = [
+  "Kore",
+  "Puck",
+  "Charon",
+  "Aoede",
+  "Fenrir",
+  "Leda",
+  "Orus",
+  "Zephyr",
+  "Sulafat",
+  "Achird",
+  "Callirrhoe",
+  "Autonoe",
+  "Enceladus",
+  "Iapetus",
+  "Umbriel",
+  "Algieba",
+  "Despina",
+  "Erinome",
+  "Algenib",
+  "Rasalgethi",
+  "Laomedeia",
+  "Achernar",
+  "Alnilam",
+  "Schedar",
+  "Gacrux",
+  "Pulcherrima",
+  "Zubenelgenubi",
+  "Vindemiatrix",
+  "Sadachbia",
+  "Sadaltager"
+];
+var DEFAULT_LIVE_VOICE = "Kore";
+var LIVE_MODELS = [
+  { id: "gemini-3.8-live", name: "Gemini 3.8 Live" },
+  { id: "gemini-3.1-flash-live-preview", name: "Gemini 3.1 Flash Live" },
+  { id: "gemini-2.5-flash-native-audio-latest", name: "Gemini 2.5 Flash Native Audio" },
+  { id: "gemini-2.5-flash-native-audio-preview-12-2025", name: "Gemini 2.5 Flash Native Audio (Dec 2025)" },
+  { id: "gemini-2.5-flash-native-audio-preview-09-2025", name: "Gemini 2.5 Flash Native Audio (Sep 2025)" }
+];
+var LIVE_THINKING_MODEL = { id: "gemini-3.8-live-extended-thinking", name: "Gemini 3.8 Live (Extended thinking)" };
+var LIVE_SEARCH_MODELS = [
+  "gemini-2.5-flash-native-audio-latest",
+  "gemini-2.5-flash-native-audio-preview-12-2025",
+  "gemini-2.5-flash-native-audio-preview-09-2025"
+];
+var ALL_LIVE_MODELS = [...LIVE_MODELS, LIVE_THINKING_MODEL];
+var LIVE_ID_PREFIX = "gemini-live:";
+function liveLabel(modelId) {
+  if (!modelId.startsWith(LIVE_ID_PREFIX)) return null;
+  const id = modelId.slice(LIVE_ID_PREFIX.length);
+  const m2 = ALL_LIVE_MODELS.find((x) => x.id === id);
+  return m2 ? { name: m2.name, provider: "Google Gemini" } : null;
+}
+__name(liveLabel, "liveLabel");
+var LIVE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
+var ORPHEUS_MAX_CHARS = 200;
+var GEMINI_TTS_CHARS = 600;
+var ORPHEUS_REPLY_MAX = 800;
+var groqKey = /* @__PURE__ */ __name((env) => env.GROQ_API_KEY?.trim() || null, "groqKey");
+var geminiKey = /* @__PURE__ */ __name((env) => env.GEMINI_API_KEY?.trim() || null, "geminiKey");
+var voiceAvailability = /* @__PURE__ */ __name((env) => ({
+  dictation: !!groqKey(env) || !!geminiKey(env),
+  readAloud: !!groqKey(env) || !!geminiKey(env),
+  live: !!geminiKey(env)
+}), "voiceAvailability");
+var rests2 = /* @__PURE__ */ new Map();
+function voiceResting(model, now = Date.now()) {
+  const until = rests2.get(model) ?? 0;
+  return until > now;
+}
+__name(voiceResting, "voiceResting");
+function noteVoiceFailure(model, err, now = Date.now()) {
+  const rest = restFor(err, now);
+  if (!rest) return;
+  if ((rests2.get(model) ?? 0) < rest.until) rests2.set(model, rest.until);
+}
+__name(noteVoiceFailure, "noteVoiceFailure");
+function voiceRestSnapshot(now = Date.now()) {
+  return [...rests2].filter(([, until]) => until > now).map(([model, until]) => ({ model, until: new Date(until).toISOString() }));
+}
+__name(voiceRestSnapshot, "voiceRestSnapshot");
+function isMostlyArabic(text2) {
+  const letters = text2.match(/\p{L}/gu)?.length ?? 0;
+  const arabic = text2.match(/\p{Script=Arabic}/gu)?.length ?? 0;
+  return letters > 0 && arabic / letters > 0.5;
+}
+__name(isMostlyArabic, "isMostlyArabic");
+var INDIC = /(?=[\p{L}\p{M}])[\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Gurmukhi}\p{Script=Gujarati}\p{Script=Oriya}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Kannada}\p{Script=Malayalam}]/gu;
+function isMostlyIndic(text2) {
+  const letters = text2.match(/[\p{L}\p{M}]/gu)?.length ?? 0;
+  const indic = text2.match(INDIC)?.length ?? 0;
+  return letters > 0 && indic / letters > 0.5;
+}
+__name(isMostlyIndic, "isMostlyIndic");
+function splitSpeech(text2, max) {
+  const clean2 = text2.replace(/\s+/g, " ").trim();
+  if (!clean2) return [];
+  const sentences = clean2.match(/[^.!?…。؟]+(?:[.!?…。؟]+["'”’)]*|$)\s*/g) ?? [clean2];
+  const units = [];
+  for (const s of sentences.map((x) => x.trim()).filter(Boolean)) {
+    if (s.length <= max) {
+      units.push(s);
+      continue;
+    }
+    let rest = s;
+    while (rest.length > max) {
+      const window = rest.slice(0, max + 1);
+      let at = Math.max(window.lastIndexOf(", "), window.lastIndexOf("; "), window.lastIndexOf("\u060C "));
+      if (at < max / 3) at = window.lastIndexOf(" ");
+      if (at < max / 3) at = max - 1;
+      units.push(rest.slice(0, at + 1).trim());
+      rest = rest.slice(at + 1).trim();
+    }
+    if (rest) units.push(rest);
+  }
+  const out = [];
+  for (const u2 of units) {
+    const last = out[out.length - 1];
+    if (last && last.length + 1 + u2.length <= max) out[out.length - 1] = `${last} ${u2}`;
+    else out.push(u2);
+  }
+  return out;
+}
+__name(splitSpeech, "splitSpeech");
+var TTS_TIMEOUT_MS = 25e3;
+async function orpheusSpeak(env, model, voice, text2, signal) {
+  const key = groqKey(env);
+  if (!key) throw new ProviderError("not_configured");
+  const timeout = AbortSignal.timeout(TTS_TIMEOUT_MS);
+  const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  try {
+    const res = await fetch(`${GROQ}/audio/speech`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({ model, input: text2, voice, response_format: "wav" }),
+      signal: sig
+    });
+    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!bytes.length) throw new ProviderError("empty");
+    return { kind: "file", bytes, mime: "audio/wav" };
+  } catch (e) {
+    throw asProviderError(e, sig);
+  }
+}
+__name(orpheusSpeak, "orpheusSpeak");
+function inlineAudio(body) {
+  const key = body.search(/"data"\s*:\s*"/);
+  if (key < 0) return null;
+  const start = body.indexOf('"', body.indexOf(":", key)) + 1;
+  const end = body.indexOf('"', start);
+  if (start <= 0 || end <= start) return null;
+  const mime = /"mimeType"\s*:\s*"([^"]{1,100})"/.exec(body)?.[1] ?? "audio/wav";
+  return { data: body.slice(start, end), mime };
+}
+__name(inlineAudio, "inlineAudio");
+async function geminiSpeak(env, model, voice, text2, signal) {
+  const key = geminiKey(env);
+  if (!key) throw new ProviderError("not_configured");
+  const shapes = [{ voice }, { prebuiltVoiceConfig: { voiceName: voice } }];
+  let last = new ProviderError("upstream");
+  for (const voiceConfig of shapes) {
+    const timeout = AbortSignal.timeout(TTS_TIMEOUT_MS);
+    const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    try {
+      const res = await fetch(`${GEMINI}/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: text2 }] }],
+          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig } }
+        }),
+        signal: sig
+      });
+      if (!res.ok) {
+        last = classifyHttp(res.status, res.headers, await errorText(res));
+        if (last.kind === "bad_request") continue;
+        throw last;
+      }
+      const audio = inlineAudio(await res.text());
+      if (!audio || !audio.data) throw new ProviderError("empty");
+      return { kind: "base64", data: audio.data, mime: audio.mime };
+    } catch (e) {
+      throw asProviderError(e, sig);
+    }
+  }
+  throw last;
+}
+__name(geminiSpeak, "geminiSpeak");
+var geminiTtsModels = /* @__PURE__ */ __name((env, now = Date.now()) => geminiKey(env) ? TTS_GEMINI_MODELS.filter((m2) => !voiceResting(m2, now)) : [], "geminiTtsModels");
+function planSpeech(env, text2, voices, now = Date.now()) {
+  const gemini3 = geminiTtsModels(env, now);
+  if (isMostlyIndic(text2)) {
+    return gemini3.length ? { engine: "gemini", model: gemini3[0], voice: voices.live, pieces: splitSpeech(text2, GEMINI_TTS_CHARS) } : null;
+  }
+  const arabic = isMostlyArabic(text2);
+  const orpheus = arabic ? TTS_ARABIC : TTS_ENGLISH;
+  const orpheusOk = !!groqKey(env) && !voiceResting(orpheus, now);
+  if (orpheusOk && (text2.length <= ORPHEUS_REPLY_MAX || !gemini3.length)) {
+    return { engine: "orpheus", model: orpheus, voice: arabic ? ARABIC_VOICE : voices.read, pieces: splitSpeech(text2, ORPHEUS_MAX_CHARS) };
+  }
+  if (gemini3.length) return { engine: "gemini", model: gemini3[0], voice: voices.live, pieces: splitSpeech(text2, GEMINI_TTS_CHARS) };
+  return null;
+}
+__name(planSpeech, "planSpeech");
+var STT_TIMEOUT_MS = 3e4;
+function clipName(mime) {
+  if (mime.includes("webm")) return "clip.webm";
+  if (mime.includes("ogg") || mime.includes("opus")) return "clip.ogg";
+  if (mime.includes("mp4") || mime.includes("m4a") || mime.includes("aac")) return "clip.m4a";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "clip.mp3";
+  if (mime.includes("wav")) return "clip.wav";
+  if (mime.includes("flac")) return "clip.flac";
+  return "clip.webm";
+}
+__name(clipName, "clipName");
+var AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "video/webm"];
+var MAX_CLIP_BYTES = 25 * 1024 * 1024;
+var MAX_GEMINI_CLIP_BYTES = 20 * 1024 * 1024;
+async function groqTranscribe(env, model, clip3, mime) {
+  const key = groqKey(env);
+  if (!key) throw new ProviderError("not_configured");
+  const form = new FormData();
+  form.append("file", new Blob([clip3], { type: mime }), clipName(mime));
+  form.append("model", model);
+  form.append("response_format", "json");
+  form.append("temperature", "0");
+  const sig = AbortSignal.timeout(STT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${GROQ}/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${key}` }, body: form, signal: sig });
+    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+    const j = await res.json().catch(() => null);
+    if (!j || typeof j.text !== "string") throw new ProviderError("upstream");
+    return j.text.trim();
+  } catch (e) {
+    throw asProviderError(e, sig);
+  }
+}
+__name(groqTranscribe, "groqTranscribe");
+async function geminiUpload(key, clip3, mime) {
+  const start = await fetch(`${GEMINI}/upload/v1beta/files`, {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": key,
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(clip3.length),
+      "X-Goog-Upload-Header-Content-Type": mime,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ file: { display_name: "dictation" } }),
+    signal: AbortSignal.timeout(15e3)
+  });
+  const url = start.headers.get("x-goog-upload-url");
+  if (!start.ok || !url) throw classifyHttp(start.status, start.headers, await errorText(start));
+  await start.body?.cancel().catch(() => void 0);
+  const done = await fetch(url, {
+    method: "POST",
+    headers: { "content-length": String(clip3.length), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" },
+    body: clip3,
+    signal: AbortSignal.timeout(STT_TIMEOUT_MS)
+  });
+  if (!done.ok) throw classifyHttp(done.status, done.headers, await errorText(done));
+  const j = await done.json().catch(() => null);
+  const uri = j?.file?.uri;
+  if (typeof uri !== "string" || !uri) throw new ProviderError("upstream");
+  return uri;
+}
+__name(geminiUpload, "geminiUpload");
+function replyText(j) {
+  const parts = j?.candidates?.[0]?.content?.parts ?? [];
+  return parts.filter((p) => typeof p.text === "string" && p.thought !== true).map((p) => p.text).join("").trim();
+}
+__name(replyText, "replyText");
+var TRANSCRIBE_PROMPT = "Transcribe this audio exactly as spoken, in the language spoken. Reply with the transcript only: no labels, no timestamps, no notes. If nothing is said, reply with nothing.";
+async function geminiTranscribe(env, clip3, mime, models) {
+  const key = geminiKey(env);
+  if (!key) throw new ProviderError("not_configured");
+  let uri;
+  try {
+    uri = await geminiUpload(key, clip3, mime);
+  } catch (e) {
+    throw asProviderError(e);
+  }
+  let last = new ProviderError("upstream");
+  for (const model of models) {
+    const sig = AbortSignal.timeout(STT_TIMEOUT_MS);
+    try {
+      const parts = [{ fileData: { mimeType: mime, fileUri: uri } }];
+      if (model !== "gemini-3.5-transcribe") parts.push({ text: TRANSCRIBE_PROMPT });
+      const res = await fetch(`${GEMINI}/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "content-type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+        signal: sig
+      });
+      if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+      const text2 = replyText(await res.json().catch(() => null));
+      if (!text2 && model === "gemini-3.5-transcribe") {
+        last = new ProviderError("empty");
+        continue;
+      }
+      return { text: text2, model };
+    } catch (e) {
+      last = asProviderError(e, sig);
+      noteVoiceFailure(model, last);
+    }
+  }
+  throw last;
+}
+__name(geminiTranscribe, "geminiTranscribe");
+var LIVE_SILENCE_MS = 500;
+function quickThinking(model) {
+  if (model === "gemini-3.1-flash-live-preview") return { thinkingLevel: "minimal" };
+  if (model.startsWith("gemini-2.5-flash-native-audio")) return { thinkingBudget: 0 };
+  return null;
+}
+__name(quickThinking, "quickThinking");
+var LIVE_MUSIC_TOOLS = [
+  {
+    name: "play_music",
+    description: "Search VinaX for music and play the best match now: a song, an artist, an album, a mood or a genre. Returns what started playing, or that nothing was found.",
+    parameters: { type: "object", properties: { query: { type: "string", description: 'What to play, in a few words, e.g. "Yaman flute", "AR Rahman", "calm lo-fi", "Shape of You".' } }, required: ["query"] }
+  },
+  { name: "pause_music", description: "Pause the music that is playing." },
+  { name: "resume_music", description: "Carry on playing the paused song." },
+  { name: "next_song", description: "Skip to the next song in the queue." },
+  { name: "previous_song", description: "Go back to the previous song (or the start of this one)." },
+  { name: "now_playing", description: "Say which song is loaded, by whom, and whether it is playing." }
+];
+function liveSetup(model, voice, prompt, search = false, tuned = false, heard = [], music = false) {
+  const tools = [...search ? [{ googleSearch: {} }] : [], ...music ? [{ functionDeclarations: LIVE_MUSIC_TOOLS }] : []];
+  const thinking = tuned ? quickThinking(model) : null;
+  return {
+    model: `models/${model}`,
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+      ...thinking ? { thinkingConfig: thinking } : {}
+    },
+    systemInstruction: { parts: [{ text: prompt }] },
+    // The listener's language for the captions (a lean setup leaves it out too).
+    inputAudioTranscription: tuned && heard.length ? { languageCodes: [...heard] } : {},
+    outputAudioTranscription: {},
+    contextWindowCompression: { slidingWindow: {} },
+    ...tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: "END_SENSITIVITY_HIGH", silenceDurationMs: LIVE_SILENCE_MS } } } : {},
+    ...tools.length ? { tools } : {}
+  };
+}
+__name(liveSetup, "liveSetup");
+var LIVE_START_WINDOW_MS = 2 * 6e4;
+var LIVE_TOKEN_TTL_MS = 30 * 6e4;
+function tokenBodies(setup, now = Date.now()) {
+  const times = { uses: 1, expireTime: new Date(now + LIVE_TOKEN_TTL_MS).toISOString(), newSessionExpireTime: new Date(now + LIVE_START_WINDOW_MS).toISOString() };
+  const config = {
+    responseModalities: setup.generationConfig.responseModalities,
+    speechConfig: setup.generationConfig.speechConfig,
+    systemInstruction: setup.systemInstruction,
+    inputAudioTranscription: setup.inputAudioTranscription,
+    outputAudioTranscription: {},
+    contextWindowCompression: setup.contextWindowCompression,
+    ...setup.generationConfig.thinkingConfig ? { thinkingConfig: setup.generationConfig.thinkingConfig } : {},
+    ...setup.realtimeInputConfig ? { realtimeInputConfig: setup.realtimeInputConfig } : {},
+    // The token is locked to the search tool too, so the page can't add it.
+    ...setup.tools ? { tools: setup.tools } : {}
+  };
+  return [
+    { shape: "constraints", body: { ...times, liveConnectConstraints: { model: setup.model, config } } },
+    { shape: "setup", body: { ...times, bidiGenerateContentSetup: setup } },
+    { shape: "plain", body: times }
+  ];
+}
+__name(tokenBodies, "tokenBodies");
+var goodShape = null;
+async function mintLiveToken(env, setup, now = Date.now()) {
+  const key = geminiKey(env);
+  if (!key) throw new ProviderError("not_configured");
+  let last = new ProviderError("upstream");
+  const bodies = tokenBodies(setup, now);
+  const known = bodies.findIndex((b) => b.shape === goodShape);
+  if (known > 0) bodies.unshift(...bodies.splice(known, 1));
+  for (const { shape: shape4, body } of bodies) {
+    const sig = AbortSignal.timeout(1e4);
+    try {
+      const res = await fetch(`${GEMINI}/v1beta/auth_tokens`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: sig
+      });
+      if (!res.ok) {
+        last = classifyHttp(res.status, res.headers, await errorText(res));
+        if (last.kind === "bad_request") continue;
+        throw last;
+      }
+      const j = await res.json().catch(() => null);
+      if (typeof j?.name !== "string" || !j.name) throw new ProviderError("upstream");
+      goodShape = shape4;
+      return { token: j.name, shape: shape4, expiresAt: body.expireTime };
+    } catch (e) {
+      throw asProviderError(e, sig);
+    }
+  }
+  throw last;
+}
+__name(mintLiveToken, "mintLiveToken");
+
 // functions/api/admin/ai.ts
 async function usedToday(env) {
   if (!dbConfigured(env)) return null;
@@ -6468,12 +6092,24 @@ async function usedToday(env) {
   return Object.fromEntries(r.rows.map((row) => [row.kind, Number(row.count) || 0]));
 }
 __name(usedToday, "usedToday");
+var FEEDBACK_DAYS = 30;
+async function feedbackScores(env) {
+  if (!dbConfigured(env)) return null;
+  const r = await db.rpc(env, "ai_feedback_stats", { p_days: FEEDBACK_DAYS });
+  if (!r.ok || !Array.isArray(r.value)) return null;
+  const models = {};
+  for (const row of r.value) {
+    if (typeof row?.model !== "string" || !row.model) continue;
+    models[row.model] = { up: Math.max(0, Number(row.up) || 0), down: Math.max(0, Number(row.down) || 0) };
+  }
+  return { days: FEEDBACK_DAYS, models };
+}
+__name(feedbackScores, "feedbackScores");
 var onRequestGet9 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   if (!await isAdminAsync(request, env)) return unauthorized();
   const now = Date.now();
   const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
-  const found = settings.discover === false ? [] : await discoveredModels(env, settings.discover, { waitUntil: ctx.waitUntil });
   const registry = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
   const snap = cooldownSnapshot(now);
   const restOf = /* @__PURE__ */ __name((key) => snap.rests.find((r) => r.key === key) ?? null, "restOf");
@@ -6485,7 +6121,7 @@ var onRequestGet9 = /* @__PURE__ */ __name(async (ctx) => {
     lastError: snap.lastErrors[id] ?? null
   }));
   const overrides = settings.models;
-  const models = [...MODELS, ...found].map((spec) => {
+  const models = MODELS.map((spec) => {
     const until = coolingUntil(spec, now);
     const own2 = restOf(`${spec.provider}|${spec.upstream}`) ?? restOf(`${spec.provider}|*`);
     const o = overrides[spec.id];
@@ -6499,24 +6135,23 @@ var onRequestGet9 = /* @__PURE__ */ __name(async (ctx) => {
       configured: providerConfigured(env, spec.provider),
       restingUntil: until > now ? new Date(until).toISOString() : null,
       restKind: until > now ? own2?.kind ?? null : null,
-      ...spec.discovered ? { discovered: true } : {},
       // Approved but paused after failing the live check (models.ts): offered nowhere, but the owner can test it;
       // `revived`: its latest daily check passed, so it is in the model menu again (modelCheck.ts).
       ...PAUSED_MODELS.has(spec.id) ? settings.revived.includes(spec.id) ? { revived: true } : { paused: true } : {}
     };
   });
-  const used = await usedToday(env);
+  const [used, feedback] = await Promise.all([usedToday(env), feedbackScores(env)]);
   return adminJson({
     settings: { enabled: settings.enabled, testers: settings.testers, search: settings.search, overrides: Object.keys(settings.models).length },
     providers,
     models,
     search: {
-      api: { configured: searchConfigured(env), provider: providerOf(env), dailyLimit: dailyLimit(env), usedToday: used ? used.search ?? 0 : null },
+      api: { configured: searchConfigured(env, settings.limits.searchesPerDay), provider: providerOf(env), dailyLimit: dailyLimit(env, settings.limits.searchesPerDay), usedToday: used ? used.search ?? 0 : null },
       grounding: { configured: ladderModels(registry, "grounded").some((s) => providerConfigured(env, s.provider)), dailyLimit: GROUNDING_DAILY_LIMIT, usedToday: used ? used.grounding ?? 0 : null }
     },
     voice: { ...voiceAvailability(env), resting: voiceRestSnapshot(now) },
     utility: UTILITY_MODELS.map((x) => ({ id: x.id, name: x.name, provider: PROVIDER_NAMES[x.provider], kind: x.kind, configured: providerConfigured(env, x.provider) })),
-    discovery: { enabled: settings.discover, providers: discoverySnapshot() },
+    feedback,
     checkedAt: new Date(now).toISOString()
   });
 }, "onRequestGet");
@@ -6557,15 +6192,31 @@ var onRequestPost3 = /* @__PURE__ */ __name(async (ctx) => {
   const read = await readJsonCapped(request, 4 * 1024);
   if (!read.ok) return badRequest();
   const id = read.value && typeof read.value === "object" ? read.value.model : null;
-  let spec = modelById(MODELS, id);
-  if (!spec && typeof id === "string") {
-    const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
-    spec = settings.discover === false ? null : modelById(await discoveredModels(env, settings.discover), id);
-  }
+  const spec = modelById(MODELS, id);
   if (!spec || !(isApproved(spec.id) || PAUSED_MODELS.has(spec.id))) return badRequest("unknown_model");
   if (!providerConfigured(env, spec.provider)) return adminJson({ model: spec.id, ok: false, ms: 0, firstTokenMs: null, kind: "not_configured", status: null });
   const r = await probeModel(env, spec);
   console.log(JSON.stringify({ route: "admin-ai-probe", model: spec.id, provider: spec.provider, ok: r.ok, ms: r.ms, kind: r.kind ?? null }));
+  return adminJson(r);
+}, "onRequestPost");
+
+// functions/api/admin/ai-search.ts
+var ai_search_exports = {};
+__export(ai_search_exports, {
+  onRequestPost: () => onRequestPost4
+});
+var onRequestPost4 = /* @__PURE__ */ __name(async (ctx) => {
+  const { request, env } = ctx;
+  const auth = await requireRole(request, env, "editor");
+  if (!auth.ok) return auth.response;
+  const read = await readJsonCapped(request, 4 * 1024);
+  if (!read.ok) return badRequest();
+  const b = read.value && typeof read.value === "object" ? read.value : {};
+  if (b.query != null && typeof b.query !== "string") return badRequest();
+  if (b.topic != null && b.topic !== "general" && b.topic !== "news") return badRequest();
+  const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
+  const r = await testSearch(env, { query: typeof b.query === "string" ? b.query : void 0, topic: b.topic === "news" ? "news" : "general", ownerCap: settings.limits.searchesPerDay });
+  console.log(JSON.stringify({ route: "admin-ai-search", provider: r.provider, ok: r.ok, ms: r.ms, count: r.count, reason: r.reason ?? null, status: r.status ?? null }));
   return adminJson(r);
 }, "onRequestPost");
 
@@ -6774,7 +6425,7 @@ __export(fcm_report_exports, {
   REPORTS_MAX: () => REPORTS_MAX,
   onRequestGet: () => onRequestGet10,
   onRequestOptions: () => onRequestOptions2,
-  onRequestPost: () => onRequestPost4
+  onRequestPost: () => onRequestPost5
 });
 var REPORTS_KEY = "fcm-reports";
 var REPORTS_MAX = 30;
@@ -6785,7 +6436,7 @@ var CORS2 = {
 };
 var onRequestOptions2 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS2 }), "onRequestOptions");
 var onRequestGet10 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestGet");
-var onRequestPost4 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost5 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-report", { capacity: 6, refillPerMinute: 3 }, env);
   if (limited) return limited;
@@ -6939,7 +6590,7 @@ var onRequestGet12 = /* @__PURE__ */ __name(async (context) => {
 var overview_exports = {};
 __export(overview_exports, {
   attentionFor: () => attentionFor,
-  onRequestGet: () => onRequestGet13
+  onRequestGet: () => onRequestGet14
 });
 
 // functions/_lib/adminRoute.ts
@@ -7030,7 +6681,7 @@ var QUERY2 = `query VinaxRequestMeter($accountTag: string, $since: string, $unti
     }
   }
 }`;
-var num2 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0, "num");
+var num = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0, "num");
 var obj3 = /* @__PURE__ */ __name((v) => v && typeof v === "object" && !Array.isArray(v) ? v : {}, "obj");
 function usageFrom(json15, now, allowance = DAILY_REQUEST_ALLOWANCE) {
   const accounts = obj3(obj3(obj3(json15).data).viewer).accounts;
@@ -7042,10 +6693,10 @@ function usageFrom(json15, now, allowance = DAILY_REQUEST_ALLOWANCE) {
   const statuses = /* @__PURE__ */ new Map();
   for (const raw of rows3) {
     const sum = obj3(obj3(raw).sum), dim = obj3(obj3(raw).dimensions);
-    const r = num2(sum.requests), e = num2(sum.errors);
+    const r = num(sum.requests), e = num(sum.errors);
     requests += r;
     errors += e;
-    subrequests += num2(sum.subrequests);
+    subrequests += num(sum.subrequests);
     const script = str(dim.scriptName) || "unknown";
     const s = scripts.get(script) ?? { requests: 0, errors: 0 };
     s.requests += r;
@@ -7148,8 +6799,87 @@ async function readRequestUsage(env, now = Date.now(), o = {}) {
 }
 __name(readRequestUsage, "readRequestUsage");
 
+// functions/api/admin/session.ts
+var session_exports = {};
+__export(session_exports, {
+  SCHEMA_WANTED: () => SCHEMA_WANTED,
+  onRequestGet: () => onRequestGet13,
+  onRequestPost: () => onRequestPost6
+});
+var SCHEMA_WANTED = 24;
+var onRequestGet13 = /* @__PURE__ */ __name(async (ctx) => {
+  const { request, env } = ctx;
+  const me = await adminPrincipal(request, env);
+  let schema = null;
+  if (me && dbConfigured(env)) {
+    const r = await db.one(env, "meta", q().eq("key", "schema").select("value"));
+    schema = r.ok ? Number(r.value?.value?.version) || null : null;
+  }
+  return adminJson({
+    schema,
+    schemaWanted: SCHEMA_WANTED,
+    databaseConfigured: dbConfigured(env),
+    googleClientId: clientIds(env)[0] ?? null,
+    googleReady: googleSignInReady(env),
+    passwordAllowed: !!env.ADMIN_LOGIN_PASSWORD,
+    turnstileSiteKey: turnstileSiteKey(env),
+    me: me ? { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via } : null
+  });
+}, "onRequestGet");
+var onRequestPost6 = /* @__PURE__ */ __name(async (ctx) => {
+  const { request, env } = ctx;
+  const read = await readJsonCapped(request, 8 * 1024);
+  if (!read.ok || !read.value || typeof read.value !== "object") return badRequest();
+  if (typeof read.value.password === "string") return passwordSignIn(ctx, read.value.password, read.value.turnstile);
+  if (!googleSignInReady(env)) return adminJson({ error: "google_not_configured" }, 503);
+  if (await bindingAllows(env, "ADMIN_AUTH_FAILS", `admin-google|${clientKey(request, env)}`) === false) return adminJson({ error: "rate_limited" }, 429);
+  const human = await verifyTurnstile(env, read.value.turnstile, request, "console-signin");
+  if (human === "missing" || human === "failed") return adminJson({ error: "human_check" }, 403);
+  const profile = await verifyGoogleIdToken(env, read.value.credential);
+  if (!profile) return adminJson({ error: "invalid_token" }, 401);
+  const email = normEmail(profile.email);
+  if (!email || !profile.emailVerified) return adminJson({ error: "email_not_verified" }, 403);
+  resetAdminMemo();
+  const row = await adminRowOf(env, email);
+  if (!row) {
+    if (dbConfigured(env)) await audit({ env, request, waitUntil: ctx.waitUntil, actor: email }, { action: "admin-signin-refused", summary: `${email} tried to sign in but is not an admin`, target: email });
+    return adminJson({ error: "not_an_admin", email }, 403);
+  }
+  const token = await issueAdminSession(env, email);
+  if (!token) return adminJson({ error: "google_not_configured" }, 503);
+  if (dbConfigured(env)) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    if (bootstrapOwners(env).includes(email)) {
+      await db.upsert(env, "admins", { email, name: profile.name, picture: profile.picture, role: "owner", last_sign_in: now }, "email");
+    } else {
+      await db.update(env, "admins", q().eq("email", email), { name: profile.name, picture: profile.picture, last_sign_in: now });
+    }
+    resetAdminMemo();
+    await audit({ env, request, waitUntil: ctx.waitUntil, actor: email }, { action: "admin-signin", summary: `${email} signed in (${row.role})`, target: email });
+  }
+  return adminJson({
+    token,
+    expiresIn: ADMIN_SESSION_TTL_S,
+    me: { email, name: profile.name, picture: profile.picture, role: row.role, via: "google" }
+  });
+}, "onRequestPost");
+async function passwordSignIn(ctx, password, turnstile) {
+  const { request, env } = ctx;
+  if (!env.ADMIN_LOGIN_PASSWORD) return adminJson({ error: "password_off" }, 403);
+  if (password.length > 512) return badRequest();
+  const human = await verifyTurnstile(env, turnstile, request, "console-signin");
+  if (human === "unavailable") return adminJson({ error: "human_check_unavailable" }, 503);
+  if (human !== "ok") return adminJson({ error: "human_check" }, 403);
+  if (!await ownerPasswordMatches(request, env, password)) return adminJson({ error: "wrong_password" }, 401);
+  const token = await issuePasswordSession(env, password);
+  if (!token) return adminJson({ error: "not_configured" }, 503);
+  const me = PASSWORD_PRINCIPAL;
+  if (dbConfigured(env)) await audit({ env, request, waitUntil: ctx.waitUntil, actor: me.email }, { action: "admin-signin", summary: "Owner signed in with the recovery password", target: me.email });
+  return adminJson({ token, expiresIn: ADMIN_SESSION_TTL_S, me: { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via } });
+}
+__name(passwordSignIn, "passwordSignIn");
+
 // functions/api/admin/overview.ts
-var SCHEMA_WANTED = 18;
 var n = /* @__PURE__ */ __name((v) => Number(v) || 0, "n");
 var plural = /* @__PURE__ */ __name((x, one, many = `${one}s`) => `${x.toLocaleString("en-IN")} ${x === 1 ? one : many}`, "plural");
 var METER_WAIT_MS = 4e3;
@@ -7173,7 +6903,7 @@ function attentionFor(k, schema, requests = null) {
   return out;
 }
 __name(attentionFor, "attentionFor");
-var onRequestGet13 = adminGet(async ({ env, url }) => {
+var onRequestGet14 = adminGet(async ({ env, url }) => {
   const days = intIn(url.searchParams.get("days"), 1, 90) ?? 14;
   const [kpis, timeline, platforms, meta, meter] = await Promise.all([
     db.rpc(env, "stats_overview"),
@@ -7204,8 +6934,8 @@ var onRequestGet13 = adminGet(async ({ env, url }) => {
 // functions/api/admin/live.ts
 var live_exports = {};
 __export(live_exports, {
-  onRequestGet: () => onRequestGet14,
-  onRequestPost: () => onRequestPost5
+  onRequestGet: () => onRequestGet15,
+  onRequestPost: () => onRequestPost7
 });
 var song = /* @__PURE__ */ __name((s) => s && typeof s === "object" && (s.title || s.artist) ? { title: s.title ?? null, artist: s.artist ?? null, image: s.image ?? null } : null, "song");
 async function ownersOf(env, devices) {
@@ -7237,7 +6967,7 @@ async function ownersOf(env, devices) {
 }
 __name(ownersOf, "ownersOf");
 var user = /* @__PURE__ */ __name((a) => ({ id: a.id, name: a.name, email: a.email, picture: a.picture }), "user");
-var onRequestGet14 = adminGet(async ({ env }) => {
+var onRequestGet15 = adminGet(async ({ env }) => {
   const now = Date.now();
   const [recent, feed, rooms, members] = await Promise.all([
     db.select(env, "listeners", q().gt("last_seen", since(5 * 6e4, now)).select("id,account_id,platform,app_version,country,city,now_playing,is_playing,last_seen").order("last_seen", "desc").limit(300)),
@@ -7310,7 +7040,7 @@ var onRequestGet14 = adminGet(async ({ env }) => {
     rooms: openRooms
   });
 });
-var onRequestPost5 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost7 = adminPost(async ({ env, body, audit: audit2 }) => {
   if (body.action === "end_room") {
     const code = clip(body.code, 8)?.toUpperCase();
     if (!code) return badRequest();
@@ -7334,8 +7064,8 @@ var listeners_exports = {};
 __export(listeners_exports, {
   DEVICES: () => DEVICES,
   cleanTags: () => cleanTags,
-  onRequestGet: () => onRequestGet15,
-  onRequestPost: () => onRequestPost6,
+  onRequestGet: () => onRequestGet16,
+  onRequestPost: () => onRequestPost8,
   tagParam: () => tagParam,
   userArgs: () => userArgs,
   withRowAppTime: () => withRowAppTime
@@ -7564,7 +7294,7 @@ function userArgs(url) {
   };
 }
 __name(userArgs, "userArgs");
-var onRequestGet15 = adminGet(async ({ env, url }) => {
+var onRequestGet16 = adminGet(async ({ env, url }) => {
   const view = url.searchParams.get("view");
   if (view === "top") {
     const days = intIn(url.searchParams.get("days"), 1, 90) ?? 7;
@@ -7674,7 +7404,7 @@ async function devicesOf(env, account) {
   return [...ids];
 }
 __name(devicesOf, "devicesOf");
-var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost8 = adminPost(async ({ env, body, audit: audit2, me }) => {
   const account = typeof body.account === "string" ? body.account : "";
   if (!SUB_RE.test(account)) return badRequest("bad_id");
   const who = await db.one(env, "accounts", q().eq("id", account).select("id,email,name,listener_id,blocked_at"));
@@ -7755,11 +7485,11 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
 // functions/api/admin/analytics.ts
 var analytics_exports = {};
 __export(analytics_exports, {
-  onRequestGet: () => onRequestGet16,
-  onRequestPost: () => onRequestPost7
+  onRequestGet: () => onRequestGet17,
+  onRequestPost: () => onRequestPost9
 });
 var VIEWS = ["music", "rising", "geo", "engagement", "listening", "retention", "funnel", "skips", "errors", "devices"];
-var onRequestGet16 = adminGet(async ({ env, url }) => {
+var onRequestGet17 = adminGet(async ({ env, url }) => {
   const view = url.searchParams.get("view");
   if (!view || !VIEWS.includes(view)) return badRequest("unknown_view", { views: VIEWS });
   const days = daysParam(url, 7, 90);
@@ -7792,7 +7522,7 @@ var onRequestGet16 = adminGet(async ({ env, url }) => {
   if (!r.ok) return dbFailure(r);
   return adminJson({ configured: true, days, view, data: r.value ?? (view === "music" || view === "rising" || view === "geo" || view === "errors" || view === "listening" || view === "devices" ? {} : []) });
 });
-var onRequestPost7 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost9 = adminPost(async ({ env, body, audit: audit2 }) => {
   if (body.action !== "clear_errors") return badRequest("unknown_action");
   const r = await db.remove(env, "events", q().eq("kind", "error").select("id"), { returning: true });
   if (!r.ok) return dbFailure(r);
@@ -7803,8 +7533,8 @@ var onRequestPost7 = adminPost(async ({ env, body, audit: audit2 }) => {
 // functions/api/admin/feedback.ts
 var feedback_exports = {};
 __export(feedback_exports, {
-  onRequestGet: () => onRequestGet17,
-  onRequestPost: () => onRequestPost8
+  onRequestGet: () => onRequestGet18,
+  onRequestPost: () => onRequestPost10
 });
 
 // functions/_lib/webpush.ts
@@ -8329,7 +8059,7 @@ async function devicesOf2(env, accounts) {
   return { ok: r.ok, rows: r.ok ? r.rows : [] };
 }
 __name(devicesOf2, "devicesOf");
-var onRequestGet17 = adminGet(async ({ env, url }) => {
+var onRequestGet18 = adminGet(async ({ env, url }) => {
   const { limit, offset } = paging(url, 50, 200);
   const [rows3, total, nNew, nRead, nResolved] = await Promise.all([
     db.select(env, "feedback", filters(url).select("*").order("at", "desc").limit(limit).offset(offset)),
@@ -8359,7 +8089,7 @@ var onRequestGet17 = adminGet(async ({ env, url }) => {
     })
   });
 });
-var onRequestPost8 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost10 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (body.action === "status") {
     const id = idOf2(body.id);
     const status = body.status;
@@ -8437,12 +8167,12 @@ ${text2}`)))].slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
 var content_exports = {};
 __export(content_exports, {
   REASONS: () => REASONS,
-  onRequestGet: () => onRequestGet18,
-  onRequestPost: () => onRequestPost9
+  onRequestGet: () => onRequestGet19,
+  onRequestPost: () => onRequestPost11
 });
 var KINDS2 = ["song", "album", "artist", "keyword"];
 var REASONS = ["Copyright", "Wrong audio", "Offensive", "Other"];
-var onRequestGet18 = adminGet(async ({ env }) => {
+var onRequestGet19 = adminGet(async ({ env }) => {
   const [blocked, music] = await Promise.all([
     db.select(env, "blocked_content", q().select("*").order("created_at", "desc").limit(1e3)),
     db.rpc(env, "stats_music", { p_days: 30, p_limit: 20 })
@@ -8452,7 +8182,7 @@ var onRequestGet18 = adminGet(async ({ env }) => {
   if (!blocked.ok || !music.ok) return adminJson({ configured: true, error: "db_unavailable" }, 502);
   return adminJson({ configured: true, blocked: blocked.rows.map(camel), suggestions: Array.isArray(music.value?.songs) ? music.value.songs : [], reasons: REASONS });
 });
-var onRequestPost9 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost11 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (body.action === "block") {
     const kind = body.kind;
     if (!KINDS2.includes(kind)) return badRequest("bad_kind");
@@ -8494,11 +8224,11 @@ var onRequestPost9 = adminPost(async ({ env, body, audit: audit2, me }) => {
 var settings_exports = {};
 __export(settings_exports, {
   OWNER_KEYS: () => OWNER_KEYS,
-  onRequestGet: () => onRequestGet19,
-  onRequestPost: () => onRequestPost10
+  onRequestGet: () => onRequestGet20,
+  onRequestPost: () => onRequestPost12
 });
 var OWNER_KEYS = /* @__PURE__ */ new Set(["retention", "jobs", "alert-rules", "email"]);
-var onRequestGet19 = adminGet(async ({ env, url }) => {
+var onRequestGet20 = adminGet(async ({ env, url }) => {
   resetSettingsMemo();
   const rows3 = await readSettings(env);
   if (!rows3.ok) return dbFailure(rows3);
@@ -8518,7 +8248,7 @@ var onRequestGet19 = adminGet(async ({ env, url }) => {
   }
   return adminJson({ configured: true, keys: SETTING_KEYS, values, updated });
 });
-var onRequestPost10 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost12 = adminPost(async ({ env, body, audit: audit2 }) => {
   const key = body.key;
   if (!isSettingKey(key)) return badRequest("unknown_key");
   if (!("value" in body)) return badRequest("value_required");
@@ -8538,8 +8268,8 @@ var onRequestPost10 = adminPost(async ({ env, body, audit: audit2 }) => {
 // functions/api/admin/experiments.ts
 var experiments_exports = {};
 __export(experiments_exports, {
-  onRequestGet: () => onRequestGet20,
-  onRequestPost: () => onRequestPost11
+  onRequestGet: () => onRequestGet21,
+  onRequestPost: () => onRequestPost13
 });
 
 // functions/_lib/experiments.ts
@@ -8571,7 +8301,7 @@ __name(sanitizeVariants, "sanitizeVariants");
 var KEY_RE = /^[a-z0-9-]{1,40}$/;
 var STATUSES2 = ["draft", "running", "paused", "finished"];
 var isStatus = /* @__PURE__ */ __name((v) => typeof v === "string" && STATUSES2.includes(v), "isStatus");
-var onRequestGet20 = adminGet(async ({ env }) => {
+var onRequestGet21 = adminGet(async ({ env }) => {
   const [r, active] = await Promise.all([
     db.select(env, "experiments", q().select("*").order("updated_at", "desc").limit(200)),
     db.count(env, "accounts", q().gte("last_seen", new Date(Date.now() - 7 * 864e5).toISOString()))
@@ -8588,7 +8318,7 @@ var onRequestGet20 = adminGet(async ({ env }) => {
     })
   });
 });
-var onRequestPost11 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost13 = adminPost(async ({ env, body, audit: audit2 }) => {
   const key = typeof body.key === "string" ? body.key.trim().toLowerCase() : "";
   if (!KEY_RE.test(key)) return badRequest("bad_key");
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -8650,8 +8380,8 @@ var push_exports = {};
 __export(push_exports, {
   cleanImage: () => cleanImage,
   isInternalLink: () => isInternalLink,
-  onRequestGet: () => onRequestGet21,
-  onRequestPost: () => onRequestPost12
+  onRequestGet: () => onRequestGet22,
+  onRequestPost: () => onRequestPost14
 });
 var SITE_ORIGIN = "https://www.vinaxmusic.online";
 var MAX_AHEAD_MS = 60 * 864e5;
@@ -8720,7 +8450,7 @@ function deviceKinds(reachable, rows3) {
   return DEVICE_KEYS.map((key) => ({ key, people: people.get(key)?.size ?? 0 })).filter((d) => d.people > 0);
 }
 __name(deviceKinds, "deviceKinds");
-var onRequestGet21 = adminGet(async ({ env }) => {
+var onRequestGet22 = adminGet(async ({ env }) => {
   const e = env;
   const [all, signed, rules, kinds, tags, fcmRows] = await Promise.all([
     db.select(env, "push_devices", q().eq("active", "true").select("channel").limit(2e4)),
@@ -8759,7 +8489,7 @@ var onRequestGet21 = adminGet(async ({ env }) => {
   });
 });
 var audienceJson = /* @__PURE__ */ __name((a, ts, reach) => ({ ...a.filter, ...a.activity ? { activity: a.activity } : {}, label: a.label, everyone: a.everyone, ts, ...reach ?? {} }), "audienceJson");
-var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost14 = adminPost(async ({ env, body, audit: audit2, me }) => {
   const e = env;
   const title = clip(body.title, 120) ?? "VinaX";
   const text2 = clip(body.body, 300);
@@ -8868,8 +8598,8 @@ var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
 // functions/api/admin/notifications.ts
 var notifications_exports = {};
 __export(notifications_exports, {
-  onRequestGet: () => onRequestGet22,
-  onRequestPost: () => onRequestPost13,
+  onRequestGet: () => onRequestGet23,
+  onRequestPost: () => onRequestPost15,
   shape: () => shape2
 });
 var STATUSES3 = ["sent", "scheduled", "draft", "cancelled", "sending"];
@@ -8900,7 +8630,7 @@ var shape2 = /* @__PURE__ */ __name((r) => {
     retractedAt: r.retracted_at
   };
 }, "shape");
-var onRequestGet22 = adminGet(async ({ env, url }) => {
+var onRequestGet23 = adminGet(async ({ env, url }) => {
   const { limit } = paging(url, 50, 200);
   const status = url.searchParams.get("status") ?? "all";
   const query2 = q().select("*").neq("kind", "system").order("at", "desc").limit(limit);
@@ -8916,7 +8646,7 @@ var onRequestGet22 = adminGet(async ({ env, url }) => {
   if (!r.ok || !nSent.ok || !nSched.ok || !nDraft.ok) return adminJson({ configured: true, error: "db_unavailable" }, 502);
   return adminJson({ configured: true, rows: r.rows.map(shape2), counts: { sent: nSent.value, scheduled: nSched.value, draft: nDraft.value } });
 });
-var onRequestPost13 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost15 = adminPost(async ({ env, body, audit: audit2 }) => {
   const id = idOf2(body.id);
   if (!id) return badRequest();
   if (body.action === "cancel") {
@@ -8952,7 +8682,7 @@ var onRequestPost13 = adminPost(async ({ env, body, audit: audit2 }) => {
 // functions/api/admin/audit.ts
 var audit_exports = {};
 __export(audit_exports, {
-  onRequestGet: () => onRequestGet23
+  onRequestGet: () => onRequestGet24
 });
 var DAY2 = /^\d{4}-\d{2}-\d{2}$/;
 var istStart = /* @__PURE__ */ __name((d) => new Date(Date.parse(`${d}T00:00:00+05:30`)).toISOString(), "istStart");
@@ -8969,7 +8699,7 @@ function filters2(url) {
   return query2;
 }
 __name(filters2, "filters");
-var onRequestGet23 = adminGet(async ({ env, url }) => {
+var onRequestGet24 = adminGet(async ({ env, url }) => {
   const { limit, offset } = paging(url, 50, 200);
   const [rows3, total, recent] = await Promise.all([
     db.select(env, "audit_log", filters2(url).select("*").order("at", "desc").limit(limit).offset(offset)),
@@ -8990,7 +8720,7 @@ __export(database_exports, {
   EXPECTED_TABLES: () => EXPECTED_TABLES,
   TABLE_NAMES: () => TABLE_NAMES,
   onRequestGet: () => onRequestGet25,
-  onRequestPost: () => onRequestPost15
+  onRequestPost: () => onRequestPost16
 });
 
 // functions/_lib/ai/cleanup.ts
@@ -9855,10 +9585,10 @@ function weeklySummaryEmail(to, s, opts = {}) {
   };
 }
 __name(weeklySummaryEmail, "weeklySummaryEmail");
-var num3 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
+var num2 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
 var rows = /* @__PURE__ */ __name((v) => (Array.isArray(v) ? v : []).slice(0, 5).map((r) => {
   const o = r && typeof r === "object" ? r : {};
-  return { title: typeof o.title === "string" ? o.title : void 0, artist: typeof o.artist === "string" ? o.artist : "Unknown artist", plays: num3(o.plays), people: num3(o.people) };
+  return { title: typeof o.title === "string" ? o.title : void 0, artist: typeof o.artist === "string" ? o.artist : "Unknown artist", plays: num2(o.plays), people: num2(o.people) };
 }), "rows");
 async function readWeeklySummary(env, monday) {
   const r = await db.rpc(env, "weekly_summary", { p_to: monday }, { timeoutMs: 6e4 });
@@ -9869,21 +9599,21 @@ async function readWeeklySummary(env, monday) {
     value: {
       from: String(v.from ?? ""),
       to: String(v.to ?? ""),
-      newUsers: num3(v.newUsers),
-      newUsersPrev: num3(v.newUsersPrev),
-      totalUsers: num3(v.totalUsers),
-      activeUsers: num3(v.activeUsers),
-      activeUsersPrev: num3(v.activeUsersPrev),
-      plays: num3(v.plays),
-      playsPrev: num3(v.playsPrev),
-      listenSeconds: num3(v.listenSeconds),
-      listenSecondsPrev: num3(v.listenSecondsPrev),
+      newUsers: num2(v.newUsers),
+      newUsersPrev: num2(v.newUsersPrev),
+      totalUsers: num2(v.totalUsers),
+      activeUsers: num2(v.activeUsers),
+      activeUsersPrev: num2(v.activeUsersPrev),
+      plays: num2(v.plays),
+      playsPrev: num2(v.playsPrev),
+      listenSeconds: num2(v.listenSeconds),
+      listenSecondsPrev: num2(v.listenSecondsPrev),
       topSongs: rows(v.topSongs),
       topArtists: rows(v.topArtists),
-      atRisk: num3(v.atRisk),
-      errors: num3(v.errors),
-      errorsPrev: num3(v.errorsPrev),
-      feedback: num3(v.feedback)
+      atRisk: num2(v.atRisk),
+      errors: num2(v.errors),
+      errorsPrev: num2(v.errorsPrev),
+      feedback: num2(v.feedback)
     }
   };
 }
@@ -10234,7 +9964,7 @@ var daytime = /* @__PURE__ */ __name((now, tz2) => {
 }, "daytime");
 var istDate = /* @__PURE__ */ __name((now) => localParts(now, IST).date, "istDate");
 var str2 = /* @__PURE__ */ __name((v) => typeof v === "string" && v.trim() ? v.trim() : null, "str");
-var num4 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
+var num3 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
 var tz = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : null, "tz");
 var list = /* @__PURE__ */ __name((v) => Array.isArray(v) ? v.map((x) => str2(x)).filter((x) => !!x) : [], "list");
 var rows2 = /* @__PURE__ */ __name((v) => Array.isArray(v) ? v.filter((r) => !!r && typeof r === "object" && typeof r.id === "string") : [], "rows");
@@ -10242,9 +9972,9 @@ var asRecaps = /* @__PURE__ */ __name((v) => rows2(v).map((r) => ({
   id: String(r.id),
   name: str2(r.name),
   tzOffset: tz(r.tzOffset),
-  seconds: num4(r.seconds),
-  plays: num4(r.plays),
-  days: num4(r.days),
+  seconds: num3(r.seconds),
+  plays: num3(r.plays),
+  days: num3(r.days),
   topArtist: str2(r.topArtist),
   topSong: str2(r.topSong),
   topSongId: str2(r.topSongId),
@@ -10257,7 +9987,7 @@ var asWinbacks = /* @__PURE__ */ __name((v) => rows2(v).map((r) => ({
   lastActive: str2(r.lastActive),
   topArtist: str2(r.topArtist),
   lastWinbackAt: str2(r.lastWinbackAt),
-  unanswered: num4(r.unanswered)
+  unanswered: num3(r.unanswered)
 })), "asWinbacks");
 var asReleases = /* @__PURE__ */ __name((v) => rows2(v).map((r) => ({
   id: String(r.id),
@@ -10770,86 +10500,6 @@ async function runScheduled(env, scheduledTime) {
 }
 __name(runScheduled, "runScheduled");
 
-// functions/api/admin/session.ts
-var session_exports = {};
-__export(session_exports, {
-  SCHEMA_WANTED: () => SCHEMA_WANTED2,
-  onRequestGet: () => onRequestGet24,
-  onRequestPost: () => onRequestPost14
-});
-var SCHEMA_WANTED2 = 18;
-var onRequestGet24 = /* @__PURE__ */ __name(async (ctx) => {
-  const { request, env } = ctx;
-  const me = await adminPrincipal(request, env);
-  let schema = null;
-  if (me && dbConfigured(env)) {
-    const r = await db.one(env, "meta", q().eq("key", "schema").select("value"));
-    schema = r.ok ? Number(r.value?.value?.version) || null : null;
-  }
-  return adminJson({
-    schema,
-    schemaWanted: SCHEMA_WANTED2,
-    databaseConfigured: dbConfigured(env),
-    googleClientId: clientIds(env)[0] ?? null,
-    googleReady: googleSignInReady(env),
-    passwordAllowed: !!env.ADMIN_LOGIN_PASSWORD,
-    turnstileSiteKey: turnstileSiteKey(env),
-    me: me ? { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via } : null
-  });
-}, "onRequestGet");
-var onRequestPost14 = /* @__PURE__ */ __name(async (ctx) => {
-  const { request, env } = ctx;
-  const read = await readJsonCapped(request, 8 * 1024);
-  if (!read.ok || !read.value || typeof read.value !== "object") return badRequest();
-  if (typeof read.value.password === "string") return passwordSignIn(ctx, read.value.password, read.value.turnstile);
-  if (!googleSignInReady(env)) return adminJson({ error: "google_not_configured" }, 503);
-  if (await bindingAllows(env, "ADMIN_AUTH_FAILS", `admin-google|${clientKey(request, env)}`) === false) return adminJson({ error: "rate_limited" }, 429);
-  const human = await verifyTurnstile(env, read.value.turnstile, request, "console-signin");
-  if (human === "missing" || human === "failed") return adminJson({ error: "human_check" }, 403);
-  const profile = await verifyGoogleIdToken(env, read.value.credential);
-  if (!profile) return adminJson({ error: "invalid_token" }, 401);
-  const email = normEmail(profile.email);
-  if (!email || !profile.emailVerified) return adminJson({ error: "email_not_verified" }, 403);
-  resetAdminMemo();
-  const row = await adminRowOf(env, email);
-  if (!row) {
-    if (dbConfigured(env)) await audit({ env, request, waitUntil: ctx.waitUntil, actor: email }, { action: "admin-signin-refused", summary: `${email} tried to sign in but is not an admin`, target: email });
-    return adminJson({ error: "not_an_admin", email }, 403);
-  }
-  const token = await issueAdminSession(env, email);
-  if (!token) return adminJson({ error: "google_not_configured" }, 503);
-  if (dbConfigured(env)) {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    if (bootstrapOwners(env).includes(email)) {
-      await db.upsert(env, "admins", { email, name: profile.name, picture: profile.picture, role: "owner", last_sign_in: now }, "email");
-    } else {
-      await db.update(env, "admins", q().eq("email", email), { name: profile.name, picture: profile.picture, last_sign_in: now });
-    }
-    resetAdminMemo();
-    await audit({ env, request, waitUntil: ctx.waitUntil, actor: email }, { action: "admin-signin", summary: `${email} signed in (${row.role})`, target: email });
-  }
-  return adminJson({
-    token,
-    expiresIn: ADMIN_SESSION_TTL_S,
-    me: { email, name: profile.name, picture: profile.picture, role: row.role, via: "google" }
-  });
-}, "onRequestPost");
-async function passwordSignIn(ctx, password, turnstile) {
-  const { request, env } = ctx;
-  if (!env.ADMIN_LOGIN_PASSWORD) return adminJson({ error: "password_off" }, 403);
-  if (password.length > 512) return badRequest();
-  const human = await verifyTurnstile(env, turnstile, request, "console-signin");
-  if (human === "unavailable") return adminJson({ error: "human_check_unavailable" }, 503);
-  if (human !== "ok") return adminJson({ error: "human_check" }, 403);
-  if (!await ownerPasswordMatches(request, env, password)) return adminJson({ error: "wrong_password" }, 401);
-  const token = await issuePasswordSession(env, password);
-  if (!token) return adminJson({ error: "not_configured" }, 503);
-  const me = PASSWORD_PRINCIPAL;
-  if (dbConfigured(env)) await audit({ env, request, waitUntil: ctx.waitUntil, actor: me.email }, { action: "admin-signin", summary: "Owner signed in with the recovery password", target: me.email });
-  return adminJson({ token, expiresIn: ADMIN_SESSION_TTL_S, me: { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via } });
-}
-__name(passwordSignIn, "passwordSignIn");
-
 // functions/api/admin/database.ts
 var EXPECTED_TABLES = [
   "meta",
@@ -10911,7 +10561,8 @@ var TABLE_NAMES = {
   ai_conversations: { name: "VinaX AI chats", about: "Chats users had with the AI assistant." },
   ai_messages: { name: "VinaX AI messages", about: "The messages inside those chats." },
   ai_attachments: { name: "VinaX AI files", about: "Pictures and documents users added to chats." },
-  ai_daily_usage: { name: "VinaX AI daily limits", about: "How much of each daily allowance was used." }
+  ai_daily_usage: { name: "VinaX AI daily limits", about: "How much of each daily allowance was used." },
+  ai_feedback: { name: "VinaX AI ratings", about: "Thumbs up and down users gave AI replies, with the model that wrote each one." }
 };
 var ESTIMATED = /* @__PURE__ */ new Set(["events"]);
 function keptFor(table, r) {
@@ -10934,6 +10585,8 @@ function keptFor(table, r) {
     case "ai_messages":
     case "ai_attachments":
       return "Until the user deletes it";
+    case "ai_feedback":
+      return "Until the user deletes their account";
     default:
       return "Forever";
   }
@@ -10996,7 +10649,7 @@ var onRequestGet25 = adminGet(async ({ env }) => {
     configured: true,
     reachable,
     schema,
-    schemaWanted: SCHEMA_WANTED2,
+    schemaWanted: SCHEMA_WANTED,
     tables: tableRows,
     counts: exact,
     totalBytes: tableRows.reduce((n3, t) => n3 + (Number(t.bytes) || 0), 0),
@@ -11008,7 +10661,7 @@ var onRequestGet25 = adminGet(async ({ env }) => {
     checkedAt: new Date(now).toISOString()
   });
 });
-var onRequestPost15 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost16 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (body.action === "purge_events") {
     const days = intIn(body.days, 7, 3650);
     if (!days) return badRequest("bad_days");
@@ -11060,7 +10713,7 @@ var onRequestPost15 = adminPost(async ({ env, body, audit: audit2, me }) => {
 var admins_exports = {};
 __export(admins_exports, {
   onRequestGet: () => onRequestGet26,
-  onRequestPost: () => onRequestPost16
+  onRequestPost: () => onRequestPost17
 });
 var COLS = "email,name,picture,role,invited_by,created_at,last_sign_in";
 var shape3 = /* @__PURE__ */ __name((r) => ({ email: r.email, name: r.name, picture: r.picture, role: r.role, invitedBy: r.invited_by, createdAt: r.created_at, lastSignIn: r.last_sign_in }), "shape");
@@ -11074,7 +10727,7 @@ var onRequestGet26 = adminGet(async ({ env, me }) => {
     me: { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via }
   });
 });
-var onRequestPost16 = adminPost(async ({ env, body, audit: audit2, me, waitUntil }) => {
+var onRequestPost17 = adminPost(async ({ env, body, audit: audit2, me, waitUntil }) => {
   const email = normEmail(body.email);
   if (!email) return badRequest("bad_email");
   const all = await db.select(env, "admins", q().select(COLS).limit(200));
@@ -11117,12 +10770,12 @@ var onRequestPost16 = adminPost(async ({ env, body, audit: audit2, me, waitUntil
 var upload_exports = {};
 __export(upload_exports, {
   MEDIA_BUCKET: () => MEDIA_BUCKET,
-  onRequestPost: () => onRequestPost17
+  onRequestPost: () => onRequestPost18
 });
 var MEDIA_BUCKET = "console-media";
 var MAX_BYTES = 15e5;
 var TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
-var onRequestPost17 = adminPost(async ({ env, body, audit: audit2 }) => {
+var onRequestPost18 = adminPost(async ({ env, body, audit: audit2 }) => {
   if (!dbConfigured(env)) return adminJson({ error: "db_not_configured" }, 503);
   const m2 = typeof body.data === "string" ? /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(body.data) : null;
   if (!m2) return badRequest("bad_image");
@@ -11162,7 +10815,7 @@ var onRequestPost17 = adminPost(async ({ env, body, audit: audit2 }) => {
 var trends_exports = {};
 __export(trends_exports, {
   onRequestGet: () => onRequestGet27,
-  onRequestPost: () => onRequestPost18
+  onRequestPost: () => onRequestPost19
 });
 
 // functions/_lib/clientConfig.ts
@@ -11434,7 +11087,7 @@ var onRequestGet27 = adminGet(async ({ env, url }) => {
   if (!f.ok) return dbFailure(f);
   return adminJson({ configured: true, days, view, data: r.value ?? {}, pins: f.pins, synonyms: f.synonyms });
 });
-var onRequestPost18 = adminPost(async ({ env, body, me, audit: audit2 }) => {
+var onRequestPost19 = adminPost(async ({ env, body, me, audit: audit2 }) => {
   const action = body.action;
   if (action !== "pin" && action !== "unpin" && action !== "synonym") return badRequest("unknown_action");
   const f = await fixes(env);
@@ -11478,7 +11131,7 @@ var onRequestPost18 = adminPost(async ({ env, body, me, audit: audit2 }) => {
 var alerts_exports = {};
 __export(alerts_exports, {
   onRequestGet: () => onRequestGet28,
-  onRequestPost: () => onRequestPost19
+  onRequestPost: () => onRequestPost20
 });
 var HOUR2 = 36e5;
 var onRequestGet28 = adminGet(async ({ env, me }) => {
@@ -11537,7 +11190,7 @@ var onRequestGet28 = adminGet(async ({ env, me }) => {
     }
   });
 });
-var onRequestPost19 = adminPost(async ({ env, body, me, audit: audit2 }) => {
+var onRequestPost20 = adminPost(async ({ env, body, me, audit: audit2 }) => {
   const e = env;
   if (body.action === "test") {
     if (me.via !== "google") return adminJson({ error: "no_own_account", message: "You signed in with the recovery password, which has no phone. Sign in with Google to send a test alert to your own phone." }, 400);
@@ -11584,7 +11237,7 @@ var onRequestGet29 = adminGet(async ({ env }) => {
 var email_exports = {};
 __export(email_exports, {
   onRequestGet: () => onRequestGet30,
-  onRequestPost: () => onRequestPost20
+  onRequestPost: () => onRequestPost21
 });
 var onRequestGet30 = adminGet(async ({ env }) => {
   const e = env;
@@ -11599,7 +11252,7 @@ var onRequestGet30 = adminGet(async ({ env }) => {
     weekly: { to, owners: !settings.weeklyTo.length, last }
   });
 });
-var onRequestPost20 = adminPost(async ({ env, body, me, audit: audit2 }) => {
+var onRequestPost21 = adminPost(async ({ env, body, me, audit: audit2 }) => {
   if (body.action !== "test" && body.action !== "weekly-test") return badRequest("unknown_action");
   const e = env;
   if (!emailConfigured(e)) return adminJson({ error: "not_configured" }, 503);
@@ -11621,7 +11274,7 @@ var onRequestPost20 = adminPost(async ({ env, body, me, audit: audit2 }) => {
 var outreach_exports = {};
 __export(outreach_exports, {
   onRequestGet: () => onRequestGet31,
-  onRequestPost: () => onRequestPost21
+  onRequestPost: () => onRequestPost22
 });
 var onRequestGet31 = adminGet(async ({ env, url }) => {
   const days = intIn(url.searchParams.get("days"), 1, 90) ?? 14;
@@ -11641,7 +11294,7 @@ var onRequestGet31 = adminGet(async ({ env, url }) => {
     summary: summary.value ?? {}
   });
 });
-var onRequestPost21 = adminPost(async ({ env, body, me, audit: audit2 }) => {
+var onRequestPost22 = adminPost(async ({ env, body, me, audit: audit2 }) => {
   if (body.action === "run") {
     const r2 = await runJob(env, "outreach");
     await audit2({ action: "outreach-run", summary: `automatic notifications run by hand (${r2.ok ? "ok" : "failed"})`, after: r2.summary });
@@ -11660,11 +11313,11 @@ var onRequestPost21 = adminPost(async ({ env, body, me, audit: audit2 }) => {
 var run_exports = {};
 __export(run_exports, {
   onRequestGet: () => onRequestGet32,
-  onRequestPost: () => onRequestPost22
+  onRequestPost: () => onRequestPost23
 });
 var json7 = /* @__PURE__ */ __name((body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } }), "json");
 var onRequestGet32 = /* @__PURE__ */ __name(async () => json7({ error: "method_not_allowed" }, 405), "onRequestGet");
-var onRequestPost22 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost23 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const presented = request.headers.get("x-cron-secret") ?? "";
   const bySecret = !!env.CRON_SECRET && !!presented && safeEqual(presented, env.CRON_SECRET);
@@ -11791,11 +11444,11 @@ var CORS4 = {
   "access-control-allow-methods": "GET, OPTIONS"
 };
 var text = /* @__PURE__ */ __name((v, max) => typeof v === "string" ? v.trim().slice(0, max) : "", "text");
-var num5 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
+var num4 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
 function publicChart(data, now = /* @__PURE__ */ new Date()) {
   const raw = data && typeof data === "object" ? data.songs : null;
   const rows3 = Array.isArray(raw) ? raw : [];
-  const kept = rows3.map((r) => r && typeof r === "object" ? r : {}).filter((r) => num5(r.listeners) >= MIN_LISTENERS && text(r.id, 64) && text(r.title, 200)).sort((a, b) => num5(a.rank) - num5(b.rank));
+  const kept = rows3.map((r) => r && typeof r === "object" ? r : {}).filter((r) => num4(r.listeners) >= MIN_LISTENERS && text(r.id, 64) && text(r.title, 200)).sort((a, b) => num4(a.rank) - num4(b.rank));
   const seen = /* @__PURE__ */ new Set();
   const songs = [];
   for (const r of kept) {
@@ -11897,7 +11550,7 @@ __export(events_exports, {
   eventsCors: () => eventsCors,
   isReservedKind: () => isReservedKind,
   onRequestOptions: () => onRequestOptions6,
-  onRequestPost: () => onRequestPost23,
+  onRequestPost: () => onRequestPost24,
   sanitizeMeta: () => sanitizeMeta
 });
 
@@ -12041,7 +11694,7 @@ function sanitizeMeta(kind, raw) {
 }
 __name(sanitizeMeta, "sanitizeMeta");
 var onRequestOptions6 = /* @__PURE__ */ __name(async (context) => new Response(null, { status: 204, headers: eventsCors(context.request.headers.get("origin")) }), "onRequestOptions");
-var onRequestPost23 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost24 = /* @__PURE__ */ __name(async (context) => {
   const { request } = context;
   const env = context.env ?? {};
   const cors = eventsCors(request.headers.get("origin"));
@@ -12164,7 +11817,7 @@ var feedback_exports2 = {};
 __export(feedback_exports2, {
   onRequestGet: () => onRequestGet39,
   onRequestOptions: () => onRequestOptions8,
-  onRequestPost: () => onRequestPost24
+  onRequestPost: () => onRequestPost25
 });
 var CORS7 = {
   "access-control-allow-origin": "*",
@@ -12174,7 +11827,7 @@ var CORS7 = {
 var KINDS3 = /* @__PURE__ */ new Set(["bug", "idea", "content", "other"]);
 var onRequestOptions8 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS7 }), "onRequestOptions");
 var onRequestGet39 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestGet");
-var onRequestPost24 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost25 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = await rateLimitAsync(request, "feedback", { capacity: 5, refillPerMinute: 2 }, env);
   if (limited) return limited;
@@ -12269,12 +11922,12 @@ var handoff_exports = {};
 __export(handoff_exports, {
   onRequestGet: () => onRequestGet41,
   onRequestOptions: () => onRequestOptions10,
-  onRequestPost: () => onRequestPost25
+  onRequestPost: () => onRequestPost26
 });
 var HEADERS = { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" };
 var gone = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ error: "gone" }), { status: 410, headers: HEADERS }), "gone");
 var onRequestGet41 = gone;
-var onRequestPost25 = gone;
+var onRequestPost26 = gone;
 var onRequestOptions10 = /* @__PURE__ */ __name(async () => new Response(null, {
   status: 204,
   headers: {
@@ -12290,7 +11943,7 @@ var recommendations_exports = {};
 __export(recommendations_exports, {
   onRequestGet: () => onRequestGet42,
   onRequestOptions: () => onRequestOptions11,
-  onRequestPost: () => onRequestPost26
+  onRequestPost: () => onRequestPost27
 });
 
 // functions/_lib/recs.ts
@@ -12414,7 +12067,7 @@ function json9(body, status = 200, cache = "no-store") {
 }
 __name(json9, "json");
 var onRequestOptions11 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
-var onRequestPost26 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
+var onRequestPost27 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
 var onRequestGet42 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = await rateLimitAsync(request, "recs", { capacity: 10, refillPerMinute: 10 }, env);
@@ -12452,7 +12105,7 @@ var google_exports = {};
 __export(google_exports, {
   onRequestGet: () => onRequestGet43,
   onRequestOptions: () => onRequestOptions12,
-  onRequestPost: () => onRequestPost27
+  onRequestPost: () => onRequestPost28
 });
 
 // functions/_lib/authShared.ts
@@ -12616,7 +12269,7 @@ async function accountIdFor(env, sub, email, verified) {
   return byEmail.ok && byEmail.value ? byEmail.value.id : sub;
 }
 __name(accountIdFor, "accountIdFor");
-var onRequestPost27 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost28 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-google", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -12639,7 +12292,7 @@ __export(me_exports, {
   deviceSignedOut: () => deviceSignedOut,
   onRequestGet: () => onRequestGet44,
   onRequestOptions: () => onRequestOptions13,
-  onRequestPost: () => onRequestPost28,
+  onRequestPost: () => onRequestPost29,
   touchAccount: () => touchAccount
 });
 var TOUCH_MS = 10 * 6e4;
@@ -12690,7 +12343,7 @@ var onRequestGet44 = /* @__PURE__ */ __name(async (ctx) => {
   ]);
   return json10({ user: { ...publicUser(row, handle), hasPassword: password, ...adminRow ? { admin: true } : {} } });
 }, "onRequestGet");
-var onRequestPost28 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost29 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-me", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -12709,7 +12362,7 @@ var password_exports = {};
 __export(password_exports, {
   onRequestGet: () => onRequestGet45,
   onRequestOptions: () => onRequestOptions14,
-  onRequestPost: () => onRequestPost29
+  onRequestPost: () => onRequestPost30
 });
 
 // functions/_lib/emailAuth.ts
@@ -12765,7 +12418,7 @@ var onRequestGet45 = /* @__PURE__ */ __name(async (ctx) => {
   if (!dbConfigured(env)) return json10({ error: "not_configured" }, 503);
   return json10({ hasPassword: await hasPassword(env, sub) });
 }, "onRequestGet");
-var onRequestPost29 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost30 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-password", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -12791,10 +12444,10 @@ var onRequestPost29 = /* @__PURE__ */ __name(async (ctx) => {
 var code_exports = {};
 __export(code_exports, {
   onRequestOptions: () => onRequestOptions15,
-  onRequestPost: () => onRequestPost30
+  onRequestPost: () => onRequestPost31
 });
 var onRequestOptions15 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
-var onRequestPost30 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost31 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-code", { capacity: 5, refillPerMinute: 3 }, env);
   if (limited) return limited;
@@ -12829,10 +12482,10 @@ var onRequestPost30 = /* @__PURE__ */ __name(async (ctx) => {
 var verify_exports = {};
 __export(verify_exports, {
   onRequestOptions: () => onRequestOptions16,
-  onRequestPost: () => onRequestPost31
+  onRequestPost: () => onRequestPost32
 });
 var onRequestOptions16 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
-var onRequestPost31 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost32 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-verify", { capacity: 10, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -12878,10 +12531,10 @@ var onRequestPost31 = /* @__PURE__ */ __name(async (ctx) => {
 var login_exports = {};
 __export(login_exports, {
   onRequestOptions: () => onRequestOptions17,
-  onRequestPost: () => onRequestPost32
+  onRequestPost: () => onRequestPost33
 });
 var onRequestOptions17 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
-var onRequestPost32 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-login", { capacity: 10, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -12970,7 +12623,7 @@ __export(chat_exports, {
   TITLE_WAIT_MS: () => TITLE_WAIT_MS,
   firstEventMsFor: () => firstEventMsFor,
   onRequestOptions: () => onRequestOptions19,
-  onRequestPost: () => onRequestPost33,
+  onRequestPost: () => onRequestPost34,
   parseContent: () => parseContent,
   tailStop: () => tailStop
 });
@@ -14073,9 +13726,12 @@ function publicKnowledgeFile(r) {
   return { id: r.id, name: r.name, mime: r.mime, kind: r.kind, size: r.size, ...r.pages ? { pages: r.pages } : {}, chars: r.extracted_text?.length ?? 0, createdAt: r.created_at };
 }
 __name(publicKnowledgeFile, "publicKnowledgeFile");
-async function loadProjectContext(env, accountId, projectId) {
+async function loadProjectContext(env, accountId, projectId, opts = {}) {
   if (!projectId) return null;
-  const [p, f] = await Promise.all([getProject(env, accountId, projectId), projectFiles(env, accountId, projectId)]);
+  const [p, f] = await Promise.all([
+    getProject(env, accountId, projectId),
+    opts.files === false ? Promise.resolve({ ok: true, rows: [] }) : projectFiles(env, accountId, projectId)
+  ]);
   if (!p.ok || !p.value) return null;
   const files = f.ok ? f.rows : [];
   return { project: p.value, files, chars: files.reduce((n3, a) => n3 + (a.extracted_text?.length ?? 0), 0) };
@@ -14438,6 +14094,10 @@ function updateMessage(env, conversationId, id, patch) {
   return db.update(env, "ai_messages", q().eq("id", id).eq("conversation_id", conversationId), patch);
 }
 __name(updateMessage, "updateMessage");
+function replaceKeptPart(env, conversationId, id, patch) {
+  return db.update(env, "ai_messages", q().eq("id", id).eq("conversation_id", conversationId).eq("role", "assistant").eq("stop_reason", "aborted").select("id"), patch, { returning: true });
+}
+__name(replaceKeptPart, "replaceKeptPart");
 function exportChats(env, accountId) {
   return db.rpc(env, "ai_export", { p_account: accountId });
 }
@@ -14547,7 +14207,7 @@ function makePipe(onCancel) {
 }
 __name(makePipe, "makePipe");
 var modelInfo = /* @__PURE__ */ __name((spec) => ({ id: spec.id, name: spec.name, provider: PROVIDER_NAMES[spec.provider] }), "modelInfo");
-var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost34 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const perMinute = dbConfigured(env) ? (await aiSettings(env)).limits.messagesPerMinute : 10;
   const limited = await rateLimitAsync(request, "ai-chat", { capacity: perMinute * 2, refillPerMinute: perMinute }, env);
@@ -14580,7 +14240,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
   let candidates;
   let ladder = null;
   if (mode === "model") {
-    const spec = modelById(registry, body.model) ?? await foundModelFor(env, settings, body.model, { waitUntil: ctx.waitUntil });
+    const spec = modelById(registry, body.model);
     if (!spec || spec.group === null || !providerConfigured(env, spec.provider)) return json10({ error: "unknown_model" }, 400);
     if (isLockedModel(spec) && !await claudeAllowed(env, sub)) return json10({ error: "model_locked" }, 403);
     candidates = [spec];
@@ -14958,11 +14618,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
         });
       }
     } else if (savedReply) {
-      await insertMessage(env, {
-        id: assistantId,
-        conversation_id: conversation.id,
-        parent_id: userMsg.id,
-        role: "assistant",
+      const reply = {
         content: [{ type: "text", text: finalText }],
         thinking: thinking || null,
         thinking_ms: thinkMs,
@@ -14975,7 +14631,9 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
         provider: model.provider,
         stop_reason: stop,
         usage
-      });
+      };
+      const put = await insertMessage(env, { id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: "assistant", ...reply });
+      if (!put.ok && put.code === "23505") await replaceKeptPart(env, conversation.id, assistantId, reply);
     }
     if (userOk) {
       await updateConversation(env, sub, conversation.id, {
@@ -15000,10 +14658,10 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
 var keep_exports = {};
 __export(keep_exports, {
   onRequestOptions: () => onRequestOptions20,
-  onRequestPost: () => onRequestPost34
+  onRequestPost: () => onRequestPost35
 });
 var onRequestOptions20 = onRequestOptions19;
-var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequestPost35 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-keep", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -15044,7 +14702,23 @@ var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
     await updateConversation(env, sub, conversationId, { updated_at: (/* @__PURE__ */ new Date()).toISOString(), active_leaf_id: assistantMessageId });
     return json10({ ok: true, saved: true });
   }
-  if (existing || !text2.trim()) return json10({ ok: true, saved: false });
+  if (!text2.trim()) return json10({ ok: true, saved: false });
+  if (existing) {
+    const before = existing.role === "assistant" && existing.parent_id === userMessageId && existing.stop_reason === "aborted" ? textOf(existing.content) : null;
+    const fuller = before !== null && text2.startsWith(before) && (text2.length > before.length || stopReason !== "aborted");
+    if (!fuller) return json10({ ok: true, saved: false });
+    const replaced = await replaceKeptPart(env, conversationId, assistantMessageId, {
+      content: [{ type: "text", text: text2 }],
+      artifacts: found.length ? found : null,
+      thinking: thinking ?? existing.thinking,
+      ...spec ? { model_id: spec.id, provider: spec.provider } : {},
+      stop_reason: stopReason
+    });
+    if (!replaced.ok) return json10({ error: "unavailable" }, 503);
+    if (!replaced.rows.length) return json10({ ok: true, saved: false });
+    await updateConversation(env, sub, conversationId, { updated_at: (/* @__PURE__ */ new Date()).toISOString(), active_leaf_id: assistantMessageId });
+    return json10({ ok: true, saved: true });
+  }
   const saved = await insertMessage(env, {
     id: assistantMessageId,
     conversation_id: conversationId,
@@ -15065,13 +14739,95 @@ var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
   return json10({ ok: true, saved: true });
 }, "onRequestPost");
 
+// functions/api/ai/feedback.ts
+var feedback_exports3 = {};
+__export(feedback_exports3, {
+  onRequestOptions: () => onRequestOptions21,
+  onRequestPost: () => onRequestPost36
+});
+
+// functions/_lib/ai/feedback.ts
+var FEEDBACK_REASONS = ["wrong", "not_helpful", "too_slow", "other"];
+var FEEDBACK_NOTE_MAX = 300;
+function parseFeedback(b) {
+  if (b.rating === null) return { ok: true, clear: true };
+  if (b.rating !== "up" && b.rating !== "down") return null;
+  if (b.reason != null && !FEEDBACK_REASONS.includes(b.reason)) return null;
+  if (b.note != null && typeof b.note !== "string") return null;
+  const note = typeof b.note === "string" ? b.note.replace(/[\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim() : "";
+  if (note.length > FEEDBACK_NOTE_MAX) return null;
+  if (b.rating === "up") return { ok: true, clear: false, rating: "up", reason: null, note: null };
+  return { ok: true, clear: false, rating: "down", reason: b.reason ?? null, note: note || null };
+}
+__name(parseFeedback, "parseFeedback");
+var publicFeedback = /* @__PURE__ */ __name((r) => ({
+  rating: r.rating,
+  ...r.reason ? { reason: r.reason } : {},
+  ...r.note ? { note: r.note } : {}
+}), "publicFeedback");
+function saveFeedback(env, row) {
+  return db.upsert(env, "ai_feedback", { ...row, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, "message_id,account_id");
+}
+__name(saveFeedback, "saveFeedback");
+function clearFeedback(env, accountId, messageId) {
+  return db.remove(env, "ai_feedback", q().eq("account_id", accountId).eq("message_id", messageId));
+}
+__name(clearFeedback, "clearFeedback");
+async function feedbackIn(env, accountId, conversationId) {
+  const r = await db.select(env, "ai_feedback", q().select("message_id,rating,reason,note").eq("account_id", accountId).eq("conversation_id", conversationId).limit(2e3));
+  if (!r.ok) return null;
+  return Object.fromEntries(r.rows.filter((row) => row.rating === "up" || row.rating === "down").map((row) => [row.message_id, publicFeedback(row)]));
+}
+__name(feedbackIn, "feedbackIn");
+
+// functions/api/ai/feedback.ts
+var onRequestOptions21 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestPost36 = /* @__PURE__ */ __name(async ({ request, env }) => {
+  const limited = await rateLimitAsync(request, "ai-feedback", { capacity: 30, refillPerMinute: 30 }, env);
+  if (limited) return limited;
+  const sub = await readSession(env, bearer(request));
+  if (!sub) return json10({ error: "signed_out" }, 401);
+  if (!dbConfigured(env)) return json10({ error: "unavailable" }, 503);
+  const read = await readJsonCapped(request, 4096);
+  if (!read.ok || !read.value || typeof read.value !== "object") return json10({ error: "bad_request" }, 400);
+  const b = read.value;
+  const { conversationId, messageId } = b;
+  if (!isUuid(conversationId) || !isUuid(messageId)) return json10({ error: "bad_request" }, 400);
+  const input = parseFeedback(b);
+  if (!input) return json10({ error: "bad_request" }, 400);
+  const conv = await getConversation(env, sub, conversationId);
+  if (!conv.ok) return json10({ error: "unavailable" }, 503);
+  if (!conv.value) return json10({ error: "not_found" }, 404);
+  if (input.clear) {
+    const r = await clearFeedback(env, sub, messageId);
+    return r.ok ? json10({ ok: true, feedback: null }) : json10({ error: "unavailable" }, 503);
+  }
+  const msg = await db.one(env, "ai_messages", q().select("id,role,model_id,provider").eq("id", messageId).eq("conversation_id", conversationId));
+  if (!msg.ok) return json10({ error: "unavailable" }, 503);
+  if (!msg.value || msg.value.role !== "assistant") return json10({ error: "not_found" }, 404);
+  const row = {
+    message_id: messageId,
+    conversation_id: conversationId,
+    account_id: sub,
+    model_id: msg.value.model_id ?? null,
+    provider: msg.value.provider ?? null,
+    rating: input.rating,
+    reason: input.reason,
+    note: input.note
+  };
+  const saved = await saveFeedback(env, row);
+  if (!saved.ok) return json10({ error: "unavailable" }, 503);
+  console.log(JSON.stringify({ route: "ai-feedback", model: row.model_id, rating: row.rating, reason: row.reason }));
+  return json10({ ok: true, feedback: publicFeedback(row) });
+}, "onRequestPost");
+
 // functions/api/ai/models.ts
 var models_exports = {};
 __export(models_exports, {
   LONG_CONTEXT_CHARS: () => LONG_CONTEXT_CHARS,
   kindsOf: () => kindsOf,
   onRequestGet: () => onRequestGet47,
-  onRequestOptions: () => onRequestOptions21,
+  onRequestOptions: () => onRequestOptions22,
   recommendedIds: () => recommendedIds
 });
 function kindsOf(spec) {
@@ -15086,7 +14842,7 @@ function kindsOf(spec) {
 __name(kindsOf, "kindsOf");
 var LONG_CONTEXT_CHARS = 3e5;
 var recommendedIds = /* @__PURE__ */ __name(() => new Set(["default", "code", "deep", "vision", "fast"].map((l) => LADDERS[l][0]).filter(Boolean)), "recommendedIds");
-var onRequestOptions21 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions22 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet47 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-models", { capacity: 30, refillPerMinute: 30 }, env);
@@ -15134,10 +14890,10 @@ var conversations_exports = {};
 __export(conversations_exports, {
   PAGE_SIZE: () => PAGE_SIZE,
   onRequestGet: () => onRequestGet48,
-  onRequestOptions: () => onRequestOptions22
+  onRequestOptions: () => onRequestOptions23
 });
 var PAGE_SIZE = 30;
-var onRequestOptions22 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions23 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet48 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-conversations", { capacity: 30, refillPerMinute: 30 }, env);
@@ -15161,9 +14917,9 @@ var onRequestGet48 = /* @__PURE__ */ __name(async (ctx) => {
 var export_exports = {};
 __export(export_exports, {
   onRequestGet: () => onRequestGet49,
-  onRequestOptions: () => onRequestOptions23
+  onRequestOptions: () => onRequestOptions24
 });
-var onRequestOptions23 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions24 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet49 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-export", { capacity: 3, refillPerMinute: 2 }, env);
@@ -15183,10 +14939,10 @@ var onRequestGet49 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/attachments.ts
 var attachments_exports = {};
 __export(attachments_exports, {
-  onRequestOptions: () => onRequestOptions24,
-  onRequestPost: () => onRequestPost35
+  onRequestOptions: () => onRequestOptions25,
+  onRequestPost: () => onRequestPost37
 });
-var onRequestOptions24 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
+var onRequestOptions25 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
 async function checkedStream(body, length, kind, mime) {
   const reader = body.getReader();
   const head = [];
@@ -15235,7 +14991,7 @@ async function checkedStream(body, length, kind, mime) {
   return { ok: true, stream };
 }
 __name(checkedStream, "checkedStream");
-var onRequestPost35 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-attachments", { capacity: 20, refillPerMinute: 20 }, env);
   if (limited) return limited;
@@ -15308,10 +15064,10 @@ var id_exports2 = {};
 __export(id_exports2, {
   onRequestDelete: () => onRequestDelete,
   onRequestGet: () => onRequestGet50,
-  onRequestOptions: () => onRequestOptions25,
+  onRequestOptions: () => onRequestOptions26,
   onRequestPatch: () => onRequestPatch
 });
-var onRequestOptions25 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions26 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned(ctx, route2, capacity = 60) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity, refillPerMinute: capacity }, ctx.env);
   if (limited) return limited;
@@ -15376,8 +15132,8 @@ var onRequestDelete = /* @__PURE__ */ __name(async (ctx) => {
 var transcribe_exports = {};
 __export(transcribe_exports, {
   looksLikeAudio: () => looksLikeAudio,
-  onRequestOptions: () => onRequestOptions26,
-  onRequestPost: () => onRequestPost36
+  onRequestOptions: () => onRequestOptions27,
+  onRequestPost: () => onRequestPost38
 });
 
 // functions/_lib/ai/voiceGate.ts
@@ -15404,13 +15160,13 @@ function voiceFailure(kinds) {
 __name(voiceFailure, "voiceFailure");
 
 // functions/api/ai/transcribe.ts
-var onRequestOptions26 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
+var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
 function looksLikeAudio(b) {
   const ascii = /* @__PURE__ */ __name((at, s) => [...s].every((c, i) => b[at + i] === c.charCodeAt(0)), "ascii");
   return b[0] === 26 && b[1] === 69 && b[2] === 223 && b[3] === 163 || ascii(4, "ftyp") || ascii(0, "OggS") || ascii(0, "RIFF") && ascii(8, "WAVE") || ascii(0, "fLaC") || ascii(0, "ID3") || b[0] === 255 && (b[1] & 224) === 224;
 }
 __name(looksLikeAudio, "looksLikeAudio");
-var onRequestPost36 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, "ai-transcribe", "dictation");
   if (!gate.ok) return gate.res;
@@ -15465,8 +15221,8 @@ __export(speak_exports, {
   MAX_SPEAK_CHARS: () => MAX_SPEAK_CHARS,
   audioFrame: () => audioFrame,
   frame: () => frame2,
-  onRequestOptions: () => onRequestOptions27,
-  onRequestPost: () => onRequestPost37
+  onRequestOptions: () => onRequestOptions28,
+  onRequestPost: () => onRequestPost39
 });
 var MAX_SPEAK_CHARS = 6500;
 var MAX_SPEAK_CALLS = 40;
@@ -15495,8 +15251,8 @@ function audioFrame(a) {
 ${a.data}`));
 }
 __name(audioFrame, "audioFrame");
-var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
-var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestPost39 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, "ai-speak", "readAloud");
   if (!gate.ok) return gate.res;
@@ -15512,7 +15268,7 @@ var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
     live: LIVE_VOICES.includes(body.liveVoice) ? body.liveVoice : DEFAULT_LIVE_VOICE
   };
   const plan = planSpeech(env, text2, voices);
-  if (!plan) return voiceFailure([]);
+  if (!plan) return isMostlyIndic(text2) ? json10({ error: "language_unavailable" }, 503) : voiceFailure([]);
   let { engine, model, voice } = plan;
   let queue = [...plan.pieces];
   let calls = 0;
@@ -15590,15 +15346,15 @@ __export(images_exports, {
   IMAGE_REPLY_TEXT: () => IMAGE_REPLY_TEXT,
   IMAGE_REQUEST_PREFIX: () => IMAGE_REQUEST_PREFIX,
   MAX_BODY_BYTES: () => MAX_BODY_BYTES2,
-  onRequestOptions: () => onRequestOptions28,
-  onRequestPost: () => onRequestPost38
+  onRequestOptions: () => onRequestOptions29,
+  onRequestPost: () => onRequestPost40
 });
 var MAX_BODY_BYTES2 = 8192;
 var IMAGE_REQUEST_PREFIX = "Create an image: ";
 var IMAGE_REPLY_TEXT = "Here\u2019s your image.";
-var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 var label = /* @__PURE__ */ __name((id) => id === IMAGE_MODEL_ID ? IMAGE_MODEL_LABEL : null, "label");
-var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost40 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-images", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -15754,12 +15510,14 @@ var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/live-token.ts
 var live_token_exports = {};
 __export(live_token_exports, {
+  LIVE_PROJECT_CHARS: () => LIVE_PROJECT_CHARS,
   liveCandidates: () => liveCandidates,
-  onRequestOptions: () => onRequestOptions29,
-  onRequestPost: () => onRequestPost39
+  liveProjectBlock: () => liveProjectBlock,
+  onRequestOptions: () => onRequestOptions30,
+  onRequestPost: () => onRequestPost41
 });
 var UUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function liveCandidates(thinking, skip, now = Date.now(), picked = null, search = false) {
   const first = ALL_LIVE_MODELS.find((m2) => m2.id === picked);
   const searchers = search ? LIVE_MODELS.filter((m2) => LIVE_SEARCH_MODELS.includes(m2.id)) : [];
@@ -15767,7 +15525,29 @@ function liveCandidates(thinking, skip, now = Date.now(), picked = null, search 
   return all.filter((m2, i) => all.findIndex((x) => x.id === m2.id) === i && !skip.includes(m2.id) && !voiceResting(m2.id, now));
 }
 __name(liveCandidates, "liveCandidates");
-var onRequestPost39 = /* @__PURE__ */ __name(async (ctx) => {
+var LIVE_PROJECT_CHARS = 2e3;
+function liveProjectBlock(p) {
+  let instructions = (p.instructions ?? "").trim();
+  if (instructions.length > LIVE_PROJECT_CHARS) {
+    const cut = instructions.slice(0, LIVE_PROJECT_CHARS);
+    const space = cut.lastIndexOf(" ");
+    instructions = `${space > LIVE_PROJECT_CHARS * 0.8 ? cut.slice(0, space) : cut} [\u2026]`;
+  }
+  return [
+    projectBlock({ name: p.name, instructions, documents: [], notes: [] }, 0),
+    "The project's files are not part of a Live voice call. If the user asks about them, say they can ask in the typed chat."
+  ].join("\n");
+}
+__name(liveProjectBlock, "liveProjectBlock");
+async function liveProject(env, sub, conversationId) {
+  if (!conversationId) return null;
+  const conv = await getConversation(env, sub, conversationId);
+  if (!conv.ok || !conv.value?.project_id) return null;
+  const ctx = await loadProjectContext(env, sub, conv.value.project_id, { files: false });
+  return ctx ? liveProjectBlock(ctx.project) : null;
+}
+__name(liveProject, "liveProject");
+var onRequestPost41 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, "ai-live-token", "live");
   if (!gate.ok) return gate.res;
@@ -15785,13 +15565,15 @@ var onRequestPost39 = /* @__PURE__ */ __name(async (ctx) => {
   const heard = transcriptionLanguages(body.language, safeLocale(body.locale));
   const personal = sanitizePersonal(body.personal);
   const conversationId = typeof body.conversationId === "string" && UUID2.test(body.conversationId) ? body.conversationId : null;
-  const [account, memory] = await Promise.all([
+  const [account, memory, project] = await Promise.all([
     accountOf(env, gate.sub),
-    memoryFor(env, gate.sub, conversationId, body.incognito === true).catch(() => null)
+    memoryFor(env, gate.sub, conversationId, body.incognito === true).catch(() => null),
+    liveProject(env, gate.sub, conversationId).catch(() => null)
   ]);
   const accountName = firstNameOf(account.ok ? account.value?.name : null);
   const extra = [
     ownerBlock(settings.instructions),
+    project,
     personalBlock(personal),
     memory ? memoryBlock(memory, "", { voice: true }) : null,
     chatContextBlock(body.context),
@@ -15833,8 +15615,8 @@ __export(live_transcript_exports, {
   MAX_TURN_SOURCES: () => MAX_TURN_SOURCES,
   cleanSources: () => cleanSources,
   cleanTurns: () => cleanTurns,
-  onRequestOptions: () => onRequestOptions30,
-  onRequestPost: () => onRequestPost40
+  onRequestOptions: () => onRequestOptions31,
+  onRequestPost: () => onRequestPost42
 });
 
 // functions/_lib/ai/complete.ts
@@ -15963,7 +15745,7 @@ function cleanSources(raw, into = []) {
   return out;
 }
 __name(cleanSources, "cleanSources");
-var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function cleanTurns(raw) {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TURNS) return null;
   const out = [];
@@ -15987,7 +15769,7 @@ function cleanTurns(raw) {
   return out.length ? out : null;
 }
 __name(cleanTurns, "cleanTurns");
-var onRequestPost40 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost42 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-live-transcript", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -16078,9 +15860,57 @@ var id_exports3 = {};
 __export(id_exports3, {
   onRequestDelete: () => onRequestDelete2,
   onRequestGet: () => onRequestGet51,
-  onRequestOptions: () => onRequestOptions31,
+  onRequestOptions: () => onRequestOptions32,
   onRequestPatch: () => onRequestPatch2
 });
+
+// functions/_lib/ai/modelName.ts
+var own = /* @__PURE__ */ __name((o, k) => Object.prototype.hasOwnProperty.call(o, k), "own");
+var UPPER = {
+  gpt: "GPT",
+  oss: "OSS",
+  vl: "VL",
+  ai: "AI",
+  llm: "LLM",
+  moe: "MoE",
+  fp8: "FP8",
+  fp16: "FP16",
+  awq: "AWQ",
+  int4: "INT4",
+  int8: "INT8",
+  r1: "R1",
+  qwq: "QwQ",
+  glm: "GLM",
+  sql: "SQL",
+  xl: "XL",
+  xs: "XS",
+  xxl: "XXL",
+  ii: "II",
+  iii: "III",
+  hf: "HF",
+  it: "",
+  instruct: "",
+  deepseek: "DeepSeek",
+  openai: "OpenAI",
+  nvidia: "NVIDIA",
+  ibm: "IBM",
+  lfm: "LFM",
+  mistral: "Mistral",
+  phi: "Phi",
+  allam: "ALLaM"
+};
+function prettyName(upstream2) {
+  const last = upstream2.replace(/^@(?:cf|hf)\//, "").replace(/:free$/, "").split("/").pop() ?? upstream2;
+  const words = last.split(/[-_\s]+/).filter(Boolean).map((w) => {
+    const l = w.toLowerCase();
+    if (own(UPPER, l)) return UPPER[l];
+    if (/^a?\d+(?:\.\d+)?[bmkt]$/.test(l)) return l.toUpperCase();
+    if (/^[\d.]+$|^v\d/.test(l)) return l;
+    return l.charAt(0).toUpperCase() + l.slice(1);
+  }).filter(Boolean);
+  return (words.join(" ") || upstream2).slice(0, 80);
+}
+__name(prettyName, "prettyName");
 
 // functions/_lib/ai/shares.ts
 var MAX_SHARE_BYTES = 1e6;
@@ -16160,7 +15990,7 @@ function publicShareSummary(r) {
 __name(publicShareSummary, "publicShareSummary");
 
 // functions/api/ai/conversations/[id].ts
-var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned2(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -16179,21 +16009,27 @@ var label2 = /* @__PURE__ */ __name((modelId) => {
   const live = liveLabel(modelId);
   if (live) return live;
   if (modelId === IMAGE_MODEL_ID) return IMAGE_MODEL_LABEL;
-  const spec = modelById(MODELS, modelId) ?? knownDiscovered(modelId);
+  const spec = modelById(MODELS, modelId);
   if (spec) return { name: spec.name, provider: PROVIDER_NAMES[spec.provider] };
   const p = modelId.slice(0, modelId.indexOf(":"));
-  return DISCOVERY_PROVIDERS.includes(p) ? { name: prettyName(modelId.slice(p.length + 1)), provider: PROVIDER_NAMES[p] } : null;
+  const upstream2 = modelId.slice(p.length + 1);
+  return Object.prototype.hasOwnProperty.call(PROVIDER_NAMES, p) && upstream2 ? { name: prettyName(upstream2), provider: PROVIDER_NAMES[p] } : null;
 }, "label");
 var onRequestGet51 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned2(ctx, "ai-conversation");
   if (o instanceof Response) return o;
-  const [m2, inc] = await Promise.all([
+  const [m2, inc, rated] = await Promise.all([
     listMessages(ctx.env, o.conv.id),
-    db.one(ctx.env, "ai_conversations", q().eq("id", o.conv.id).select("incognito"))
+    db.one(ctx.env, "ai_conversations", q().eq("id", o.conv.id).select("incognito")),
+    feedbackIn(ctx.env, o.sub, o.conv.id).catch(() => null)
   ]);
   if (!m2.ok) return json10({ error: "unavailable" }, 503);
   const incognito = inc.ok && inc.value?.incognito === true;
-  return json10({ conversation: { ...publicConversation(o.conv), ...incognito ? { incognito: true } : {} }, messages: m2.rows.map((r) => publicMessage(r, label2)) });
+  const messages = m2.rows.map((r) => {
+    const fb = r.role === "assistant" ? rated?.[r.id] : void 0;
+    return fb ? { ...publicMessage(r, label2), feedback: fb } : publicMessage(r, label2);
+  });
+  return json10({ conversation: { ...publicConversation(o.conv), ...incognito ? { incognito: true } : {} }, messages });
 }, "onRequestGet");
 var onRequestPatch2 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned2(ctx, "ai-conversation-write");
@@ -16248,10 +16084,10 @@ var onRequestDelete2 = /* @__PURE__ */ __name(async (ctx) => {
 var shares_exports = {};
 __export(shares_exports, {
   onRequestGet: () => onRequestGet52,
-  onRequestOptions: () => onRequestOptions32,
-  onRequestPost: () => onRequestPost41
+  onRequestOptions: () => onRequestOptions33,
+  onRequestPost: () => onRequestPost43
 });
-var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-shares", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16264,7 +16100,7 @@ var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ items: r.rows.map(publicShareSummary) });
 }, "onRequestGet");
-var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequestPost43 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-share-write", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16306,7 +16142,7 @@ var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var artifacts_exports = {};
 __export(artifacts_exports, {
   onRequestGet: () => onRequestGet53,
-  onRequestOptions: () => onRequestOptions33
+  onRequestOptions: () => onRequestOptions34
 });
 
 // functions/_lib/ai/gallery.ts
@@ -16395,7 +16231,7 @@ async function artifactVersions(env, accountId, conversationId, artifactId) {
 __name(artifactVersions, "artifactVersions");
 
 // functions/api/ai/artifacts.ts
-var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-artifacts", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16417,9 +16253,9 @@ var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var id_exports4 = {};
 __export(id_exports4, {
   onRequestGet: () => onRequestGet54,
-  onRequestOptions: () => onRequestOptions34
+  onRequestOptions: () => onRequestOptions35
 });
-var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet54 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-artifact", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
@@ -16439,11 +16275,11 @@ var id_exports5 = {};
 __export(id_exports5, {
   onRequestDelete: () => onRequestDelete3,
   onRequestGet: () => onRequestGet55,
-  onRequestOptions: () => onRequestOptions35
+  onRequestOptions: () => onRequestOptions36
 });
 var NOINDEX = { "x-robots-tag": "noindex, nofollow" };
 var notFound = /* @__PURE__ */ __name(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", ...NOINDEX, ...CORS10 } }), "notFound");
-var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet55 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-read", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
@@ -16477,11 +16313,11 @@ var onRequestDelete3 = /* @__PURE__ */ __name(async ({ request, env, params }) =
 // functions/api/ai/shares/[id]-continue.ts
 var id_continue_exports = {};
 __export(id_continue_exports, {
-  onRequestOptions: () => onRequestOptions36,
-  onRequestPost: () => onRequestPost42
+  onRequestOptions: () => onRequestOptions37,
+  onRequestPost: () => onRequestPost44
 });
-var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
-var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestPost44 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-continue", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16527,10 +16363,10 @@ var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) =>
 var projects_exports = {};
 __export(projects_exports, {
   onRequestGet: () => onRequestGet56,
-  onRequestOptions: () => onRequestOptions37,
-  onRequestPost: () => onRequestPost43
+  onRequestOptions: () => onRequestOptions38,
+  onRequestPost: () => onRequestPost45
 });
-var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 async function session(request, env, route2) {
   const limited = await rateLimitAsync(request, route2, { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16564,7 +16400,7 @@ var onRequestGet56 = /* @__PURE__ */ __name(async (ctx) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ items: r.rows.map((p) => publicProject(p, counts.get(p.id) ?? { chats: 0, files: 0 })) });
 }, "onRequestGet");
-var onRequestPost43 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost45 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await session(ctx.request, ctx.env, "ai-projects-write");
   if (sub instanceof Response) return sub;
   const read = await readJsonCapped(ctx.request, 64e3);
@@ -16595,10 +16431,10 @@ var id_exports6 = {};
 __export(id_exports6, {
   onRequestDelete: () => onRequestDelete4,
   onRequestGet: () => onRequestGet57,
-  onRequestOptions: () => onRequestOptions38,
+  onRequestOptions: () => onRequestOptions39,
   onRequestPatch: () => onRequestPatch3
 });
-var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned3(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -16663,10 +16499,10 @@ var memories_exports = {};
 __export(memories_exports, {
   onRequestDelete: () => onRequestDelete5,
   onRequestGet: () => onRequestGet58,
-  onRequestOptions: () => onRequestOptions39,
-  onRequestPost: () => onRequestPost44
+  onRequestOptions: () => onRequestOptions40,
+  onRequestPost: () => onRequestPost46
 });
-var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet58 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
@@ -16674,7 +16510,7 @@ var onRequestGet58 = /* @__PURE__ */ __name(async (ctx) => {
   if (!items.ok || !prefs.ok) return json10({ error: "unavailable" }, 503);
   return json10({ enabled, prefs: prefs.value, items: items.rows.map(publicMemory), max: MEMORY_MAX_ITEMS });
 }, "onRequestGet");
-var onRequestPost44 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost46 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, true);
   if (sub instanceof Response) return sub;
   const read = await readJsonCapped(ctx.request, 2048);
@@ -16706,10 +16542,10 @@ var onRequestDelete5 = /* @__PURE__ */ __name(async (ctx) => {
 var prefs_exports = {};
 __export(prefs_exports, {
   onRequestGet: () => onRequestGet59,
-  onRequestOptions: () => onRequestOptions40,
+  onRequestOptions: () => onRequestOptions41,
   onRequestPut: () => onRequestPut3
 });
-var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
 var onRequestGet59 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
@@ -16738,9 +16574,9 @@ var onRequestPut3 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports7 = {};
 __export(id_exports7, {
   onRequestDelete: () => onRequestDelete6,
-  onRequestOptions: () => onRequestOptions41
+  onRequestOptions: () => onRequestOptions42
 });
-var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestDelete6 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, true);
   if (sub instanceof Response) return sub;
@@ -16757,7 +16593,7 @@ var profile_exports = {};
 __export(profile_exports, {
   onRequestDelete: () => onRequestDelete7,
   onRequestGet: () => onRequestGet60,
-  onRequestOptions: () => onRequestOptions42,
+  onRequestOptions: () => onRequestOptions43,
   onRequestPut: () => onRequestPut4
 });
 
@@ -16881,7 +16717,7 @@ async function isFollowing(env, follower, followee) {
 __name(isFollowing, "isFollowing");
 
 // functions/api/profile.ts
-var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet60 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
@@ -16968,8 +16804,8 @@ var onRequestDelete7 = /* @__PURE__ */ __name(async (ctx) => {
 var reactions_exports = {};
 __export(reactions_exports, {
   onRequestGet: () => onRequestGet61,
-  onRequestOptions: () => onRequestOptions43,
-  onRequestPost: () => onRequestPost45,
+  onRequestOptions: () => onRequestOptions44,
+  onRequestPost: () => onRequestPost47,
   onRequestPut: () => onRequestPut5
 });
 var CORS11 = {
@@ -16977,18 +16813,18 @@ var CORS11 = {
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
+var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
 var onRequestGet61 = /* @__PURE__ */ __name(async () => jsonResponse({ total: 0, counts: {}, mine: null }, 200, { ...CORS11, "cache-control": "public, max-age=3600" }), "onRequestGet");
 var onRequestPut5 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestPut");
-var onRequestPost45 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS11), "onRequestPost");
+var onRequestPost47 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS11), "onRequestPost");
 
 // functions/api/profile/[handle].ts
 var handle_exports = {};
 __export(handle_exports, {
   onRequestGet: () => onRequestGet62,
-  onRequestOptions: () => onRequestOptions44
+  onRequestOptions: () => onRequestOptions45
 });
-var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
 var onRequestGet62 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = rateLimit(ctx.request, "profile-read", { capacity: 60, refillPerMinute: 60 }, ctx.env);
   if (limited) return limited;
@@ -17020,10 +16856,10 @@ var follow_exports = {};
 __export(follow_exports, {
   MAX_FOLLOWING: () => MAX_FOLLOWING,
   onRequestGet: () => onRequestGet63,
-  onRequestOptions: () => onRequestOptions45,
-  onRequestPost: () => onRequestPost46
+  onRequestOptions: () => onRequestOptions46,
+  onRequestPost: () => onRequestPost48
 });
-var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var MAX_FOLLOWING = 500;
 var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
@@ -17047,7 +16883,7 @@ var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
   following.sort((a, b) => active(b) - active(a) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return json10({ following });
 }, "onRequestGet");
-var onRequestPost46 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost48 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = await rateLimitAsync(ctx.request, "follow", { capacity: 30, refillPerMinute: 20 }, ctx.env);
   if (limited) return limited;
   const who = await requireAccount(ctx.env, ctx.request);
@@ -17085,8 +16921,8 @@ __export(shared_playlist_exports, {
   cleanSongs: () => cleanSongs,
   onRequestDelete: () => onRequestDelete8,
   onRequestGet: () => onRequestGet64,
-  onRequestOptions: () => onRequestOptions46,
-  onRequestPost: () => onRequestPost47,
+  onRequestOptions: () => onRequestOptions47,
+  onRequestPost: () => onRequestPost49,
   publicPlaylist: () => publicPlaylist
 });
 function cleanSongs(raw) {
@@ -17118,7 +16954,7 @@ function publicPlaylist(p, extra = {}) {
   };
 }
 __name(publicPlaylist, "publicPlaylist");
-var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet64 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
@@ -17126,7 +16962,7 @@ var onRequestGet64 = /* @__PURE__ */ __name(async (ctx) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ playlists: r.rows.map((p) => publicPlaylist(p, { mine: true })) });
 }, "onRequestGet");
-var onRequestPost47 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost49 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "shared-playlist", { capacity: 30, refillPerMinute: 15 }, env);
   if (limited) return limited;
@@ -17190,10 +17026,10 @@ var onRequestDelete8 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports8 = {};
 __export(id_exports8, {
   onRequestGet: () => onRequestGet65,
-  onRequestOptions: () => onRequestOptions47,
-  onRequestPost: () => onRequestPost48
+  onRequestOptions: () => onRequestOptions48,
+  onRequestPost: () => onRequestPost50
 });
-var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var idOf3 = /* @__PURE__ */ __name((v) => typeof v === "string" && /^[a-z0-9]{12}$/.test(v) ? v : null, "idOf");
 async function load(env, id) {
   const r = await db.one(env, "shared_playlists", q().eq("id", id));
@@ -17217,7 +17053,7 @@ var onRequestGet65 = /* @__PURE__ */ __name(async (ctx) => {
   const acc = await accountOf(ctx.env, r.row.owner_id);
   return json10({ playlist: publicPlaylist(r.row, { owner: acc.ok ? acc.value?.name ?? null : null, mine }), canEdit: mine || tokenOk(r.row, token) }, 200);
 }, "onRequestGet");
-var onRequestPost48 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost50 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = await rateLimitAsync(ctx.request, "shared-playlist-collab", { capacity: 40, refillPerMinute: 20 }, ctx.env);
   if (limited) return limited;
   if (!dbConfigured(ctx.env)) return json10({ error: "unavailable" }, 503);
@@ -17254,8 +17090,8 @@ var onRequestPost48 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/push/fcm-register.ts
 var fcm_register_exports = {};
 __export(fcm_register_exports, {
-  onRequestOptions: () => onRequestOptions48,
-  onRequestPost: () => onRequestPost50
+  onRequestOptions: () => onRequestOptions49,
+  onRequestPost: () => onRequestPost52
 });
 
 // functions/api/push/subscribe.ts
@@ -17264,7 +17100,7 @@ __export(subscribe_exports, {
   accountOfRequest: () => accountOfRequest,
   cleanTzOffset: () => cleanTzOffset,
   isAllowedPushEndpoint: () => isAllowedPushEndpoint,
-  onRequestPost: () => onRequestPost49
+  onRequestPost: () => onRequestPost51
 });
 var ALLOWED_PUSH_HOSTS = [
   "fcm.googleapis.com",
@@ -17291,7 +17127,7 @@ async function accountOfRequest(request, env) {
   return token ? readSession(env, token) : null;
 }
 __name(accountOfRequest, "accountOfRequest");
-var onRequestPost49 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-subscribe", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -17335,8 +17171,8 @@ var CORS12 = {
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type, authorization"
 };
-var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
-var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
+var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
+var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-fcm", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -17372,16 +17208,16 @@ var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/push/opened.ts
 var opened_exports = {};
 __export(opened_exports, {
-  onRequestOptions: () => onRequestOptions49,
-  onRequestPost: () => onRequestPost51
+  onRequestOptions: () => onRequestOptions50,
+  onRequestPost: () => onRequestPost53
 });
 var CORS13 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
-var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
+var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
+var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-opened", { capacity: 20, refillPerMinute: 20 }, env);
   if (limited) return limited;
@@ -17396,9 +17232,9 @@ var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/push/unsubscribe.ts
 var unsubscribe_exports = {};
 __export(unsubscribe_exports, {
-  onRequestPost: () => onRequestPost52
+  onRequestPost: () => onRequestPost54
 });
-var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost54 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-unsubscribe", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -17435,8 +17271,8 @@ __export(room_exports, {
   newCode: () => newCode2,
   newHostToken: () => newHostToken,
   onRequestGet: () => onRequestGet67,
-  onRequestOptions: () => onRequestOptions50,
-  onRequestPost: () => onRequestPost53,
+  onRequestOptions: () => onRequestOptions51,
+  onRequestPost: () => onRequestPost55,
   pushMoment: () => pushMoment
 });
 function liveLine(env) {
@@ -17503,7 +17339,7 @@ __name(memberHandle, "memberHandle");
 var HANDLE = /^[0-9a-f]{12}$/;
 var jamOf = /* @__PURE__ */ __name((r) => r.jam && typeof r.jam === "object" && !Array.isArray(r.jam) ? r.jam : {}, "jamOf");
 var removedOf = /* @__PURE__ */ __name((r) => new Set(Array.isArray(jamOf(r).removed) ? jamOf(r).removed : []), "removedOf");
-var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
+var onRequestOptions51 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
 function newCode2() {
   const a = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const buf = new Uint8Array(6);
@@ -17652,7 +17488,7 @@ var onRequestGet67 = /* @__PURE__ */ __name(async (context) => {
   if (live) body.live = live;
   return json11(body);
 }, "onRequestGet");
-var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost55 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (!dbConfigured(env)) return json11({ error: "not_configured" }, 503);
   const body = asObject(await request.json().catch(() => null)) ?? {};
@@ -17833,13 +17669,13 @@ var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
 var site_mode_exports = {};
 __export(site_mode_exports, {
   onRequestGet: () => onRequestGet68,
-  onRequestOptions: () => onRequestOptions51
+  onRequestOptions: () => onRequestOptions52
 });
 var CORS15 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions51 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS15 }), "onRequestOptions");
+var onRequestOptions52 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS15 }), "onRequestOptions");
 var onRequestGet68 = /* @__PURE__ */ __name(async (ctx) => {
   const { values } = await settingsMap(ctx?.env ?? {});
   return new Response(JSON.stringify(publicSiteMode(values)), {
@@ -17851,13 +17687,13 @@ var onRequestGet68 = /* @__PURE__ */ __name(async (ctx) => {
 var trending_searches_exports = {};
 __export(trending_searches_exports, {
   onRequestGet: () => onRequestGet69,
-  onRequestOptions: () => onRequestOptions52
+  onRequestOptions: () => onRequestOptions53
 });
 var CORS16 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions52 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS16 }), "onRequestOptions");
+var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS16 }), "onRequestOptions");
 var onRequestGet69 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ queries: [] }), {
   headers: { "content-type": "application/json", "cache-control": "public, max-age=600", ...CORS16 }
 }), "onRequestGet");
@@ -17866,13 +17702,13 @@ var onRequestGet69 = /* @__PURE__ */ __name(async () => new Response(JSON.string
 var trends_exports2 = {};
 __export(trends_exports2, {
   onRequestGet: () => onRequestGet70,
-  onRequestOptions: () => onRequestOptions53
+  onRequestOptions: () => onRequestOptions54
 });
 var CORS17 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
+var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
 var onRequestGet70 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), sources: [], items: [] }), {
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60, s-maxage=300", ...CORS17 }
 }), "onRequestGet");
@@ -17882,8 +17718,8 @@ var username_exports = {};
 __export(username_exports, {
   normalizeHandle: () => normalizeHandle2,
   onRequestGet: () => onRequestGet71,
-  onRequestOptions: () => onRequestOptions54,
-  onRequestPost: () => onRequestPost54
+  onRequestOptions: () => onRequestOptions55,
+  onRequestPost: () => onRequestPost56
 });
 var HANDLE_RE2 = /^[a-z0-9_]{3,20}$/;
 var CORS18 = {
@@ -17892,7 +17728,7 @@ var CORS18 = {
   "access-control-allow-headers": "content-type"
 };
 var json12 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS18), "json");
-var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
+var onRequestOptions55 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
 var normalizeHandle2 = /* @__PURE__ */ __name((raw) => {
   if (typeof raw !== "string") return null;
   const u2 = raw.trim().toLowerCase();
@@ -17924,7 +17760,7 @@ var onRequestGet71 = /* @__PURE__ */ __name(async (ctx) => {
   if (owner === void 0) return json12({ error: "unavailable" }, 503);
   return json12({ available: owner === null });
 }, "onRequestGet");
-var onRequestPost54 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost56 = /* @__PURE__ */ __name(async (ctx) => {
   if (!ctx || !dbConfigured(ctx.env)) return json12({ ok: true, unchecked: true });
   const { request, env } = ctx;
   const limited = rateLimit(request, "username-claim", { capacity: 10, refillPerMinute: 5 }, env);
@@ -17955,7 +17791,7 @@ var version_exports = {};
 __export(version_exports, {
   buildFromRelease: () => buildFromRelease,
   onRequestGet: () => onRequestGet72,
-  onRequestOptions: () => onRequestOptions55
+  onRequestOptions: () => onRequestOptions56
 });
 var CORS19 = {
   "access-control-allow-origin": "*",
@@ -17975,7 +17811,7 @@ function buildFromRelease(tagName, body) {
   return parseInt(/build(\d+)/i.exec(tagName)?.[1] ?? "0", 10);
 }
 __name(buildFromRelease, "buildFromRelease");
-var onRequestOptions55 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
+var onRequestOptions56 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
 var onRequestGet72 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (!githubConfigured(env)) return json13({ error: "not_configured" }, 503);
@@ -18016,7 +17852,7 @@ var errors_exports = {};
 __export(errors_exports, {
   ERROR_STATUSES: () => ERROR_STATUSES,
   onRequestGet: () => onRequestGet74,
-  onRequestPost: () => onRequestPost55
+  onRequestPost: () => onRequestPost57
 });
 var ERROR_STATUSES = ["new", "investigating", "fixed", "ignored"];
 var onRequestGet74 = adminGet(async ({ env, url }) => {
@@ -18034,7 +17870,7 @@ var onRequestGet74 = adminGet(async ({ env, url }) => {
     top: Array.isArray(v.top) ? v.top : []
   });
 });
-var onRequestPost55 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost57 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (body.action === "status") {
     const fingerprint = typeof body.fingerprint === "string" && /^[0-9a-f]{32}$/.test(body.fingerprint) ? body.fingerprint : null;
     const status = body.status;
@@ -18493,8 +18329,8 @@ var onRequestGet86 = /* @__PURE__ */ __name((context) => renderEntity("song", St
 var songId_exports = {};
 __export(songId_exports, {
   onRequestGet: () => onRequestGet87,
-  onRequestOptions: () => onRequestOptions56,
-  onRequestPost: () => onRequestPost56
+  onRequestOptions: () => onRequestOptions57,
+  onRequestPost: () => onRequestPost58
 });
 var CORS20 = {
   "access-control-allow-origin": "*",
@@ -18505,8 +18341,8 @@ function json14(body, status = 200, cache = "no-store") {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS20 } });
 }
 __name(json14, "json");
-var onRequestOptions56 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS20 }), "onRequestOptions");
-var onRequestPost56 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
+var onRequestOptions57 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS20 }), "onRequestOptions");
+var onRequestPost58 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
 var onRequestGet87 = /* @__PURE__ */ __name(async (context) => {
   const { request, env, params } = context;
   const limited = await rateLimitAsync(request, "recs-similar", { capacity: 30, refillPerMinute: 30 }, env);
@@ -18565,6 +18401,7 @@ var EXACT = {
   "/api/admin/outreach": outreach_exports,
   "/api/admin/musicapi": musicapi_exports,
   "/api/admin/ai": ai_exports,
+  "/api/admin/ai-search": ai_search_exports,
   "/api/admin/fcmcheck": fcmcheck_exports,
   "/api/admin/releases": releases_exports,
   "/api/admin/overview": overview_exports,
@@ -18606,6 +18443,7 @@ var EXACT = {
   "/api/account/data": data_exports,
   "/api/ai/chat": chat_exports,
   "/api/ai/keep": keep_exports,
+  "/api/ai/feedback": feedback_exports3,
   "/api/ai/models": models_exports,
   "/api/ai/conversations": conversations_exports,
   "/api/ai/export": export_exports,

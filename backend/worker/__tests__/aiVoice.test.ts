@@ -8,13 +8,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestPost as transcribe, looksLikeAudio } from '../functions/api/ai/transcribe';
 import { onRequestPost as speak, FRAME_BASE64, FRAME_FILE, FRAME_STOPPED } from '../functions/api/ai/speak';
-import { onRequestPost as liveToken, liveCandidates } from '../functions/api/ai/live-token';
+import { onRequestPost as liveToken, liveCandidates, liveProjectBlock, LIVE_PROJECT_CHARS } from '../functions/api/ai/live-token';
 import { onRequestPost as liveTranscript, cleanSources, cleanTurns } from '../functions/api/ai/live-transcript';
 import { callText, cleanSummary, shouldSummarize, SUMMARY_SYSTEM } from '../functions/_lib/ai/callSummary';
 import { onRequestGet as getModels } from '../functions/api/ai/models';
 import { onRequestGet as getConversation } from '../functions/api/ai/conversations/[id]';
 import {
-  _resetTokenShape, _resetVoiceRests, GEMINI_TTS_CHARS, LIVE_VOICES, inlineAudio, isMostlyArabic, liveSetup, noteVoiceFailure, ORPHEUS_MAX_CHARS, planSpeech, splitSpeech, tokenBodies,
+  _resetTokenShape, _resetVoiceRests, GEMINI_TTS_CHARS, LIVE_VOICES, inlineAudio, isMostlyArabic, isMostlyIndic, liveSetup, noteVoiceFailure, ORPHEUS_MAX_CHARS, planSpeech, splitSpeech, tokenBodies,
 } from '../functions/_lib/ai/voice';
 import { ProviderError } from '../functions/_lib/ai/errors';
 import { chatContextBlock, languageRule, transcriptionLanguages, RECAP_CHARS, VOICE_PROMPT, VOICE_SEARCH_PROMPT, voicePrompt, voiceRecapBlock } from '../functions/_lib/ai/prompt';
@@ -112,6 +112,19 @@ describe('text for speech', () => {
     expect(isMostlyArabic('123 456')).toBe(false);
   });
 
+  it('tells text in an Indian script from Latin and Arabic text', () => {
+    expect(isMostlyIndic('नमस्ते, आप कैसे हैं?')).toBe(true); // Hindi (Devanagari, vowel signs counted)
+    expect(isMostlyIndic('మీరు ఎలా ఉన్నారు?')).toBe(true); // Telugu
+    expect(isMostlyIndic('வணக்கம்')).toBe(true); // Tamil
+    expect(isMostlyIndic('ਸਤ ਸ੍ਰੀ ਅਕਾਲ')).toBe(true); // Gurmukhi
+    expect(isMostlyIndic('আপনি কেমন আছেন')).toBe(true); // Bengali
+    expect(isMostlyIndic('Play Kesariya by Arijit Singh (केसरिया)')).toBe(false); // mostly English
+    expect(isMostlyIndic('Namaste, aap kaise hain?')).toBe(false);
+    expect(isMostlyIndic('مرحبا، كيف حالك اليوم؟')).toBe(false);
+    expect(isMostlyIndic('123 456')).toBe(false);
+    expect(isMostlyIndic('Track १२३४५६७८९०')).toBe(false); // Devanagari digits are not words
+  });
+
   it('pulls the audio out of a Gemini reply without parsing all of it', () => {
     expect(inlineAudio(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: 'AAEC' } }] } }] })))
       .toEqual({ data: 'AAEC', mime: 'audio/L16;codec=pcm;rate=24000' });
@@ -139,6 +152,25 @@ describe('who reads a reply', () => {
     _resetVoiceRests();
     expect(planSpeech({ ...ENV, GEMINI_API_KEY: '' }, 'Words here. '.repeat(100), voices)?.engine).toBe('orpheus');
     expect(planSpeech({ ...ENV, GROQ_API_KEY: '', GEMINI_API_KEY: '' }, 'Hi.', voices)).toBeNull();
+  });
+
+  it('Hindi and Telugu go to Gemini whatever their length, never to Orpheus English', () => {
+    expect(planSpeech(ENV, 'नमस्ते, आप कैसे हैं?', voices)).toMatchObject({ engine: 'gemini', model: 'gemini-3.8-flash-tts', voice: 'Puck', pieces: ['नमस्ते, आप कैसे हैं?'] });
+    expect(planSpeech(ENV, 'మీరు ఎలా ఉన్నారు?', voices)).toMatchObject({ engine: 'gemini', voice: 'Puck' });
+    const long = 'यह एक लंबा वाक्य है जो चलता रहता है। '.repeat(60);
+    const plan = planSpeech(ENV, long, voices);
+    expect(plan?.engine).toBe('gemini');
+    expect(plan!.pieces.every((p) => p.length <= GEMINI_TTS_CHARS)).toBe(true);
+    // The next Gemini model when the first is resting.
+    noteVoiceFailure('gemini-3.8-flash-tts', new ProviderError('quota'));
+    expect(planSpeech(ENV, 'నమస్కారం', voices)?.model).toBe('gemini-3.8-flash-lite-tts');
+    _resetVoiceRests();
+    // No Gemini: no plan, even though Orpheus English is free.
+    expect(planSpeech({ ...ENV, GEMINI_API_KEY: '' }, 'नमस्ते', voices)).toBeNull();
+    for (const m of ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts']) noteVoiceFailure(m, new ProviderError('quota'));
+    expect(planSpeech(ENV, 'నమస్కారం', voices)).toBeNull();
+    expect(planSpeech(ENV, 'Hello.', voices)?.engine).toBe('orpheus');
+    _resetVoiceRests();
   });
 });
 
@@ -307,6 +339,23 @@ describe('POST /api/ai/speak', () => {
     const res = await say({ text: 'Hello.' });
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ error: 'voice_busy' });
+  });
+
+  it('reads a short Hindi reply with Gemini, not Orpheus English', async () => {
+    seed();
+    upstream = (url) => (url.includes('gemini-3.8-flash-tts:generateContent') ? geminiAudio() : new Response(WAV));
+    const got = await frames(await say({ text: 'नमस्ते, आप कैसे हैं?', liveVoice: 'Puck' }));
+    expect(got.map((f) => f.kind)).toEqual([FRAME_BASE64]);
+    expect(seen.some((s) => s.url.endsWith('/audio/speech'))).toBe(false);
+  });
+
+  it('Telugu with no Gemini key answers language_unavailable instead of Orpheus English', async () => {
+    seed();
+    upstream = () => new Response(WAV);
+    const res = await say({ text: 'మీరు ఎలా ఉన్నారు?' }, { ...ENV, GEMINI_API_KEY: '' });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'language_unavailable' });
+    expect(seen.some((s) => s.url.endsWith('/audio/speech'))).toBe(false);
   });
 
   it('refuses empty and over-long text', async () => {
@@ -528,6 +577,35 @@ describe('POST /api/ai/live-token', () => {
     expect(body.setup.systemInstruction.parts[0].text).toContain('You have Google Search');
     expect(body.setup.systemInstruction.parts[0].text).not.toContain('or search the web in Live voice');
     expect(JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config.tools).toEqual([{ googleSearch: {} }]);
+  });
+
+  it('a call on a chat in a project carries the project’s instructions, never its files', async () => {
+    const PROJ = '22222222-2222-4222-8222-222222222222';
+    const db = seed({
+      ai_conversations: [{ id: CONV, account_id: '1001', title: 'Setlist', project_id: PROJ }],
+      ai_projects: [{ id: PROJ, account_id: '1001', name: 'Wedding playlist', instructions: 'Always answer in two sentences.', starred: false }],
+      ai_attachments: [{ id: 'f1', account_id: '1001', project_id: PROJ, extracted_text: 'SECRET KNOWLEDGE' }],
+    });
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const text = (await (await ask({ conversationId: CONV })).json()).setup.systemInstruction.parts[0].text as string;
+    expect(text).toContain('# Project: Wedding playlist');
+    expect(text).toContain('<project_instructions>\nAlways answer in two sentences.\n</project_instructions>');
+    expect(text).toContain('not part of a Live voice call');
+    expect(text).not.toContain('SECRET KNOWLEDGE');
+    expect(db.calls.some((c) => c.table === 'ai_attachments')).toBe(false);
+    // No chat, or a chat outside a project: no project block.
+    expect((await (await ask({})).json()).setup.systemInstruction.parts[0].text).not.toContain('# Project:');
+    // Someone else's chat brings nothing.
+    const other = await (await liveToken({ request: await req('/api/ai/live-token', { method: 'POST', sub: '2002', body: JSON.stringify({ conversationId: CONV }), headers: { 'content-type': 'application/json' } }), env: ENV })).json();
+    expect(other.setup.systemInstruction.parts[0].text).not.toContain('# Project:');
+  });
+
+  it('long project instructions are cut to about 2,000 characters for Live', () => {
+    const block = liveProjectBlock({ name: 'Notes', instructions: 'word '.repeat(1_000) });
+    const inner = block.split('<project_instructions>\n')[1].split('\n</project_instructions>')[0];
+    expect(inner.length).toBeLessThanOrEqual(LIVE_PROJECT_CHARS + 4);
+    expect(inner.endsWith('word […]')).toBe(true);
+    expect(liveProjectBlock({ name: 'Notes', instructions: null })).not.toContain('<project_instructions>');
   });
 
   it('a reconnect carries what was said so far into the new prompt', async () => {

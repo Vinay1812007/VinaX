@@ -274,6 +274,26 @@ describe('failover and failures', () => {
     expect(fake.rows('ai_conversations')[0].active_leaf_id ?? null).toBeNull();
   });
 
+  it('a part the page kept while it was frozen is replaced by the whole reply, and only such a part', async () => {
+    const fake = seed();
+    const patches: Array<{ query: string; body: Record<string, unknown> }> = [];
+    fake.answer('ai_messages', (call) => {
+      const row = call.body as Record<string, unknown> | null;
+      // The reply's id is already taken: the page's keepalive save (keep.ts) got there first.
+      if (call.method === 'POST') return row?.role === 'assistant' ? Response.json({ code: '23505', message: 'duplicate key value violates unique constraint' }, { status: 409 }) : new Response(null, { status: 201 });
+      if (call.method === 'PATCH') { patches.push({ query: decodeURIComponent(call.query), body: row ?? {} }); return Response.json([{ id: 'x' }]); }
+      return Response.json([]);
+    });
+    const events = await readEvents(await post(ask('Tell me about raga Yaman')));
+    await settle();
+    const meta = events[0].data as { assistantMessageId: string };
+    expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end', saved: true });
+    expect(patches).toHaveLength(1);
+    expect(patches[0].query).toContain(`id=eq.${meta.assistantMessageId}`);
+    expect(patches[0].query).toContain('stop_reason=eq.aborted');
+    expect(patches[0].body).toMatchObject({ content: [{ type: 'text', text: 'Yaman is an evening raga.' }], stop_reason: 'end' });
+  });
+
   it('a new chat is saved while the model answers; if its row cannot be written, nothing else is and the page is told', async () => {
     const fake = seed();
     fake.answer('ai_conversations', (call) => (call.method === 'POST' ? new Response('{"message":"down"}', { status: 503 }) : Response.json([])));
