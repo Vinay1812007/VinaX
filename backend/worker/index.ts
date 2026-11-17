@@ -57,6 +57,7 @@ import { runScheduled } from './functions/_lib/jobs';
 import * as m_api_announcements from './functions/api/announcements';
 import * as m_api_apk from './functions/api/apk';
 import * as m_api_appconfig from './functions/api/appconfig';
+import * as m_api_charts_vinax from './functions/api/charts/vinax';
 import * as m_api_blocklist from './functions/api/blocklist';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
@@ -194,6 +195,7 @@ const EXACT: Record<string, Mod> = {
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,
   '/api/appconfig': m_api_appconfig,
+  '/api/charts/vinax': m_api_charts_vinax,
   '/api/blocklist': m_api_blocklist,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,

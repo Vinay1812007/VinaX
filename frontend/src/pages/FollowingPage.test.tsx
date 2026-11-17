@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
@@ -11,16 +11,21 @@ vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), hap
 vi.mock('@/features/player/playEntity', () => ({ playArtist: vi.fn(async () => undefined) }));
 const topSongs = vi.fn(async (id: string) => (id === 'ar1' ? [song('t1', 'Top One'), song('t2', 'Top Two')] : []));
 vi.mock('@/services/api/saavn', () => ({ getArtistTopSongs: (id: string) => topSongs(id) }));
+const account = vi.hoisted(() => ({ current: null as null | { session: string } }));
+vi.mock('@/services/auth/google', () => ({ currentAccount: () => account.current, onAccountChange: () => () => undefined }));
 
 import { useLibraryStore } from '@/store/libraryStore';
 import { useReleaseStore } from '@/features/releases/releaseWatch';
+import { useSocialStore } from '@/features/social/store';
+import type { PublicProfile } from '@/services/social/api';
 import FollowingPage from './FollowingPage';
 
 function song(id: string, title: string): Song {
   return { kind: 'song', id, title, subtitle: 'Anirudh', artists: [{ id: 'ar1', name: 'Anirudh' }], album: { id: 'a', name: 'A' }, images: [], audio: [], duration: 200, language: 'telugu', year: '2026', explicit: false, hasLyrics: false, playCount: 0 } as unknown as Song;
 }
 
-const mount = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><FollowingPage /></MemoryRouter></QueryClientProvider>);
+const mount = (at = '/following') => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[at]}><Routes><Route path="/following" element={<FollowingPage />} /><Route path="/u/:handle" element={<p>Profile page</p>} /></Routes></MemoryRouter></QueryClientProvider>);
+const friend = (handle: string, over: Partial<PublicProfile> = {}): PublicProfile => ({ handle, name: handle.toUpperCase(), picture: null, bio: null, public: true, topArtists: [], topLanguages: [], recentLikes: [], badges: [], nowPlaying: null, updatedAt: new Date().toISOString(), following: true, ...over });
 
 describe('1.12 — the Following page', () => {
   beforeEach(() => {
@@ -63,5 +68,53 @@ describe('1.12 — the Following page', () => {
     // An artist with nothing in the catalogue gets no block.
     expect(screen.queryByRole('region', { name: 'Latest from Sid Sriram' })).toBeNull();
     expect(topSongs).toHaveBeenCalledWith('ar2');
+  });
+});
+
+describe('/following → People', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    account.current = { session: 'vx1.t' };
+    useLibraryStore.setState({ saved: [] } as never);
+    useSocialStore.setState({ profile: null, following: [], loadedAt: Date.now() });
+  });
+  afterEach(cleanup);
+
+  it('the People tab lists everyone you follow, with Join when they let you into their room, and Unfollow', async () => {
+    const follow = vi.fn(async () => false);
+    useSocialStore.setState({ following: [friend('bobo', { jamCode: 'JAM123' }), friend('cyan', { nowPlaying: { id: 's1', title: 'Song' } })], follow });
+    mount('/following?tab=people');
+    expect(screen.getByRole('heading', { name: 'People you follow' })).toBeTruthy();
+    expect(screen.getByText('2 people')).toBeTruthy();
+    expect(screen.getByRole('link', { name: "BOBO's profile" }).getAttribute('href')).toBe('/u/bobo');
+    expect(screen.getByRole('link', { name: "Join BOBO's room" }).getAttribute('href')).toBe('/together?code=JAM123');
+    expect(screen.queryByRole('link', { name: "Join CYAN's room" })).toBeNull();
+    expect(screen.getByText('@cyan · Playing Song')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Unfollow CYAN' }));
+    await waitFor(() => expect(follow).toHaveBeenCalledWith('cyan', false));
+  });
+
+  it('switches tabs, and the artists tab is the default', () => {
+    mount();
+    expect(screen.getByRole('tab', { name: 'Artists' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'People' }));
+    expect(screen.getByRole('heading', { name: 'People you follow' })).toBeTruthy();
+  });
+
+  it('Find by handle opens the profile, and says when the text cannot be a handle', () => {
+    mount('/following?tab=people');
+    const field = screen.getByRole('textbox', { name: 'Handle' });
+    fireEvent.change(field, { target: { value: 'a b' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(screen.getByText('A handle is 3–20 letters, digits or underscores.')).toBeTruthy();
+    fireEvent.change(field, { target: { value: '@Bobo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(screen.getByText('Profile page')).toBeTruthy();
+  });
+
+  it('signed out, asks to sign in', () => {
+    account.current = null;
+    mount('/following?tab=people');
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login');
   });
 });

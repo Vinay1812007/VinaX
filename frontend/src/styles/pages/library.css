@@ -711,7 +711,6 @@
 .vx-lp-link-go { width: 20px; height: 20px; flex-shrink: 0; color: rgb(var(--ink-400)); }
 
 /* -------------------------------------------------------------------- mixes */
-.vx-mix-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 0 24px; }
 .vx-mix-play {
   position: relative;
   display: inline-flex;

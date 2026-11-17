@@ -277,9 +277,9 @@ export interface Banner {
 
 /** Console rebuild — what a banner can open. `charts` needs no id; `page` takes one of these app pages. */
 export const BANNER_LINK_TYPES = ['song', 'album', 'playlist', 'artist', 'charts', 'page'] as const;
-export const BANNER_PAGES = ['/charts', '/discover', '/radio', '/mixes', '/made-for-you', '/weekly', '/vinaxai', '/library', '/search'] as const;
+export const BANNER_PAGES = ['/charts', '/discover', '/radio', '/made-for-you', '/weekly', '/vinaxai', '/library', '/search'] as const;
 /** Pages that were retired after banners could name them: a saved banner opens the page that took over. */
-const BANNER_PAGE_MOVED: Record<string, string> = { '/explore': '/discover' };
+const BANNER_PAGE_MOVED: Record<string, string> = { '/explore': '/discover', '/mixes': '/made-for-you' };
 
 /** Banners live today (inside their optional start/end dates), at most 10, fields clipped. */
 export function activeBanners(value: unknown, now = new Date()): Banner[] {

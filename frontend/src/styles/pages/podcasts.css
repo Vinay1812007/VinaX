@@ -37,6 +37,64 @@
 .vx-episodes-more { display: flex; justify-content: center; margin-top: 20px; }
 .vx-season-rail { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
 
+/* Where you are in an episode: a thin line (white on dark, the played part
+   green) with the time left beside it, or a tick once it is played. */
+.vx-episode-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: rgb(var(--ink-300));
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.vx-episode-status.is-played { color: rgb(var(--ember-500)); }
+.vx-episode-status svg { width: 14px; height: 14px; flex: none; }
+.vx-episode-progress {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 72px;
+  height: 3px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-100) / 0.25);
+}
+.vx-episode-progress > i { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); }
+
+/* Continue your shows (Podcasts): a card that is one button. */
+.vx-continue-play {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vx-continue-play .vx-media-title { color: rgb(var(--ink-100)); }
+.vx-continue-bar { position: absolute; left: 8px; right: 8px; bottom: 8px; width: auto; height: 4px; background: rgb(var(--ink-950) / 0.6); }
+.vx-continue-glyph {
+  display: grid;
+  position: absolute;
+  right: 10px;
+  bottom: 20px;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease-standard);
+}
+.vx-continue-glyph svg { width: 18px; height: 18px; }
+.vx-continue-play:hover .vx-continue-glyph,
+.vx-continue-play:focus-visible .vx-continue-glyph { opacity: 1; }
+@media (hover: none) { .vx-continue-glyph { opacity: 1; } }
+
 @media (max-width: 767px) {
   .vx-episode .vx-track-play { gap: 12px; }
   .vx-episode .vx-track-art { width: 56px; height: 56px; }

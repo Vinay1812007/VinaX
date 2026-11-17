@@ -18,10 +18,10 @@ import '@/styles/pages/browse.css';
  * v5.7.9 — cinematic video player (full-screen canvas style): dark
  * immersive stage, autoplay, music pauses the moment the video starts.
  *
- * Source order is honest about the upstream: the FULL stream is tried first
- * (it lights up automatically once the source serves it); the reliably
- * playable 720p preview clip is the fallback, labeled as a preview, with a
- * one-tap bridge to the full audio track through the normal player.
+ * Source order follows the upstream: the 720p preview clip, which always
+ * plays, is tried first, labeled as a preview, with a one-tap bridge to the
+ * full audio track through the normal player. The full stream (404 upstream
+ * so far) is only the fallback, so opening a video never waits on it.
  */
 /** Mirrors the real page: 16:9 stage, title block, then the related list. */
 function VideoSkeleton() {
@@ -52,7 +52,7 @@ export default function VideoPage() {
   const src = sources[srcIdx] ?? null;
   const isPreview = !!video && !!src && src === video.previewUrl && video.streamUrl !== video.previewUrl;
 
-  // New video → start back at the best source.
+  // New video → start back at the first source.
   useEffect(() => {
     setSrcIdx(0);
     setDead(false);

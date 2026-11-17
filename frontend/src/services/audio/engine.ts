@@ -276,7 +276,7 @@ class AudioEngine {
     const el = this.el;
     const mod = this.effectsMod;
     if (!el || !mod || !this.effectsOn || el.crossOrigin !== 'anonymous' || el.readyState < 1) return;
-    mod.attachEffects(el, { onBypass: () => this.handleEffectsBypass() });
+    mod.attachEffects(el, { onBypass: () => this.handleEffectsBypass(), trackId: this.song?.id });
   }
 
   /** The probe heard silence through the chain (tainted source): the module

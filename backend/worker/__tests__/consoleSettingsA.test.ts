@@ -64,6 +64,12 @@ describe('banners', () => {
       { title: 'Old', linkType: 'page', linkId: '/discover' },
     ]);
   });
+
+  it('opens Made for you for a banner saved with the retired Mixes page', () => {
+    expect(activeBanners([{ title: 'Old', linkType: 'page', linkId: '/mixes' }], NOW)).toEqual([
+      { title: 'Old', linkType: 'page', linkId: '/made-for-you' },
+    ]);
+  });
 });
 
 describe('announcement pop-up', () => {

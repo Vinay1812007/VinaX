@@ -11,9 +11,10 @@ import { TrackMenu } from '@/components/TrackMenu';
 import { Chip } from '@/components/Chip';
 import { Button } from '@/components/Button';
 import { SaveButton } from '@/components/SaveButton';
-import { MicIcon, PlayIcon, ShareIcon } from '@/components/Icons';
+import { CheckIcon, MicIcon, PlayIcon, ShareIcon } from '@/components/Icons';
 import { getEpisodePage, type Episode } from '@/features/podcasts/api';
 import { podcastPath } from '@/features/podcasts/paths';
+import { progressFraction, STARTED_SEC, timeLeft, useEpisodeProgress, type EpisodeProgress } from '@/features/podcasts/progress';
 import { languageLabel } from '@/constants/languages';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { artistPath, extractId } from '@/utils/slug';
@@ -44,7 +45,25 @@ export function episodeLength(sec: number | null): string {
   return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
-const EpisodeRow = memo(function EpisodeRow({ ep, list, index }: { ep: Episode; list: Episode[]; index: number }) {
+/** Played, or how far in with the time left; nothing for an episode not started. */
+export function EpisodeStatus({ progress }: { progress: EpisodeProgress | undefined }) {
+  if (!progress) return null;
+  if (progress.played) {
+    return <span className="vx-episode-status is-played"><CheckIcon /> Played</span>;
+  }
+  if (progress.sec <= STARTED_SEC || progress.dur <= 0) return null;
+  const pct = Math.round(progressFraction(progress) * 100);
+  return (
+    <span className="vx-episode-status">
+      <span className="vx-episode-progress" role="progressbar" aria-label="Listened" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+        <i style={{ width: `${pct}%` }} />
+      </span>
+      {timeLeft(progress)}
+    </span>
+  );
+}
+
+const EpisodeRow = memo(function EpisodeRow({ ep, list, index, progress }: { ep: Episode; list: Episode[]; index: number; progress?: EpisodeProgress }) {
   const { song } = ep;
   const isCurrent = usePlayerStore((s) => s.queue[s.index]?.id === song.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying && s.queue[s.index]?.id === song.id);
@@ -82,6 +101,7 @@ const EpisodeRow = memo(function EpisodeRow({ ep, list, index }: { ep: Episode; 
             {song.explicit && <span className="vx-explicit" title="Explicit">E</span>}
           </span>
           {ep.description && <span className="vx-episode-desc">{ep.description}</span>}
+          <EpisodeStatus progress={progress} />
         </span>
       </button>
       <span className="vx-track-more hover-reveal"><TrackMenu song={song} /></span>
@@ -124,6 +144,7 @@ function PodcastView({ id }: { id: string }) {
     return (eps.data?.pages ?? []).flat().filter((e) => !seen.has(e.song.id) && (seen.add(e.song.id), true));
   }, [eps.data]);
   const songs = useMemo(() => episodes.map((e) => e.song), [episodes]);
+  const progress = useEpisodeProgress();
 
   const canonicalPath = podcast ? podcastPath(podcast) : undefined;
   usePageMeta({
@@ -198,7 +219,7 @@ function PodcastView({ id }: { id: string }) {
         <>
           <div className="vx-tracklist vx-episodes" aria-label="Episodes">
             {episodes.map((ep, i) => (
-              <EpisodeRow key={ep.song.id} ep={ep} list={episodes} index={i} />
+              <EpisodeRow key={ep.song.id} ep={ep} list={episodes} index={i} progress={progress[ep.song.id]} />
             ))}
           </div>
           {eps.isFetchNextPageError ? (

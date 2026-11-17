@@ -125,7 +125,7 @@ export interface SettingsState {
   mono: boolean;
   /** v5.19.0 — stereo balance, -1 (left) .. 1 (right). */
   balance: number;
-  /** v5.19.0 — loudness normalisation (compressor). */
+  /** v5.19.0 — loudness normalisation (a per-song level, then a peak limiter). */
   normalize: boolean;
 
   setDailyGoalMinutes(n: number): void;

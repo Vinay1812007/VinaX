@@ -63,7 +63,6 @@ const DriveModePage = lazy(() => import('@/pages/DriveModePage'));
 const DiscoPage = lazy(() => import('@/pages/DiscoPage'));
 const MadeForYouPage = lazy(() => import('@/pages/MadeForYouPage'));
 const WeeklyMixPage = lazy(() => import('@/pages/WeeklyMixPage'));
-const MixesPage = lazy(() => import('@/pages/MixesPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
 const SongPage = lazy(() => import('@/pages/SongPage'));
 const AlbumPage = lazy(() => import('@/pages/AlbumPage'));
@@ -170,7 +169,8 @@ export const router = createBrowserRouter([
       { path: 'vinaxai/project/:projectId', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/share/:shareId', caseSensitive: true, element: <VinaXAISharePage /> },
       { path: 'weekly', element: <WeeklyMixPage /> },
-      { path: 'mixes', element: <MixesPage /> },
+      // Mixes was the same mixes as Made for you; old links and saved last routes land there.
+      { path: 'mixes', element: <Navigate to="/made-for-you" replace /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'search/:query', element: <SearchPage /> },
       { path: 'song/:id', element: <SongPage /> },

@@ -272,6 +272,7 @@ const ERASE_LABELS: Record<string, string> = {
   weekly: 'Weekly mix cache',
   output: 'Audio output preference',
   roomHostTokens: 'Listen Together host keys',
+  blends: 'Blend playlist details',
   updateAttempt: 'Update install attempt marker',
 };
 const eraseItems = [

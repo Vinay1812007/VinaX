@@ -31,7 +31,7 @@
   /** Pages a banner, message or pop-up may open (the server keeps the same list). */
   var PAGES = [
     { value: '/charts', label: 'Charts' }, { value: '/discover', label: 'Discover' },
-    { value: '/radio', label: 'Radio' }, { value: '/mixes', label: 'Mixes' }, { value: '/made-for-you', label: 'Made for you' },
+    { value: '/radio', label: 'Radio' }, { value: '/made-for-you', label: 'Made for you' },
     { value: '/weekly', label: 'Weekly mix' }, { value: '/vinaxai', label: 'VinaX AI' }, { value: '/library', label: 'Library' }, { value: '/search', label: 'Search' }
   ];
   var pageName = function (p) { var f = PAGES.filter(function (x) { return x.value === p; })[0]; return f ? f.label : null; };
@@ -44,6 +44,8 @@
     path = path || '';
     // Explore folded into Discover: an older message that opened it now opens Discover (the server does the same).
     if (path === '/explore') path = '/discover';
+    // Mixes folded into Made for you the same way.
+    if (path === '/mixes') path = '/made-for-you';
     if (!path || path === '/') return { kind: 'none', path: '', label: '' };
     var m = /^\/(song|album|playlist)\/(.+)$/.exec(path);
     if (m) return { kind: m[1], path: path, label: label || 'Chosen ' + m[1] };

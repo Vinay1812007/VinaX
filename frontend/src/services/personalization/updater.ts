@@ -16,14 +16,16 @@ import { withProfile as withProfileCoalesced } from './storage';
 import { energyOfSong, recordSessionPlay } from './session';
 import { EVENT_WEIGHTS, SKIP_RETRACTS_PLAY } from './eventWeights';
 import { noteSessionEvent } from './sessionIntent';
+import { isEpisode } from '@/features/podcasts/episode';
 
 /**
  * A song the old music AI made (id "gen-…"; VinaX no longer makes them, but a
  * listener may still have one saved) teaches the taste profile nothing: it is
  * not the listener's choice of artist, and it must never count as a play of
- * the song it was inspired by.
+ * the song it was inspired by. Nor does a podcast episode: its host is not an
+ * artist, and a talk show says nothing about the music the listener likes.
  */
-const generated = (song: Song): boolean => song.id.startsWith('gen-');
+const learnsNothing = (song: Song): boolean => song.id.startsWith('gen-') || isEpisode(song);
 
 function logEvent(type: string, song: Song, playedSec?: number): void {
   void addEvent({
@@ -36,6 +38,16 @@ function logEvent(type: string, song: Song, playedSec?: number): void {
     playedSec,
     songDuration: song.duration,
   });
+}
+
+/**
+ * True when the song teaches nothing; an episode's play, completion or skip
+ * still goes in the play log (Stats lists what was heard), and only there.
+ */
+function logOnly(type: 'play' | 'complete' | 'skip', song: Song, playedSec?: number): boolean {
+  if (!learnsNothing(song)) return false;
+  if (isEpisode(song)) logEvent(type, song, playedSec);
+  return true;
 }
 
 /**
@@ -116,7 +128,7 @@ export function resetSittingDamping(): void {
 }
 
 export function recordPlay(song: Song): void {
-  if (generated(song)) return;
+  if (logOnly('play', song)) return;
   const damp = sittingDamp(song);
   withProfile((p) => {
     bumpAll(p, song, EVENT_WEIGHTS.PLAY, 'play', damp);
@@ -135,7 +147,7 @@ export function recordPlay(song: Song): void {
 }
 
 export function recordComplete(song: Song, playedSec: number): void {
-  if (generated(song)) return;
+  if (logOnly('complete', song, playedSec)) return;
   // The same damping as the play it finishes (not another step).
   const damp = sittingDamp(song, Date.now(), false);
   withProfile((p) => {
@@ -148,7 +160,7 @@ export function recordComplete(song: Song, playedSec: number): void {
 }
 
 export function recordSkip(song: Song, playedSec: number): void {
-  if (generated(song)) return;
+  if (logOnly('skip', song, playedSec)) return;
   withProfile((p) => {
     bumpAll(p, song, EVENT_WEIGHTS.SKIP - (SKIP_RETRACTS_PLAY ? EVENT_WEIGHTS.PLAY : 0), 'skip');
     p.totals.skips += 1;
@@ -159,7 +171,7 @@ export function recordSkip(song: Song, playedSec: number): void {
 }
 
 export function recordFavorite(song: Song, favored: boolean): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   withProfile((p) => {
     bumpAll(p, song, favored ? EVENT_WEIGHTS.FAVORITE : -EVENT_WEIGHTS.FAVORITE, 'signal');
     p.totals.favorites += favored ? 1 : -1;
@@ -172,7 +184,7 @@ export function recordFavorite(song: Song, favored: boolean): void {
 }
 
 export function recordQueueAdd(song: Song): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   withProfile((p) => {
     bumpAll(p, song, EVENT_WEIGHTS.QUEUE_ADD, 'signal');
     p.totals.queueAdds += 1;
@@ -189,7 +201,7 @@ export function recordQueueAdd(song: Song): void {
  * profile knew nothing about. Decay returns them within weeks anyway.
  */
 export function recordDislike(song: Song, disliked: boolean): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   withProfile((p) => {
     const ids = (p.dislikedSongIds ?? []).filter((id) => id !== song.id);
     if (!disliked) {
@@ -209,7 +221,7 @@ export function recordDislike(song: Song, disliked: boolean): void {
 
 /** 8.5.0 — the listener put a song in one of their own playlists: worth a play for its artists, language and the song. */
 export function recordPlaylistAdd(song: Song): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   withProfile((p) => {
     bumpAll(p, song, EVENT_WEIGHTS.PLAYLIST_ADD, 'signal');
     p.totals.playlistAdds = (p.totals.playlistAdds ?? 0) + 1;
@@ -225,7 +237,7 @@ export function recordPlaylistAdd(song: Song): void {
  * modest extra bump) and for this sitting (a strong pull).
  */
 export function recordSearchPlay(song: Song): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   withProfile((p) => {
     bumpAll(p, song, EVENT_WEIGHTS.SEARCH_PLAY, 'signal');
   });
@@ -238,7 +250,7 @@ export function recordSearchPlay(song: Song): void {
  *  primary artist for 14 days so nothing by them shows up on Home shelves.
  *  Undoable via unmuteArtist below. */
 export function softMuteArtist(song: Song, days = 14): void {
-  if (generated(song)) return;
+  if (learnsNothing(song)) return;
   const primary = song.artists[0];
   if (!primary) return;
   const key = primary.id || primary.name.toLowerCase();

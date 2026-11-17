@@ -2,7 +2,9 @@
 /**
  * 1.3 — /trending reads the catalogue's trending feed and /most-searched its
  * "Most Searched Songs" chart playlist; both fall back to the search seed when
- * the catalogue misses. /top-songs has no feed and stays on the search.
+ * the catalogue misses. /top-songs reads "Most played on VinaX this week"
+ * (GET /api/charts/vinax) and stays on the search while fewer than ten of its
+ * songs pass the listener's safety rules.
  */
 import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +16,9 @@ import { makeSong } from '@/__fixtures__/songs';
 const getTrendingSongs = vi.fn();
 const getCharts = vi.fn();
 const getPlaylist = vi.fn();
+const getSong = vi.fn();
 vi.mock('@/services/api', () => ({
+  getSong: (id: string) => getSong(id),
   API_LANGUAGES: ['hindi', 'telugu'],
   getTrendingSongs: (...a: unknown[]) => getTrendingSongs(...a),
   getCharts: (...a: unknown[]) => getCharts(...a),
@@ -53,6 +57,7 @@ beforeEach(() => {
   getTrendingSongs.mockReset().mockRejectedValue(new Error('route not found'));
   getCharts.mockReset().mockRejectedValue(new Error('route not found'));
   getPlaylist.mockReset().mockRejectedValue(new Error('down'));
+  getSong.mockReset().mockImplementation(async (id: string) => makeSong(id, { title: `Chart ${id}`, language: 'hindi', explicit: id === 'v1' || id === 'v2' }));
   searchEnabled.length = 0;
   useSettingsStore.setState({ pinnedLanguages: ['hindi'], mutedLanguages: [], kidMode: false });
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
@@ -103,10 +108,38 @@ describe('ChartLandingPage', () => {
     expect(await screen.findByText('Search One')).toBeTruthy();
   });
 
-  it('/top-songs has no feed and stays on the search', async () => {
+  const chart = (n: number) => new Response(JSON.stringify({ songs: Array.from({ length: n }, (_, i) => ({ id: `v${i + 1}`, title: `Chart v${i + 1}`, artist: 'A', image: null, rank: i + 1 })) }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+  it('/top-songs lists "Most played on VinaX this week" without running the search', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => chart(12)));
+    mount('top');
+    expect(await screen.findByText('Chart v12')).toBeTruthy();
+    expect(screen.getByText('Most played on VinaX this week')).toBeTruthy();
+    expect(screen.queryByText('Search One')).toBeNull();
+    expect(searchEnabled[searchEnabled.length - 1]).toBe(false);
+    expect(getTrendingSongs).not.toHaveBeenCalled();
+  });
+
+  it('/top-songs stays on the search while fewer than ten chart songs are allowed', async () => {
+    // Twelve on the chart, two explicit: Kid mode leaves ten — still a chart.
+    useSettingsStore.setState({ kidMode: true });
+    vi.stubGlobal('fetch', vi.fn(async () => chart(12)));
+    const first = mount('top');
+    expect(await screen.findByText('Chart v12')).toBeTruthy();
+    expect(screen.queryByText('Chart v1')).toBeNull();
+    first.unmount();
+    // Eleven, two explicit: nine left, so the search seed shows instead.
+    vi.stubGlobal('fetch', vi.fn(async () => chart(11)));
     mount('top');
     expect(await screen.findByText('Search One')).toBeTruthy();
-    expect(getTrendingSongs).not.toHaveBeenCalled();
+    expect(screen.queryByText('Most played on VinaX this week')).toBeNull();
+  });
+
+  it('/top-songs stays on the search when the chart is short or cannot be read, and looks nothing up', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => chart(9)));
+    mount('top');
+    expect(await screen.findByText('Search One')).toBeTruthy();
+    expect(getSong).not.toHaveBeenCalled();
     expect(getCharts).not.toHaveBeenCalled();
   });
 });

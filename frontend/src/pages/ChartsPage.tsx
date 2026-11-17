@@ -41,6 +41,7 @@ import { useClientConfig } from '@/features/home/useAppConfig';
 import '@/styles/pages/browse.css';
 import { songLine } from '@/utils/songLine';
 import { movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
+import { MIN_CHART_SONGS, useVinaxChart } from '@/features/charts/vinaxChart';
 
 /**
  * The Charts page. 1.15.1 — led by Top Charts: the catalogue's chart
@@ -52,6 +53,10 @@ import { movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView }
  * config says `trendsConnected`, so with none connected no /api/trends
  * request is made and the trends client never loads. The catalogue's
  * trending and new lists and the moods / hubs column follow.
+ *
+ * "Most played on VinaX this week" (features/charts/vinaxChart.ts) leads
+ * the page, only while at least MIN_CHART_SONGS of its songs pass the
+ * listener's safety rules; with fewer it is not shown at all.
  */
 
 const MOODS: Array<{ id: string; label: string; to: string }> = [
@@ -368,6 +373,38 @@ function TrendingToday({ charts }: { charts: Playlist[] }) {
   );
 }
 
+/** The top ten of "Most played on VinaX this week"; nothing at all while loading, on a miss or with too few songs. */
+function VinaxChart() {
+  const q = useVinaxChart();
+  const allowed = useShelfSafety();
+  const playQueue = usePlayerStore((s) => s.playQueue);
+  const songs = (q.data ?? []).filter(allowed);
+  if (songs.length < MIN_CHART_SONGS) return null;
+  const top = songs.slice(0, 10);
+  return (
+    <section aria-labelledby="vinax-chart" className="vx-section">
+      <div className="vx-section-header">
+        <div className="min-w-0">
+          <h2 id="vinax-chart">Most played on VinaX this week</h2>
+          <p>What people played most here in the last 7 days</p>
+        </div>
+        <Link to="/top-songs" className="vx-section-link">Show all</Link>
+      </div>
+      <ul className="vx-track-list">
+        {top.map((s, i) => (
+          <li key={s.id}>
+            <button type="button" onClick={() => playQueue(songs, i, { from: { kind: 'playlist', label: 'Most played on VinaX', path: '/top-songs' } })} className="vx-chart-row">
+              <span className="vx-chart-rank">{i + 1}</span>
+              <img src={bestImage(s.images, 96)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" width={48} height={48} loading="lazy" decoding="async" />
+              <ChartRowText song={s} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function CatalogueLists() {
   const trendingPlaylists = useChartsTrendingPlaylists();
   const trendingAlbums = useChartsTrendingAlbums();
@@ -402,6 +439,8 @@ export default function ChartsPage() {
         <div className="min-w-0">
           {trendsOn && <VerifiedCharts region={region} />}
 
+          <VinaxChart />
+
           <TopCharts onCharts={setCharts} />
 
           <TrendingToday charts={charts} />
@@ -416,8 +455,8 @@ export default function ChartsPage() {
             shape="lane"
             tone="vx-tone-8"
             className="mb-8"
-            title={`Your Week ${isoWeek()} mix ${new Date().getDay() === 5 ? 'is here' : 'drops Friday'}`}
-            meta={playsCount > 0 ? `Built from your last ${Math.min(playsCount, 500)} plays` : 'Builds from what you play this week'}
+            title={`Your Week ${isoWeek()}`}
+            meta={playsCount > 0 ? 'Songs new to you · refreshes every Monday' : 'Builds from what you play this week'}
             visual={<TileGlyph><SparkleIcon /></TileGlyph>}
           />
 

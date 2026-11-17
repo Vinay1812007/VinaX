@@ -2,8 +2,8 @@
  * 13.0 — the signed-in listener's data follows their Google account.
  *
  * What syncs is the backup file's own categories (features/settings/backup):
- * settings, library and playlists, smart collections, history, taste profile,
- * bookmarks and the Home layout. Never searches or this device's
+ * settings, library and playlists (with their share links, never the invite
+ * tokens), smart collections, history, taste profile, bookmarks and the Home layout. Never searches or this device's
  * identity. The server keeps ONE copy per account (GET/PUT /api/account/data)
  * with a version number:
  *
@@ -23,6 +23,7 @@ import { currentAccount, onAccountChange } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
+import { migrateShareTokens } from '@/features/social/shareMap';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const SYNC_ENDPOINT = `${ORIGIN}/api/account/data`;
@@ -222,6 +223,9 @@ export function scheduleSync(): void {
 export function installAccountSync(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
+  // 1.15 — an older build kept invite tokens inside the share-link map; move
+  // them aside before the first merge rewrites the map without them.
+  migrateShareTokens();
   void syncNow();
   // 13.4.0 — a new SESSION syncs; a refreshed name or photo on the same
   // session does not (that rewrite used to start a sync round every time).
@@ -246,5 +250,7 @@ export function installAccountSync(): void {
     import('@/store/settingsStore').then((m) => m.useSettingsStore.subscribe(scheduleSync)),
     import('@/store/smartCollectionStore').then((m) => m.useSmartCollectionStore.subscribe(scheduleSync)),
     import('@/store/bookmarkStore').then((m) => m.useBookmarkStore.subscribe(scheduleSync)),
+    // 1.15 — a shared playlist's /p/ copy follows its edits a few seconds later.
+    import('@/features/social/sharedCopy').then((m) => m.installSharedAutoPush()),
   ]);
 }

@@ -83,7 +83,7 @@ let hasBootstrapped = false;
 function useLastRoute(): void {
   const loc = useLocation();
   useEffect(() => {
-    try { if (/^\/(?:search|library|favorites|later|history|queue|stats|charts|discover|mixes|weekly|made-for-you)?$/.test(loc.pathname) || loc.pathname === '/') localStorage.setItem('vinax.last-route', loc.pathname); } catch { /* ignore */ }
+    try { if (/^\/(?:search|library|favorites|later|history|queue|stats|charts|discover|weekly|made-for-you)?$/.test(loc.pathname) || loc.pathname === '/') localStorage.setItem('vinax.last-route', loc.pathname); } catch { /* ignore */ }
   }, [loc.pathname]);
 }
 

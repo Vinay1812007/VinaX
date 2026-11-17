@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useSocialStore } from '@/features/social/store';
 import { resolveSongs } from '@/features/social/resolve';
-import { jamPath } from '@/services/social/api';
+import { JoinRoomLink } from '@/features/social/JoinRoomLink';
 import { usePlayerStore } from '@/store/playerStore';
 import { FALLBACK_ART } from '@/utils/images';
 import { PlayIcon } from '@/components/Icons';
@@ -40,7 +40,7 @@ export function FriendsListening() {
                   <img src={p.picture ?? FALLBACK_ART} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="vxh-friend-avatar" />
                   <span className="vxh-friend-name">{who}</span>
                 </Link>
-                {p.jamCode && <Link to={jamPath(p.jamCode)} className="vxh-friend-join" aria-label={`Join ${who}'s room`}>Join</Link>}
+                <JoinRoomLink profile={p} className="vxh-friend-join" />
               </div>
               {!p.nowPlaying ? (
                 <p className="vxh-friend-sub">Hosting Listen Together</p>

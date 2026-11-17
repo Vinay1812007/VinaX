@@ -697,3 +697,50 @@ describe('the heard songs (Never repeat)', () => {
     expect(SYNC_CATEGORIES).not.toContain('heard');
   });
 });
+
+describe('playlist share links travel with the library (1.15)', () => {
+  const ID = 'abcdefghij12';
+  const ID2 = 'zyxwvutsrq98';
+  const libState = { state: { favorites: [], collections: [{ id: 'c1', name: 'Road', createdAt: 1, songs: [song('s1')] }], saved: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 };
+  beforeEach(() => localStorage.clear());
+
+  it('exports the links but never the invite token', () => {
+    set(KEYS.library, libState);
+    set(KEYS.sharedPlaylists, { c1: { id: ID, token: 'secret', version: 4, public: true, at: 10 } });
+    const file = createBackup(['library']);
+    expect((file.categories.library as Record<string, unknown>)[KEYS.sharedPlaylists]).toEqual({ c1: { id: ID, version: 4, public: true, at: 10 } });
+    expect(serializeBackup(file)).not.toContain('secret');
+  });
+
+  it('a merge keeps both sides, the newer entry per playlist winning', () => {
+    set(KEYS.library, libState);
+    set(KEYS.sharedPlaylists, { c1: { id: ID, version: 9, at: 50 }, c2: { id: ID2, version: 1, at: 5 } });
+    const file = createBackup(['library']);
+    set(KEYS.sharedPlaylists, { c1: { id: ID, version: 3, at: 60, public: false } });
+    const parsed = parseBackup(serializeBackup(file));
+    if (!parsed.ok) throw new Error('parse');
+    expect(applyBackup(parsed, { mode: 'merge', categories: ['library'] }).ok).toBe(true);
+    expect(get(KEYS.sharedPlaylists)).toEqual({ c1: { id: ID, version: 9, at: 60, public: false }, c2: { id: ID2, version: 1, at: 5 } });
+  });
+
+  it('an older backup without links loads, and a merge keeps the links this device has', () => {
+    set(KEYS.library, libState);
+    const old = createBackup(['library']);
+    expect((old.categories.library as Record<string, unknown>)[KEYS.sharedPlaylists]).toBeUndefined();
+    set(KEYS.sharedPlaylists, { c1: { id: ID, version: 2, at: 1 } });
+    const parsed = parseBackup(serializeBackup(old));
+    if (!parsed.ok) throw new Error('parse');
+    expect(parsed.rejected).toEqual([]);
+    expect(applyBackup(parsed, { mode: 'merge', categories: ['library'] }).ok).toBe(true);
+    expect(get(KEYS.sharedPlaylists)).toEqual({ c1: { id: ID, version: 2, at: 1 } });
+  });
+
+  it('unreadable links are left out without refusing the playlists', () => {
+    const file = { format: BACKUP_FORMAT, schemaVersion: BACKUP_SCHEMA_VERSION, app: 'vinax', appVersion: 'x', exportedAt: new Date().toISOString(), categories: { library: { [KEYS.library]: libState, [KEYS.sharedPlaylists]: ['bad'] } } };
+    const parsed = parseBackup(JSON.stringify(file));
+    if (!parsed.ok) throw new Error('parse');
+    expect(parsed.rejected).toEqual([]);
+    expect(parsed.warnings.some((w) => /share links/.test(w))).toBe(true);
+    expect(parsed.categories.find((c) => c.id === 'library')?.values[KEYS.sharedPlaylists]).toBeUndefined();
+  });
+});

@@ -101,6 +101,8 @@ function ctxKey(ctx: RecommendationContext): string {
     ctx.trendBonus?.size ?? 0,
     ctx.region?.timezone ?? '',
     ctx.pinnedLanguages.join(','),
+    // Your Week gathers wider (the explore source in the listener's own languages).
+    ctx.widen ?? 0,
   ].join('|');
 }
 

@@ -1,5 +1,6 @@
 import type { Song } from '@/types';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
+import { isEpisode } from '@/features/podcasts/episode';
 
 /**
  * V2 — the session ANCHOR: what this listening session is about.
@@ -129,11 +130,15 @@ function load(): Anchor | null {
   }
 }
 
-/** Start a new session from what the listener chose: a song, a list, radio seeds. */
+/**
+ * Start a new session from what the listener chose: a song, a list, radio
+ * seeds. Podcast episodes are never seeds: a talk show says nothing about the
+ * music to play after it (an episodes-only start leaves the anchor empty).
+ */
 export function startAnchor(songs: readonly Song[], now = Date.now()): Anchor {
   const unique: Song[] = [];
   const seen = new Set<string>();
-  for (const s of songs) if (s?.id && !seen.has(s.id)) { seen.add(s.id); unique.push(s); }
+  for (const s of songs) if (s?.id && !seen.has(s.id) && !isEpisode(s)) { seen.add(s.id); unique.push(s); }
   const seeds = evenSample(unique, MAX_START_SEEDS).map((song) => ({ song, via: 'start' as const, at: now }));
   state = derive(seeds, (state?.version ?? 0) + 1, now);
   lastTouch = now;
@@ -148,7 +153,7 @@ export function startAnchor(songs: readonly Song[], now = Date.now()): Anchor {
  */
 export function addAnchorSeed(song: Song, via: 'like' | 'queued', now = Date.now()): Anchor | null {
   const current = load();
-  if (!current || !song?.id) return current;
+  if (!current || !song?.id || isEpisode(song)) return current;
   if (current.seeds.some((s) => s.song.id === song.id)) {
     lastTouch = now;
     return current;
@@ -197,7 +202,8 @@ export function removeAnchorSeed(songId: string): void {
  * The anchor for a plan. A session that went quiet for longer than the gap,
  * or none at all, starts again from `fallbackSeed` (the song playing).
  * `lastActivity` is the listener's latest play start: a long playlist plays
- * for hours without a plan, and that is still one session.
+ * for hours without a plan, and that is still one session. An episode
+ * playing seeds nothing: the anchor then comes back with no seeds.
  */
 export function readAnchor(fallbackSeed: Song, now = Date.now(), lastActivity = 0): Anchor {
   const current = load();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -6,13 +6,13 @@ import { EntityHeader, EntityMeta, PlayFab } from '@/components/EntityHeader';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
 import { SectionHeader } from '@/components/SectionHeader';
-import { getProfile, jamPath, SocialError, type PublicProfile } from '@/services/social/api';
+import { getProfile, SocialError, type PublicProfile } from '@/services/social/api';
 import { resolveSongs } from '@/features/social/resolve';
 import { useSocialStore } from '@/features/social/store';
 import { currentAccount } from '@/services/auth/google';
-import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { recommendFromSeeds } from '@/services/recs/similar';
+import { BlendButton, BlendSection, useBlend } from '@/features/social/BlendPanel';
+import { JoinRoomLink } from '@/features/social/JoinRoomLink';
 import { languageLabel } from '@/constants/languages';
 import { FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
@@ -22,9 +22,11 @@ import '@/styles/pages/secondary.css';
 /**
  * 15.0 — /u/<handle>: a listener's public profile. Their name and picture,
  * a line, top artists and languages, recent likes (playable), what they
- * are playing when they share it, Follow, and Blend — a mix built on this
- * device from both listeners' likes. v23: Join their room, when they host a
- * jam and let you (you follow each other; the server decides).
+ * are playing when they share it, Follow, and Blend — a playlist built on
+ * this device from both listeners' likes, saved as "Blend with <name>" and
+ * rebuilt when either side changes (features/social/blend.ts). v23: Join
+ * their room, when they host a jam and let you (you follow each other; the
+ * server decides).
  */
 export default function ProfilePage() {
   const { handle = '' } = useParams();
@@ -37,6 +39,7 @@ export default function ProfilePage() {
   const likes = useQuery({ queryKey: ['profile-likes', handle.toLowerCase(), profile?.updatedAt], queryFn: () => resolveSongs(profile?.recentLikes ?? [], 20), enabled: !!profile?.recentLikes?.length, staleTime: 10 * 60_000 });
   const isFollowing = profile?.following ?? following.some((p) => p.handle === profile?.handle);
   const [toggling, setToggling] = useState(false);
+  const blend = useBlend(profile, !!profile && !mine);
 
   if (q.isLoading) return <div className="vx-sec"><p className="text-ink-400 p-6">Loading…</p></div>;
   if (!profile) {
@@ -73,10 +76,8 @@ export default function ProfilePage() {
                 {isFollowing ? 'Following' : 'Follow'}
               </button>
             )}
-            {!mine && profile.jamCode && (
-              <Link to={jamPath(profile.jamCode)} className="vx-tap px-5 min-h-[44px] inline-flex items-center rounded-full btn-primary font-semibold" aria-label={`Join ${profile.name ?? profile.handle}'s room`}>Join their room</Link>
-            )}
-            {!mine && <BlendButton profile={profile} />}
+            {!mine && <JoinRoomLink profile={profile} className="vx-tap px-5 min-h-[44px] inline-flex items-center rounded-full btn-primary font-semibold">Join their room</JoinRoomLink>}
+            {!mine && <BlendButton blend={blend} />}
             {mine && <Link to="/settings#profile" className="vx-tap px-5 min-h-[44px] inline-flex items-center rounded-full btn-secondary font-semibold">Edit</Link>}
           </>
         }
@@ -85,6 +86,8 @@ export default function ProfilePage() {
           <p className="mt-3 text-[14px] text-ink-300"><span className="vx-np-live-dot" aria-hidden /> Playing now: <span className="font-semibold text-ink-100">{profile.nowPlaying.title}</span>{profile.nowPlaying.subtitle ? ` · ${profile.nowPlaying.subtitle}` : ''}</p>
         )}
       </EntityHeader>
+
+      {!mine && <BlendSection blend={blend} profile={profile} />}
 
       {profile.topArtists.length > 0 && (
         <section className="vx-sec-block" aria-label="Top artists">
@@ -117,33 +120,5 @@ export default function ProfilePage() {
         </section>
       )}
     </div>
-  );
-}
-
-/** Blend: a mix seeded from both listeners' likes, built on this device. */
-function BlendButton({ profile }: { profile: PublicProfile }) {
-  const [busy, setBusy] = useState(false);
-  const favorites = useLibraryStore((s) => s.favorites);
-  const seedsTheirs = useMemo(() => profile.recentLikes.slice(0, 3), [profile.recentLikes]);
-  const run = async () => {
-    setBusy(true);
-    try {
-      const theirs = await resolveSongs(seedsTheirs, 3);
-      const mineSeeds = favorites.slice(0, 2);
-      const seeds = [...theirs.slice(0, 3), ...mineSeeds].slice(0, 5);
-      if (!seeds.length) { toast('Nothing to blend from yet'); return; }
-      const picks = await recommendFromSeeds(seeds, { limit: 20 });
-      const mix = [...theirs, ...mineSeeds, ...picks].filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
-      if (!mix.length) { toast('Could not build the blend right now'); return; }
-      usePlayerStore.getState().playQueue(mix, 0, { keepList: true });
-      toast(`Blend with ${profile.name ?? profile.handle}: ${mix.length} songs`);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <button type="button" onClick={() => void run()} disabled={busy} className="vx-tap px-5 min-h-[44px] rounded-full btn-secondary font-semibold" title="A mix from both of your likes, built on this device">
-      {busy ? 'Blending…' : 'Blend'}
-    </button>
   );
 }

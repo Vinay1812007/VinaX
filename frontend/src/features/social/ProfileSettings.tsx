@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Row, RowButton, Toggle } from '@/features/settings/SettingsControls';
+import { LinkRow, Row, RowButton, Toggle } from '@/features/settings/SettingsControls';
 import { currentAccount } from '@/services/auth/google';
 import { useSocialStore } from '@/features/social/store';
 import { toast } from '@/store/toastStore';
-
-const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+import { HANDLE_RE } from '@/features/social/handle';
 
 /**
  * 15.0 — Settings → Profile → Public profile: a handle, a line, the public
@@ -16,6 +15,7 @@ export function ProfileSettings() {
   const account = currentAccount();
   const profile = useSocialStore((s) => s.profile);
   const busy = useSocialStore((s) => s.busy);
+  const followingCount = useSocialStore((s) => (Array.isArray(s.following) ? s.following.length : 0));
   const [handle, setHandle] = useState(profile?.handle ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   useEffect(() => { setHandle(profile?.handle ?? ''); setBio(profile?.bio ?? ''); }, [profile?.handle, profile?.bio]);
@@ -49,6 +49,7 @@ export function ProfileSettings() {
           )}
         </div>
       </Row>
+      <LinkRow to="/following?tab=people" label="People you follow" note="See everyone you follow, unfollow someone, or find a listener by handle." keywords="following people friends find handle unfollow" value={followingCount ? String(followingCount) : undefined} />
       {profile && (
         <>
           <Row label="Visible to everyone" note="Off: only people you follow who follow you back can see it." keywords="private public profile">

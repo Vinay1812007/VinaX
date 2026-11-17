@@ -297,9 +297,12 @@ export default function StatsPage() {
         title="Your VinaX"
         subtitle="Computed on this device · never uploaded"
         actions={
-          <button type="button" onClick={share} className="vx-sec-pill">
-            <ShareIcon className="w-4 h-4" /> Share
-          </button>
+          <>
+            <Link to="/taste-profile" className="vx-sec-pill">What shapes your mixes</Link>
+            <button type="button" onClick={share} className="vx-sec-pill">
+              <ShareIcon className="w-4 h-4" /> Share
+            </button>
+          </>
         }
       />
 

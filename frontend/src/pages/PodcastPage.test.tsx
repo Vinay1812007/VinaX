@@ -32,6 +32,7 @@ vi.mock('@/components/TrackMenu', () => ({ TrackMenu: () => null }));
 vi.mock('@/utils/color', () => ({ extractVibrantColor: () => Promise.resolve(null) }));
 
 import PodcastPage from './PodcastPage';
+import { noteEpisodeProgress } from '@/features/podcasts/progress';
 
 const podcast = (over: Partial<Podcast> = {}): Podcast => ({
   id: '62',
@@ -76,6 +77,7 @@ beforeEach(() => {
   getEpisodePage.mockReset();
   playQueue.mockReset();
   enqueueAll.mockReset();
+  localStorage.clear();
 });
 afterEach(cleanup);
 
@@ -126,6 +128,21 @@ describe('PodcastPage', () => {
     expect(playQueue).toHaveBeenLastCalledWith(list.map((e) => e.song), 1);
     fireEvent.click(screen.getByRole('button', { name: 'Play all' }));
     expect(playQueue).toHaveBeenLastCalledWith(list.map((e) => e.song), 0);
+  });
+
+  it('ticks the episodes you finished and shows how far you are in the others', async () => {
+    getPodcast.mockResolvedValue(podcast());
+    const list = [ep('e1'), ep('e2'), ep('e3')];
+    getEpisodePage.mockResolvedValue(list);
+    noteEpisodeProgress(list[0].song, 1700, 1716);
+    noteEpisodeProgress(list[1].song, 858, 1716);
+    const { container } = mount();
+    expect(await screen.findByText('Episode e1')).toBeTruthy();
+    const row = (id: string) => container.querySelector(`[data-song-id="${id}"]`)!;
+    expect(row('e1').textContent).toContain('Played');
+    expect(row('e2').textContent).toContain('14 min left');
+    expect(row('e2').querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('50');
+    expect(row('e3').querySelector('.vx-episode-status')).toBeNull();
   });
 
   it('loads more episodes until the season’s count', async () => {

@@ -152,7 +152,7 @@ export function SoundSettings() {
           <Toggle on={s.mono} onChange={s.setMono} label="Mono audio" disabled={!on} />
         </Row>
 
-        <Row label="Loudness normalisation" note="Evens out volume jumps between quiet and loud songs.">
+        <Row label="Loudness normalisation" note="Plays every song at about the same volume, without squashing it. A new song settles in its first few seconds.">
           <Toggle on={s.normalize} onChange={s.setNormalize} label="Loudness normalisation" disabled={!on} />
         </Row>
 

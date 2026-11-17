@@ -7,6 +7,7 @@ import { normalizeTags } from '@/features/library/tags';
 import { USERNAME_RE } from '@/features/identity/username';
 import { SMART_COLLECTIONS_KEY, sanitizeSmartCollections } from '@/features/library/smartCollections';
 import { normalizeProfile } from '@/services/personalization/profile';
+import { mergeShareMaps, migrateShareTokens, sanitizeShareMap, type ShareMap } from '@/features/social/shareMap';
 import { sanitizeAlarm, sanitizeLyricOffsets } from '@/services/storage/sanitize';
 import { pickSettings, useSettingsStore } from '@/store/settingsStore';
 import { pruneUnsaved, useLibraryStore, type SavedEntity, type UnsavedMark } from '@/store/libraryStore';
@@ -313,8 +314,10 @@ const isSavedKind = (k: unknown): k is SavedEntity['kind'] => k === 'album' || k
 const libraryCategory: BackupCategory = {
   id: 'library',
   label: 'Library',
-  description: 'Favourites, playlists (with tags, pins and descriptions), Listen Later, saved albums, artists and podcasts, and hidden songs.',
-  keys: [{ key: KEYS.library }],
+  description: 'Favourites, playlists (with tags, pins, descriptions and their share links), Listen Later, saved albums, artists and podcasts, and hidden songs.',
+  // 1.15 — the share links (local playlist → its /p/ copy) ride with the
+  // playlists. Optional: older files without them still load.
+  keys: [{ key: KEYS.library }, { key: KEYS.sharedPlaylists }],
   sanitize: (values, ctx) => {
     const env = envelope(values[KEYS.library]);
     if (!env) return { error: 'Library data is not in the expected shape.' };
@@ -359,7 +362,15 @@ const libraryCategory: BackupCategory = {
       hiddenArtists: capped(strings(s.hiddenArtists), 500, 'Never-play artists', ctx),
       trash: pruneTrash(trash),
     };
-    return { values: { [KEYS.library]: wrap(state, storeVersion(KEYS.library)) } };
+    const out: CategoryValues = { [KEYS.library]: wrap(state, storeVersion(KEYS.library)) };
+    if (values[KEYS.sharedPlaylists] !== undefined && values[KEYS.sharedPlaylists] !== null) {
+      // Invite tokens are dropped here: they never leave the device. A bad
+      // map is left out, never a reason to refuse the playlists themselves.
+      const links = sanitizeShareMap(values[KEYS.sharedPlaylists]);
+      if (links) out[KEYS.sharedPlaylists] = links;
+      else ctx?.warn?.('Playlist share links were unreadable and were left out.');
+    }
+    return { values: out };
   },
   summarize: (values) => {
     const s = envelope(values[KEYS.library])?.state ?? {};
@@ -367,13 +378,17 @@ const libraryCategory: BackupCategory = {
     const songs = cols.reduce((n, c) => n + c.songs.length, 0);
     const fav = Array.isArray(s.favorites) ? s.favorites.length : 0;
     const later = Array.isArray(s.later) ? s.later.length : 0;
-    return `${fav} favourite${fav === 1 ? '' : 's'} · ${cols.length} playlist${cols.length === 1 ? '' : 's'} (${songs} songs) · ${later} for later`;
+    const links = values[KEYS.sharedPlaylists] ? Object.values(values[KEYS.sharedPlaylists] as ShareMap).filter((l) => !l.off).length : 0;
+    return `${fav} favourite${fav === 1 ? '' : 's'} · ${cols.length} playlist${cols.length === 1 ? '' : 's'} (${songs} songs) · ${later} for later${links ? ` · ${links} shared` : ''}`;
   },
   merge: (current, incoming) => {
     const a = envelope(current[KEYS.library]);
     const b = envelope(incoming[KEYS.library]);
     if (!a) return incoming;
     if (!b) return current;
+    const linksA = current[KEYS.sharedPlaylists] as ShareMap | undefined;
+    const linksB = incoming[KEYS.sharedPlaylists] as ShareMap | undefined;
+    const links = linksA && linksB ? mergeShareMaps(linksA, linksB) : linksA ?? linksB;
     const A = a.state as Record<string, unknown[]>;
     const B = b.state as Record<string, unknown[]>;
     const list = (x: unknown) => (Array.isArray(x) ? x : []);
@@ -404,6 +419,7 @@ const libraryCategory: BackupCategory = {
         },
         storeVersion(KEYS.library),
       ),
+      ...(links ? { [KEYS.sharedPlaylists]: links } : {}),
     };
   },
 };
@@ -997,6 +1013,9 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
   const entries: Array<readonly [string, string | null]> = [];
   const applied: BackupCategoryId[] = [];
   let pendingHandle: string | null = null;
+  // 1.15 — an older build kept invite tokens inside the share-link map; move
+  // them to their device-only key before the library is rewritten without them.
+  if (wanted.has('library')) migrateShareTokens();
   for (const report of parsed.categories) {
     if (!wanted.has(report.id)) continue;
     const cat = categoryById(report.id);

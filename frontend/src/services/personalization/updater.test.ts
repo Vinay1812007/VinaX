@@ -11,7 +11,7 @@ vi.mock('@/services/storage/idb', () => ({ addEvent: vi.fn(async () => undefined
 
 import { EVENT_WEIGHTS } from './eventWeights';
 import { loadProfile, resetProfile } from './storage';
-import { recordDislike, recordFavorite, recordPlay, recordPlaylistAdd } from './updater';
+import { recordComplete, recordDislike, recordFavorite, recordPlay, recordPlaylistAdd, recordSkip } from './updater';
 import { getSessionIntent } from './sessionIntent';
 import { addEvent } from '@/services/storage/idb';
 
@@ -158,5 +158,33 @@ describe('one sitting’s share of the long-term profile (9.0.0)', () => {
     recordPlay(song('next', 'Loved Voice'));
     expect(loadProfile().artists['a-Loved Voice'].score - again).toBeGreaterThan(EVENT_WEIGHTS.PLAY * 0.9);
     vi.useRealTimers();
+  });
+});
+
+describe('podcast episodes', () => {
+  const episode = (id: string): Song => ({ ...song(id, 'Show Host', 'hindi'), audio: [{ quality: 'original', url: `https://x/${id}.mp3` }] });
+
+  it('teach the taste profile nothing: the host is not an artist', () => {
+    const e = episode('ep1');
+    recordPlay(e);
+    recordComplete(e, 1700);
+    recordSkip(episode('ep2'), 30);
+    recordFavorite(e, true);
+    recordPlaylistAdd(e);
+    const p = loadProfile();
+    expect(p.artists['a-Show Host']).toBeUndefined();
+    expect(p.languages.hindi).toBeUndefined();
+    expect(p.totals.plays).toBe(0);
+    expect(p.totals.skips).toBe(0);
+    expect(p.likedSongIds ?? []).toEqual([]);
+    expect(getSessionIntent().artistPull['show host']).toBeUndefined();
+  });
+
+  it('still go in the play log that Stats reads', () => {
+    const e = episode('ep3');
+    recordPlay(e);
+    recordComplete(e, 1700);
+    const types = vi.mocked(addEvent).mock.calls.map(([evt]) => evt.type);
+    expect(types).toEqual(['play', 'complete']);
   });
 });

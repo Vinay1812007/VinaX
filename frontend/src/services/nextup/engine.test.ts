@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import { noteSessionEvent, resetSessionIntent } from '@/services/personalization/sessionIntent';
 import { addAnchorSeed, anchorLanguages, avoidArtist, evenSample, readAnchor, resetAnchor, startAnchor, MAX_START_SEEDS, SESSION_GAP_MS } from './anchor';
-import { notePlayed, planNextSongs, poolSize, resetNextUp, setCatalogueApi, POOL_CAP } from './engine';
+import { notePlayed, planNextSongs, poolSize, resetNextUp, setCatalogueApi, EPISODES_END, POOL_CAP } from './engine';
 import { resetServed } from './memory';
 import type { CatalogueApi } from './sources';
 import { songKey } from '@/services/recommendation/songKey';
@@ -283,5 +283,37 @@ describe('V2 Up Next — Never repeat', () => {
     const p = await plan(seed);
     expect(p.songs).toEqual([]);
     expect(p.exhausted).toBe(true);
+  });
+});
+
+describe('V2 Up Next — podcast episodes', () => {
+  const episode = (id: string): Song => song(id, 'Show Host', { audio: [{ quality: 'original', url: `https://x/${id}.mp3` }], language: 'hindi' });
+
+  it('never makes an episode a seed of the session', () => {
+    expect(startAnchor([episode('e1'), song('m', 'M'), episode('e2')]).seeds.map((s) => s.song.id)).toEqual(['m']);
+    expect(addAnchorSeed(episode('e3'), 'like')?.seeds.map((s) => s.song.id)).toEqual(['m']);
+    expect(startAnchor([episode('e1')]).seeds).toEqual([]);
+    expect(readAnchor(episode('e4')).seeds).toEqual([]);
+  });
+
+  it('plays no music after episodes alone, and says the episodes ended', async () => {
+    const { api, asked } = fakeCatalogue({ e1: [song('n1', 'N1')] }, { 'a-Show Host': [song('n2', 'N2')] });
+    setCatalogueApi(api);
+    startAnchor([episode('e1'), episode('e2')]);
+    const p = await plan(episode('e2'));
+    expect(p.songs).toEqual([]);
+    expect(p.notice).toBe(EPISODES_END);
+    expect(asked).toEqual([]);
+  });
+
+  it('after an episode in a music session, goes on from the music', async () => {
+    const { api, asked } = fakeCatalogue({ chosen: [song('n1', 'N1'), song('n2', 'N2'), song('n3', 'N3'), song('n4', 'N4'), song('n5', 'N5')] });
+    setCatalogueApi(api);
+    startAnchor([song('chosen', 'Chosen')]);
+    const p = await plan(episode('e1'));
+    expect(asked).toContain('similar:chosen');
+    expect(asked).not.toContain('similar:e1');
+    expect(p.songs.length).toBeGreaterThan(0);
+    expect(p.notice).toBeUndefined();
   });
 });

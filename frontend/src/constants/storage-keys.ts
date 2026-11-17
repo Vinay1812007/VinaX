@@ -45,8 +45,12 @@ export const KEYS = {
   smartDownloads: `${STORAGE_PREFIX}.smart-downloads.v1`,
   /** 15.0 — the own public profile and following list (features/social/store.ts). */
   social: `${STORAGE_PREFIX}.social.v1`,
-  /** 15.0 — local playlist id → its shared copy (id, invite token, version). */
+  /** 15.0 — local playlist id → its shared copy (id, version, public). 1.15: travels in the library backup and the account sync. */
   sharedPlaylists: `${STORAGE_PREFIX}.shared-playlists.v1`,
+  /** Blend playlists: friend's handle → its playlist id, when it was built, whose seeds each song came from. */
+  blends: `${STORAGE_PREFIX}.blends.v1`,
+  /** 1.15 — shared copy id → its invite token. Device only: a key, so it is in no backup; the server hands it back to the owner. */
+  sharedPlaylistTokens: `${STORAGE_PREFIX}.shared-playlist-tokens.v1`,
   /** 15.0 — release alerts: seen song ids per saved artist (newest and top lists), the new ones (features/releases). */
   releases: `${STORAGE_PREFIX}.releases.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,

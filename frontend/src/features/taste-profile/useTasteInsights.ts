@@ -14,6 +14,7 @@ import type { StoredEvent } from '@/services/storage/idb';
 export interface TasteInsights {
   topLanguages: Array<{ id: string; label: string; score: number; plays: number }>;
   topArtists: Array<{ name: string; score: number; plays: number }>;
+  /** The songs played most in the event log: only the hero's covers use it (play counts live on Your VinaX). */
   mostReplayed: Array<{ songId: string; title: string; count: number }>;
   hourHistogram: number[];
   totals: TasteProfile['totals'];
@@ -30,7 +31,6 @@ export interface TasteInsights {
   topGenres: string[];
   confidence: number;
   listeningMinutes: number;
-  recentTrend: Array<{ day: string; plays: number }>;
 }
 
 const NEW_ARTIST_MAX_PLAYS = 3;
@@ -100,21 +100,6 @@ async function compute(): Promise<TasteInsights> {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  // Last 7 days of plays.
-  const dayMs = 86_400_000;
-  const recentTrend: Array<{ day: string; plays: number }> = [];
-  for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date(Date.now() - i * dayMs);
-    dayStart.setHours(0, 0, 0, 0);
-    const plays = events.filter(
-      (e) => e.type === 'play' && e.ts >= dayStart.getTime() && e.ts < dayStart.getTime() + dayMs,
-    ).length;
-    recentTrend.push({
-      day: dayStart.toLocaleDateString(undefined, { weekday: 'short' }),
-      plays,
-    });
-  }
-
   let listeningSeconds = 0;
   for (const e of events) {
     if (e.type === 'complete') listeningSeconds += e.songDuration ?? e.playedSec ?? 0;
@@ -148,7 +133,6 @@ async function compute(): Promise<TasteInsights> {
     topGenres: topGenres(profile, favorites, history),
     confidence: profileConfidence(profile),
     listeningMinutes: Math.round(listeningSeconds / 60),
-    recentTrend,
   };
 }
 

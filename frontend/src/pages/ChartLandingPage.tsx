@@ -21,6 +21,7 @@ import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getTopSearches } from '@/services/api/catalog';
+import { MIN_CHART_SONGS, useVinaxChart } from '@/features/charts/vinaxChart';
 
 export type ChartVariant = 'top' | 'trending' | 'most-searched';
 
@@ -34,8 +35,12 @@ interface VariantConfig {
   seed: string;
   listName: string;
   showSearches?: boolean;
-  /** 1.3 — the catalogue feed tried before the search seed ("top" has none). */
-  feed?: 'trending' | 'most-searched';
+  /**
+   * 1.3 — the feed tried before the search seed. "vinax" is the Worker's
+   * "Most played on VinaX this week" chart, used only while at least
+   * MIN_CHART_SONGS of its songs pass the listener's safety rules.
+   */
+  feed?: 'trending' | 'most-searched' | 'vinax';
 }
 
 const CONFIG: Record<ChartVariant, VariantConfig> = {
@@ -46,6 +51,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
     desc: `The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.`,
     seed: `top hit songs india ${YEAR}`,
     listName: 'Top Songs on VinaX',
+    feed: 'vinax',
   },
   trending: {
     path: '/trending',
@@ -102,13 +108,16 @@ function SearchChips() {
 
 export default function ChartLandingPage({ variant }: { variant: ChartVariant }) {
   const cfg = CONFIG[variant];
-  // 1.3 — the catalogue's own list first (trending feed, "Most Searched" chart); the search seed when it misses.
+  // 1.3 — the catalogue's own list first (trending feed, "Most Searched" chart),
+  // or VinaX's own chart for /top-songs; the search seed when it misses.
   const trendingQ = useTrendingFeedSongs(cfg.feed === 'trending');
   const mostSearchedQ = useMostSearchedFeedSongs(cfg.feed === 'most-searched');
-  const feedQ = cfg.feed === 'trending' ? trendingQ : cfg.feed === 'most-searched' ? mostSearchedQ : null;
+  const vinaxQ = useVinaxChart(cfg.feed === 'vinax');
+  const feedQ = cfg.feed === 'trending' ? trendingQ : cfg.feed === 'most-searched' ? mostSearchedQ : cfg.feed === 'vinax' ? vinaxQ : null;
   const allowed = useShelfSafety();
   const feedSongs = feedQ && !feedQ.isError ? (feedQ.data ?? []).filter(allowed) : [];
-  const fromFeed = feedSongs.length > 0;
+  const fromFeed = feedSongs.length >= (cfg.feed === 'vinax' ? MIN_CHART_SONGS : 1);
+  const fromVinax = fromFeed && cfg.feed === 'vinax';
   const waitingForFeed = !!feedQ?.isLoading;
   const songsQ = useInfiniteSongs(cfg.seed, !fromFeed && !waitingForFeed);
   const songs = fromFeed ? feedSongs : flattenSongPages(songsQ.data?.pages);
@@ -148,7 +157,7 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
           titleText={cfg.h1}
           tone="var(--tone)"
           art={<HubCover songs={songs} icon={<WaveformIcon />} />}
-          meta={<EntityMeta items={['From the catalogue', songs.length > 0 && songsLabel(songs.length)]} />}
+          meta={<EntityMeta items={[fromVinax ? 'Most played on VinaX this week' : 'From the catalogue', songs.length > 0 && songsLabel(songs.length)]} />}
           actions={
             songs.length > 0 && (
               <>

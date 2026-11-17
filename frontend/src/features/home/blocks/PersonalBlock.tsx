@@ -80,7 +80,8 @@ export function PersonalBlock() {
 
   const mixCards = [
     ...(daily.data?.length ? [{ id: 'vinax-daily', title: 'VinaX Daily', subtitle: 'A fresh mix for today', songs: lens(daily.data, 'personal') }] : []),
-    ...(mixes.data ?? []).map((m: Mix) => ({ id: m.id, title: m.title, subtitle: m.explanation ?? `${m.songs.length} songs`, songs: lens(m.songs, 'personal') })),
+    // The discover-weekly mix is the same list as "For you this week" below (Your Week is built from it), so it gets no card of its own.
+    ...(mixes.data ?? []).filter((m: Mix) => m.kind !== 'discover-weekly').map((m: Mix) => ({ id: m.id, title: m.title, subtitle: m.explanation ?? `${m.songs.length} songs`, songs: lens(m.songs, 'personal') })),
   ];
 
   return (
@@ -121,7 +122,7 @@ export function PersonalBlock() {
       <DeferredBlock render={() => <SimilarArtistsShelf />} />
 
       <MoreShelves id="personal-more" label="More from your listening" hint="On this day, on repeat, most listened, rewinds">
-        {() => <MorePersonal mixes={mixes.data ?? []} />}
+        {() => <MorePersonal mixes={(mixes.data ?? []).filter((m) => m.kind !== 'discover-weekly')} />}
       </MoreShelves>
     </>
   );

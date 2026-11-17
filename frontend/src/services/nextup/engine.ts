@@ -18,6 +18,7 @@ import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { kidModeOn } from '@/services/kidMode';
 import { peekAnchor, readAnchor, type Anchor } from './anchor';
+import { isEpisode } from '@/features/podcasts/episode';
 
 // The player and the library reach the anchor through this module (one lazy chunk).
 export { addAnchorSeed, avoidArtist, removeAnchorSeed, startAnchor } from './anchor';
@@ -70,6 +71,8 @@ import { planLookups, planWideLookups, runLookups, type CatalogueApi, type Fetch
 
 export const NEXTUP_VERSION = '2.0.0';
 
+/** The queue of episodes ran out and the session has no music to follow on from. */
+export const EPISODES_END: PlanNotice = { text: 'That was the last episode in your queue', opts: { key: 'episodes-end' } };
 /** 1.4 — Never repeat found nothing unheard (the same words as the 9.x engine's notice). */
 const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
   text: "You've heard everything we can find here. Try Discover or another language",
@@ -461,6 +464,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const language = env.languages[0] ?? null;
   const empty = (fallback: FallbackReason | null): NextSongsPlan => ({ songs: [], picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed: [], discoveryIds: new Set(), language, commit: () => undefined, topUp: () => [] });
   if (!limit || signal?.aborted) return empty(null);
+  // A podcast episode is never a seed (anchor.ts): after one, Up Next follows
+  // the music this session started from, and with none it plays nothing.
+  if (!anchor.seeds.length && isEpisode(seed)) return { ...empty(null), notice: EPISODES_END };
 
   const { pool: p, moved } = poolFor(anchor, t0);
   // 1.14.4 — the liked songs and repeat plays are NOT put in the pool up
@@ -601,6 +607,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
 export function warmNextUp(seed: Song, ctx: RecommendationContext): void {
   const now = Date.now();
   const anchor = readAnchor(seed, now, ctx.history?.[0]?.ts ?? 0);
+  if (!anchor.seeds.length && isEpisode(seed)) return;
   const env = buildEnv(seed, ctx, anchor, {}, now);
   const { pool: p, moved } = poolFor(anchor, now);
   if (moved || p.items.size < POOL_LOW_WATER * 3) void refill(p, env, NEXTUP_DEADLINE_MS * 2);

@@ -3,11 +3,15 @@ import { timeOfDaySeed } from '@/constants/seeds';
 import { languageLabel } from '@/constants/languages';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { explainMix } from './explanations';
-import { dedupeByIdentity } from './songIdentity';
+import { dedupeByIdentity, songKey } from './songIdentity';
+import { heardCheck } from './admission';
+import { listenerFamiliarity } from './scoring';
 import type { Mix, RecommendationContext, ScoredCandidate } from './types';
 
 const MIX_SIZE = 20;
 const MIN_MIX_SIZE = 4;
+/** Your Week (/weekly) is the weekly discovery mix, at this length. */
+export const WEEK_SIZE = 30;
 
 function songsOf(list: ScoredCandidate[], n = MIX_SIZE): Song[] {
   return list.slice(0, n).map((s) => s.candidate.song);
@@ -20,9 +24,47 @@ function mix(
   songs: Song[],
   ctx: RecommendationContext,
   detail?: string,
+  size = MIX_SIZE,
 ): Mix | null {
   if (songs.length < MIN_MIX_SIZE) return null;
-  return { id, kind, title, explanation: explainMix(kind, ctx, detail), songs: songs.slice(0, MIX_SIZE) };
+  return { id, kind, title, explanation: explainMix(kind, ctx, detail), songs: songs.slice(0, size) };
+}
+
+/**
+ * The weekly discovery picks ("New to you this week", and Your Week at
+ * /weekly). Only songs the listener has never played: not in the listening
+ * history or taste profile, and not in the lifetime heard-set once it is
+ * loaded (`heard`, ./heardSet.ts). First the songs whose lead artist they
+ * have never played either, then topped up from the explore source, whose
+ * picks may be by any artist. At most three songs per lead artist. Pure: the
+ * week's salt and cache live with the caller (features/weekly/useWeeklyMix).
+ */
+export function weekDiscoveries(
+  ranked: ScoredCandidate[],
+  ctx: Pick<RecommendationContext, 'profile' | 'history'>,
+  n = WEEK_SIZE,
+  heard: ((key: string) => boolean) | undefined = heardCheck(),
+): Song[] {
+  const { knownArtists, playedSongIds } = listenerFamiliarity(ctx);
+  const leadOf = (s: Song): string => (s.artists?.[0]?.name ?? '').trim().toLowerCase();
+  const out: Song[] = [];
+  const taken = new Set<string>();
+  const perArtist = new Map<string, number>();
+  const pass = (pred: (s: ScoredCandidate) => boolean): void => {
+    for (const s of ranked) {
+      if (out.length >= n) return;
+      const song = s.candidate.song;
+      if (taken.has(song.id) || playedSongIds.has(song.id) || heard?.(songKey(song)) || !pred(s)) continue;
+      const lead = leadOf(song);
+      if (lead && (perArtist.get(lead) ?? 0) >= 3) continue;
+      perArtist.set(lead, (perArtist.get(lead) ?? 0) + 1);
+      taken.add(song.id);
+      out.push(song);
+    }
+  };
+  pass((s) => !knownArtists.has(leadOf(s.candidate.song)));
+  pass((s) => s.candidate.source === 'explore');
+  return out;
 }
 
 /**
@@ -190,12 +232,11 @@ export function buildMixes(rankedInput: ScoredCandidate[], ctx: RecommendationCo
     if (mRadio) out.push(mRadio);
   }
 
-  // The weekly discovery lane — refreshes every Monday (via getMondayStamp), pure
-  // discovery from candidates the listener has never played.
-  const seenIds = new Set(ctx.history.map((h) => h.song.id));
-  const discover = take((s) => !seenIds.has(s.candidate.song.id), 20, true);
+  // The weekly discovery lane — refreshes every Monday (via mondayStamp): songs
+  // never heard by artists never played (./weekDiscoveries). Your Week at
+  // /weekly is this same mix, built with the week's salt and kept until Monday.
   // 9.0.0 — its own name (the old title echoed another product's feature name).
-  const mDW = mix(`discover-weekly-${mondayStamp()}`, 'discover-weekly', 'New to you this week', songsOf(discover, 20), ctx);
+  const mDW = mix(`discover-weekly-${mondayStamp()}`, 'discover-weekly', 'New to you this week', weekDiscoveries(ranked, ctx), ctx, undefined, WEEK_SIZE);
   if (mDW) out.push(mDW);
 
   return out;

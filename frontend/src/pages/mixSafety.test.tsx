@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Your Week, Made for you and Mixes come out of caches (the week until
+ * Your Week and Made for you come out of caches (the week until
  * Monday, mixes for up to 30 minutes), so each page filters its songs with
  * the listener's CURRENT safety settings (useShelfSafety) when it renders,
  * and Play, Shuffle and Save use that same filtered list.
@@ -48,7 +48,6 @@ vi.mock('@/features/library/CollageCover', () => ({ CollageCover: () => null, co
 
 import WeeklyMixPage from './WeeklyMixPage';
 import MadeForYouPage from './MadeForYouPage';
-import MixesPage from './MixesPage';
 
 const mount = (el: ReactNode) => render(<MemoryRouter>{el}</MemoryRouter>);
 const ids = (list: Song[]) => list.map((s) => s.id);
@@ -89,17 +88,6 @@ describe('Made for you', () => {
     mount(<MadeForYouPage />);
     expect(screen.queryByText('Bravo')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Mix two' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Play all/ }));
-    expect(ids(playQueue.mock.calls[0][0] as Song[])).toEqual(['a']);
-  });
-});
-
-describe('Mixes', () => {
-  it('filters each mix the same way', () => {
-    mount(<MixesPage />);
-    expect(screen.queryByText('Bravo')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Mix two' })).toBeNull();
-    expect(screen.getAllByTestId('row').map((r) => r.dataset.list)).toEqual(['a']);
     fireEvent.click(screen.getByRole('button', { name: /Play all/ }));
     expect(ids(playQueue.mock.calls[0][0] as Song[])).toEqual(['a']);
   });

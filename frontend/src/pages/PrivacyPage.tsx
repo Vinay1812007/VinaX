@@ -69,6 +69,13 @@ export default function PrivacyPage() {
           batch, how many seconds of it you heard out of its length, whether you finished it, skipped it or liked it, and
           the same test group. <strong>Neither report names the song.</strong>
         </p>
+        <p>
+          The &ldquo;Most played on VinaX this week&rdquo; chart on Charts and Top songs is made from the &ldquo;a song
+          was played&rdquo; events above: plays shared by signed-in listeners over the last 7 days, added up for each
+          song. A song appears only
+          once at least 5 different accounts have played it, and the chart shows only the song, its rank and its
+          artwork &mdash; never who played it or how many times.
+        </p>
         <H>Session insights — only if you opt in</H>
         <p>
           A separate switch in Settings &rarr; Region &amp; privacy, off by default, turns on anonymous session

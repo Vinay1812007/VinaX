@@ -115,8 +115,8 @@ var Query = class {
   }
 };
 var q = /* @__PURE__ */ __name(() => new Query(), "q");
-function like(text) {
-  return text.replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\s+/g, " ").trim();
+function like(text2) {
+  return text2.replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\s+/g, " ").trim();
 }
 __name(like, "like");
 function quoteValue(v) {
@@ -168,10 +168,10 @@ __name(call, "call");
 async function rowsOf(r) {
   if (!r.ok) return { ...r, rows: [] };
   if (r.res.status === 204) return { ok: true, rows: [] };
-  const text = await r.res.text();
-  if (!text) return { ok: true, rows: [] };
+  const text2 = await r.res.text();
+  if (!text2) return { ok: true, rows: [] };
   try {
-    const body = JSON.parse(text);
+    const body = JSON.parse(text2);
     return { ok: true, rows: Array.isArray(body) ? body : [body] };
   } catch {
     return { ...fail("unavailable", r.res.status, null, "bad body"), rows: [] };
@@ -250,9 +250,9 @@ var db = {
   async rpc(env, fn, args = {}, opts = {}) {
     const r = await call(env, "POST", `rpc/${fn}`, args, opts);
     if (!r.ok) return r;
-    const text = await r.res.text();
+    const text2 = await r.res.text();
     try {
-      return { ok: true, value: text ? JSON.parse(text) : null };
+      return { ok: true, value: text2 ? JSON.parse(text2) : null };
     } catch {
       return fail("unavailable", r.res.status, null, "bad body");
     }
@@ -738,8 +738,8 @@ var bases = BASES;
 var ORIGIN = "https://www.vinaxmusic.online";
 var esc = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
 var jsonForScript = /* @__PURE__ */ __name((value) => JSON.stringify(value ?? null).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/[\u2028\u2029]/g, (c) => c === "\u2028" ? "\\u2028" : "\\u2029"), "jsonForScript");
-function slugify(text) {
-  return String(text ?? "").toLowerCase().normalize("NFKD").replace(/&[a-z]+;|&#x?[0-9a-f]+;/gi, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "x";
+function slugify(text2) {
+  return String(text2 ?? "").toLowerCase().normalize("NFKD").replace(/&[a-z]+;|&#x?[0-9a-f]+;/gi, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "x";
 }
 __name(slugify, "slugify");
 var LANG_TAG = {
@@ -1010,8 +1010,8 @@ async function buildMeta(type, id) {
     let bio = "";
     try {
       const b = typeof d2.bio === "string" ? JSON.parse(d2.bio) : d2.bio;
-      const text = Array.isArray(b) ? plain(b.find((x) => x?.text)?.text) : "";
-      bio = text.length > 700 ? `${text.slice(0, text.lastIndexOf(" ", 700))}\u2026` : text;
+      const text2 = Array.isArray(b) ? plain(b.find((x) => x?.text)?.text) : "";
+      bio = text2.length > 700 ? `${text2.slice(0, text2.lastIndexOf(" ", 700))}\u2026` : text2;
     } catch {
     }
     const artistPara = `${d2.name} is a${/^[aeiou]/.test(role) ? "n" : ""} ${role}` + (main ? ` whose songs on VinaX are mostly in ${capWord(main)}${others.length ? `, with others in ${listText(others.slice(0, 5))}` : ""}.` : ".") + (top.length ? ` The best-known include ${listText(top.slice(0, 3).map((t) => `\u201C${t.title}\u201D`))}.` : "") + (albums.length ? ` Albums and soundtracks on VinaX include ${listText(albums.slice(0, 3).map((a) => a.year ? `${a.name} (${a.year})` : a.name))}.` : "");
@@ -1160,8 +1160,8 @@ function matchHub(pathname) {
   return { lang: m2[1], mood: m2[2] };
 }
 __name(matchHub, "matchHub");
-function filmOf(text) {
-  const m2 = /\(From\s+["\u201c]([^"\u201d]+)["\u201d]\)/i.exec(String(text ?? ""));
+function filmOf(text2) {
+  const m2 = /\(From\s+["\u201c]([^"\u201d]+)["\u201d]\)/i.exec(String(text2 ?? ""));
   return m2 ? m2[1].trim() : void 0;
 }
 __name(filmOf, "filmOf");
@@ -1483,10 +1483,10 @@ async function verifyGoogleIdToken(env, token, now = Date.now()) {
 }
 __name(verifyGoogleIdToken, "verifyGoogleIdToken");
 var sessionSecret = /* @__PURE__ */ __name((env) => env.AUTH_SECRET?.trim() || env.DEVICE_ID_SECRET?.trim() || env.TELEMETRY_PEPPER?.trim() || null, "sessionSecret");
-async function hmac(secret, text) {
+async function hmac(secret, text2) {
   const enc8 = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc8.encode(`session:${secret}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return bytesToB64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc8.encode(text))));
+  return bytesToB64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc8.encode(text2))));
 }
 __name(hmac, "hmac");
 async function issueSession(env, sub, now = Date.now()) {
@@ -1568,9 +1568,9 @@ var fromB64url = /* @__PURE__ */ __name((s) => {
   return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }, "fromB64url");
 var secretOf2 = /* @__PURE__ */ __name((env) => env.AUTH_SECRET?.trim() || env.DEVICE_ID_SECRET?.trim() || env.TELEMETRY_PEPPER?.trim() || null, "secretOf");
-async function sign(secret, text) {
+async function sign(secret, text2) {
   const key = await crypto.subtle.importKey("raw", enc.encode(`admin-session:${secret}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(text))));
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(text2))));
 }
 __name(sign, "sign");
 var normEmail = /* @__PURE__ */ __name((v) => {
@@ -2045,17 +2045,17 @@ function redactSecrets(value, depth = 0, seen = /* @__PURE__ */ new WeakSet()) {
   return out;
 }
 __name(redactSecrets, "redactSecrets");
-async function digest(text) {
-  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+async function digest(text2) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text2)));
   return [...bytes.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 __name(digest, "digest");
 async function auditValue(value) {
   if (value === void 0) return null;
   const safe = redactSecrets(value);
-  const text = JSON.stringify(safe) ?? "null";
-  if (text.length <= AUDIT_VALUE_MAX) return safe;
-  return { omitted: "too_large", chars: text.length, sha256_64: await digest(text) };
+  const text2 = JSON.stringify(safe) ?? "null";
+  if (text2.length <= AUDIT_VALUE_MAX) return safe;
+  return { omitted: "too_large", chars: text2.length, sha256_64: await digest(text2) };
 }
 __name(auditValue, "auditValue");
 function requestId(request) {
@@ -2199,11 +2199,11 @@ function robotsTxt(raw, origin = "https://www.vinaxmusic.online") {
   return lines.join("\n");
 }
 __name(robotsTxt, "robotsTxt");
-function readRobotsBlocked(text) {
+function readRobotsBlocked(text2) {
   const blocked = [];
   let agents = [];
   let inRules = false;
-  for (const raw of String(text).split("\n")) {
+  for (const raw of String(text2).split("\n")) {
     const line = raw.replace(/#.*$/, "").trim();
     if (!line) continue;
     const i = line.indexOf(":");
@@ -2236,8 +2236,8 @@ async function get(url, timeoutMs = 8e3) {
   const timer = setTimeout(() => c.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: c.signal, redirect: "follow", headers: { "user-agent": "VinaX-Admin-SEO (like Googlebot)", "cache-control": "no-cache" } });
-    const text = await r.text();
-    return { status: r.status, ms: Date.now() - t0, text: text.slice(0, 15e5), type: r.headers.get("content-type") ?? "" };
+    const text2 = await r.text();
+    return { status: r.status, ms: Date.now() - t0, text: text2.slice(0, 15e5), type: r.headers.get("content-type") ?? "" };
   } catch {
     return { status: 0, ms: Date.now() - t0, text: "", type: "" };
   } finally {
@@ -2310,13 +2310,13 @@ function listedPaths(xmls, origin) {
   return [...out];
 }
 __name(listedPaths, "listedPaths");
-function readRobots(text) {
-  const sitemaps = [...text.matchAll(/^sitemap:\s*(\S+)/gim)].map((m2) => m2[1]);
+function readRobots(text2) {
+  const sitemaps = [...text2.matchAll(/^sitemap:\s*(\S+)/gim)].map((m2) => m2[1]);
   const blocked = [];
   let agents = [];
   let disallowAll = false;
   let inRules = false;
-  for (const raw of text.split("\n")) {
+  for (const raw of text2.split("\n")) {
     const line = raw.replace(/#.*$/, "").trim();
     if (!line) continue;
     const [k, ...rest] = line.split(":");
@@ -3603,10 +3603,10 @@ async function viaWrapper(base3, seg, search) {
       signal: ctrl.signal
     });
     if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) throw new Error(`wrapper ${r.status}`);
-    const text = await r.text();
-    if (!text.trim().startsWith("{") && !text.trim().startsWith("[")) throw new Error("wrapper body");
+    const text2 = await r.text();
+    if (!text2.trim().startsWith("{") && !text2.trim().startsWith("[")) throw new Error("wrapper body");
     const noStore = /no-store|private/i.test(r.headers.get("cache-control") ?? "");
-    return new Response(text, {
+    return new Response(text2, {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": noStore ? "no-store" : "public, max-age=60, s-maxage=600",
@@ -4511,8 +4511,8 @@ async function* parseWorkersAiStream(body, signal) {
       if (!j) continue;
       const thought = j.reasoning_content ?? j.choices?.[0]?.delta?.reasoning_content;
       if (thought) yield* split.reasoning(thought);
-      const text = j.response ?? j.choices?.[0]?.delta?.content;
-      if (text) yield* split.push(text);
+      const text2 = j.response ?? j.choices?.[0]?.delta?.content;
+      if (text2) yield* split.push(text2);
       if (j.choices?.[0]?.finish_reason === "length") reason = "length";
       if (j.usage) usage = { input: j.usage.prompt_tokens ?? 0, output: j.usage.completion_tokens ?? 0 };
     }
@@ -5116,14 +5116,14 @@ function voiceRestSnapshot(now = Date.now()) {
   return [...rests2].filter(([, until]) => until > now).map(([model, until]) => ({ model, until: new Date(until).toISOString() }));
 }
 __name(voiceRestSnapshot, "voiceRestSnapshot");
-function isMostlyArabic(text) {
-  const letters = text.match(/\p{L}/gu)?.length ?? 0;
-  const arabic = text.match(/\p{Script=Arabic}/gu)?.length ?? 0;
+function isMostlyArabic(text2) {
+  const letters = text2.match(/\p{L}/gu)?.length ?? 0;
+  const arabic = text2.match(/\p{Script=Arabic}/gu)?.length ?? 0;
   return letters > 0 && arabic / letters > 0.5;
 }
 __name(isMostlyArabic, "isMostlyArabic");
-function splitSpeech(text, max) {
-  const clean2 = text.replace(/\s+/g, " ").trim();
+function splitSpeech(text2, max) {
+  const clean2 = text2.replace(/\s+/g, " ").trim();
   if (!clean2) return [];
   const sentences = clean2.match(/[^.!?…。؟]+(?:[.!?…。؟]+["'”’)]*|$)\s*/g) ?? [clean2];
   const units = [];
@@ -5153,7 +5153,7 @@ function splitSpeech(text, max) {
 }
 __name(splitSpeech, "splitSpeech");
 var TTS_TIMEOUT_MS = 25e3;
-async function orpheusSpeak(env, model, voice, text, signal) {
+async function orpheusSpeak(env, model, voice, text2, signal) {
   const key = groqKey(env);
   if (!key) throw new ProviderError("not_configured");
   const timeout = AbortSignal.timeout(TTS_TIMEOUT_MS);
@@ -5162,7 +5162,7 @@ async function orpheusSpeak(env, model, voice, text, signal) {
     const res = await fetch(`${GROQ}/audio/speech`, {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ model, input: text, voice, response_format: "wav" }),
+      body: JSON.stringify({ model, input: text2, voice, response_format: "wav" }),
       signal: sig
     });
     if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
@@ -5184,7 +5184,7 @@ function inlineAudio(body) {
   return { data: body.slice(start, end), mime };
 }
 __name(inlineAudio, "inlineAudio");
-async function geminiSpeak(env, model, voice, text, signal) {
+async function geminiSpeak(env, model, voice, text2, signal) {
   const key = geminiKey(env);
   if (!key) throw new ProviderError("not_configured");
   const shapes = [{ voice }, { prebuiltVoiceConfig: { voiceName: voice } }];
@@ -5197,7 +5197,7 @@ async function geminiSpeak(env, model, voice, text, signal) {
         method: "POST",
         headers: { "x-goog-api-key": key, "content-type": "application/json" },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text }] }],
+          contents: [{ role: "user", parts: [{ text: text2 }] }],
           generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig } }
         }),
         signal: sig
@@ -5218,15 +5218,15 @@ async function geminiSpeak(env, model, voice, text, signal) {
 }
 __name(geminiSpeak, "geminiSpeak");
 var geminiTtsModels = /* @__PURE__ */ __name((env, now = Date.now()) => geminiKey(env) ? TTS_GEMINI_MODELS.filter((m2) => !voiceResting(m2, now)) : [], "geminiTtsModels");
-function planSpeech(env, text, voices, now = Date.now()) {
-  const arabic = isMostlyArabic(text);
+function planSpeech(env, text2, voices, now = Date.now()) {
+  const arabic = isMostlyArabic(text2);
   const orpheus = arabic ? TTS_ARABIC : TTS_ENGLISH;
   const orpheusOk = !!groqKey(env) && !voiceResting(orpheus, now);
   const gemini3 = geminiTtsModels(env, now);
-  if (orpheusOk && (text.length <= ORPHEUS_REPLY_MAX || !gemini3.length)) {
-    return { engine: "orpheus", model: orpheus, voice: arabic ? ARABIC_VOICE : voices.read, pieces: splitSpeech(text, ORPHEUS_MAX_CHARS) };
+  if (orpheusOk && (text2.length <= ORPHEUS_REPLY_MAX || !gemini3.length)) {
+    return { engine: "orpheus", model: orpheus, voice: arabic ? ARABIC_VOICE : voices.read, pieces: splitSpeech(text2, ORPHEUS_MAX_CHARS) };
   }
-  if (gemini3.length) return { engine: "gemini", model: gemini3[0], voice: voices.live, pieces: splitSpeech(text, GEMINI_TTS_CHARS) };
+  if (gemini3.length) return { engine: "gemini", model: gemini3[0], voice: voices.live, pieces: splitSpeech(text2, GEMINI_TTS_CHARS) };
   return null;
 }
 __name(planSpeech, "planSpeech");
@@ -5322,12 +5322,12 @@ async function geminiTranscribe(env, clip3, mime, models) {
         signal: sig
       });
       if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-      const text = replyText(await res.json().catch(() => null));
-      if (!text && model === "gemini-3.5-transcribe") {
+      const text2 = replyText(await res.json().catch(() => null));
+      if (!text2 && model === "gemini-3.5-transcribe") {
         last = new ProviderError("empty");
         continue;
       }
-      return { text, model };
+      return { text: text2, model };
     } catch (e) {
       last = asProviderError(e, sig);
       noteVoiceFailure(model, last);
@@ -5748,13 +5748,13 @@ function discoveredSpecs(states) {
   return out;
 }
 __name(discoveredSpecs, "discoveredSpecs");
-function openRouterFreeEntries(text) {
+function openRouterFreeEntries(text2) {
   const MARK = '{"id":"';
   const starts = [];
-  for (let i = text.indexOf(MARK); i >= 0; i = text.indexOf(MARK, i + MARK.length)) starts.push(i);
+  for (let i = text2.indexOf(MARK); i >= 0; i = text2.indexOf(MARK, i + MARK.length)) starts.push(i);
   if (!starts.length) {
     try {
-      return JSON.parse(text);
+      return JSON.parse(text2);
     } catch {
       return null;
     }
@@ -5762,7 +5762,7 @@ function openRouterFreeEntries(text) {
   const data = [];
   for (let k = 0; k < starts.length; k++) {
     const a = starts[k];
-    const seg = text.slice(a, k + 1 < starts.length ? starts[k + 1] : text.length);
+    const seg = text2.slice(a, k + 1 < starts.length ? starts[k + 1] : text2.length);
     const id = seg.slice(MARK.length, seg.indexOf('"', MARK.length));
     const zeroPriced = /"prompt":"0(?:\.0+)?"/.test(seg) && /"completion":"0(?:\.0+)?"/.test(seg);
     if (!id.endsWith(":free") && !zeroPriced) continue;
@@ -6146,9 +6146,9 @@ __name(foundModelFor, "foundModelFor");
 var LONG_THREAD_CHARS = 15e4;
 var CODE_CUES = /```|\bfunction\b|\bbugs?\b|stack ?trace|traceback|exception|\berror:|\bat [\w.$<>]+ \(|\bconst |\blet |\bdef |\bclass |\bimport |#include|\bSELECT\b.+\bFROM\b|=>|\b\w+\.(?:js|jsx|ts|tsx|py|java|kt|go|rs|rb|php|cs|cpp|c|h|swift|sql|sh|html|css|json|ya?ml|toml|vue|svelte|dart)\b|\bregex\b|\bcompile|\bdebug/i;
 var SMALL_TALK = /^(?:hi+|hey+|hello+|hiya|yo|sup|thanks?|thank you|thx|ty|ok(?:ay)?|cool|nice|great|awesome|good (?:morning|afternoon|evening|night)|gm|gn|bye|see you|lol|haha+|namaste)\b/i;
-var hasCodeCues = /* @__PURE__ */ __name((text) => CODE_CUES.test(text), "hasCodeCues");
-function isSmallTalk(text) {
-  const t = text.trim();
+var hasCodeCues = /* @__PURE__ */ __name((text2) => CODE_CUES.test(text2), "hasCodeCues");
+function isSmallTalk(text2) {
+  const t = text2.trim();
   if (!t || t.includes("?")) return false;
   const words = t.split(/\s+/).length;
   return words < 6 && SMALL_TALK.test(t) && !hasCodeCues(t);
@@ -6264,25 +6264,25 @@ var searchMode = /* @__PURE__ */ __name((v) => v === "on" || v === "off" ? v : "
 var RECENCY = /\b(today|tonight|tomorrow|yesterday|this (week|weekend|month|year|season)|right now|currently|current|latest|newest|recent(ly)?|breaking|news|headlines?|update[sd]?|announce[ds]?|released?|launch(ed)?|price|prices|cost(s)?|rate|rates|stock|shares?|score[sd]?|result[sd]?|match|fixture|standings|weather|forecast|temperature|election|poll|who won|who is winning|box office|trending|live|schedule|open now|deadline|upcoming|in theatres|ott)\b/i;
 var IS_OPEN = /\bis\b[^.?!]{1,60}\bopen\b/i;
 var LINK = /https?:\/\/\S+|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|org|net|in|io|dev|ai|co|gov|edu|info|me|app|news|tv|online|site|xyz|store|shop|blog|tech|music|uk|us|ca|au|de|fr|jp)\b/i;
-function hasRecencyCue(text, now = /* @__PURE__ */ new Date()) {
-  if (RECENCY.test(text) || IS_OPEN.test(text) || LINK.test(text)) return true;
+function hasRecencyCue(text2, now = /* @__PURE__ */ new Date()) {
+  if (RECENCY.test(text2) || IS_OPEN.test(text2) || LINK.test(text2)) return true;
   const year = now.getUTCFullYear();
-  for (const m2 of text.matchAll(/\b(19|20)\d{2}\b/g)) if (Number(m2[0]) >= year - 1) return true;
+  for (const m2 of text2.matchAll(/\b(19|20)\d{2}\b/g)) if (Number(m2[0]) >= year - 1) return true;
   return false;
 }
 __name(hasRecencyCue, "hasRecencyCue");
-function wantsSearch(text, mode, now = /* @__PURE__ */ new Date()) {
-  if (mode === "off" || !text.trim()) return false;
-  return mode === "on" || hasRecencyCue(text, now);
+function wantsSearch(text2, mode, now = /* @__PURE__ */ new Date()) {
+  if (mode === "off" || !text2.trim()) return false;
+  return mode === "on" || hasRecencyCue(text2, now);
 }
 __name(wantsSearch, "wantsSearch");
-function topicOf(text) {
-  return /\b(news|today|tonight|latest|breaking|headlines?|score[sd]?|match|weather|price|prices|stock|election|live)\b/i.test(text) ? "news" : "general";
+function topicOf(text2) {
+  return /\b(news|today|tonight|latest|breaking|headlines?|score[sd]?|match|weather|price|prices|stock|election|live)\b/i.test(text2) ? "news" : "general";
 }
 __name(topicOf, "topicOf");
 var STOP = new Set("a an the and or but of to in on at for with from by about as is are was were be been it its this that these those what which who whom how why when where can could should would will do does did i me my we our you your he she they them their please tell show give explain more also just like than then so if not any some there here".split(" "));
-function keyWords(text, max = 6) {
-  const words = text.replace(/https?:\/\/\S+/g, " ").toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'.-]*/gu) ?? [];
+function keyWords(text2, max = 6) {
+  const words = text2.replace(/https?:\/\/\S+/g, " ").toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'.-]*/gu) ?? [];
   const out = [];
   for (const w of words) if (!STOP.has(w) && w.length > 1 && !out.includes(w)) out.push(w);
   return out.slice(0, max);
@@ -6410,35 +6410,35 @@ async function searchWeb(env, query2, topic, now = Date.now(), ownerCap = null) 
   return { ok: true, sources: out.sources, cached: false, provider };
 }
 __name(searchWeb, "searchWeb");
-function charIndexOfByte(text, byte) {
+function charIndexOfByte(text2, byte) {
   const enc8 = new TextEncoder();
   let bytes = 0;
   let i = 0;
-  for (const ch of text) {
+  for (const ch of text2) {
     if (bytes >= byte) return i;
     bytes += enc8.encode(ch).length;
     i += ch.length;
   }
-  return text.length;
+  return text2.length;
 }
 __name(charIndexOfByte, "charIndexOfByte");
-function placeMarkers(text, supports) {
+function placeMarkers(text2, supports) {
   const fences2 = [];
   const re = /```[\s\S]*?(```|$)/g;
-  for (let m2 = re.exec(text); m2; m2 = re.exec(text)) fences2.push([m2.index, m2.index + m2[0].length]);
+  for (let m2 = re.exec(text2); m2; m2 = re.exec(text2)) fences2.push([m2.index, m2.index + m2[0].length]);
   const inFence = /* @__PURE__ */ __name((i) => fences2.some(([a, b]) => i > a && i < b), "inFence");
   const byAt = /* @__PURE__ */ new Map();
   let from = 0;
   for (const s of supports) {
     let at = -1;
     if (s.text) {
-      const idx = text.indexOf(s.text, Math.max(0, from - s.text.length));
-      const found = idx >= 0 ? idx : text.indexOf(s.text);
+      const idx = text2.indexOf(s.text, Math.max(0, from - s.text.length));
+      const found = idx >= 0 ? idx : text2.indexOf(s.text);
       if (found >= 0) at = found + s.text.length;
     }
-    if (at < 0 && s.endIndex >= 0) at = charIndexOfByte(text, s.endIndex);
-    if (at < 0 || at > text.length) continue;
-    while (at < text.length && /[\p{L}\p{N}]/u.test(text[at])) at++;
+    if (at < 0 && s.endIndex >= 0) at = charIndexOfByte(text2, s.endIndex);
+    if (at < 0 || at > text2.length) continue;
+    while (at < text2.length && /[\p{L}\p{N}]/u.test(text2[at])) at++;
     if (inFence(at)) continue;
     from = at;
     const set2 = byAt.get(at) ?? /* @__PURE__ */ new Set();
@@ -6448,14 +6448,14 @@ function placeMarkers(text, supports) {
   return [...byAt.entries()].sort((a, b) => a[0] - b[0]).map(([at, ns]) => ({ at, ns: [...ns].sort((x, y) => x - y) }));
 }
 __name(placeMarkers, "placeMarkers");
-function applyMarkers(text, markers) {
+function applyMarkers(text2, markers) {
   let out = "";
   let last = 0;
   for (const m2 of [...markers].sort((a, b) => a.at - b.at)) {
-    out += text.slice(last, m2.at) + m2.ns.map((n3) => `[${n3}]`).join("");
+    out += text2.slice(last, m2.at) + m2.ns.map((n3) => `[${n3}]`).join("");
     last = m2.at;
   }
-  return out + text.slice(last);
+  return out + text2.slice(last);
 }
 __name(applyMarkers, "applyMarkers");
 
@@ -7114,8 +7114,8 @@ async function query(env, now, timeoutMs) {
     const json15 = obj3(await res.json().catch(() => null));
     const errors = Array.isArray(json15.errors) ? json15.errors : [];
     if (errors.length && !obj3(json15.data).viewer) {
-      const text = errors.map((e) => str(obj3(e).message)).join(" ").toLowerCase();
-      return { ok: false, reason: /auth|permission|access|not allowed|token/.test(text) ? "unauthorized" : "failed" };
+      const text2 = errors.map((e) => str(obj3(e).message)).join(" ").toLowerCase();
+      return { ok: false, reason: /auth|permission|access|not allowed|token/.test(text2) ? "unauthorized" : "failed" };
     }
     const usage = usageFrom(json15, now);
     if (!usage) return { ok: false, reason: errors.length ? "failed" : "unauthorized" };
@@ -7463,9 +7463,9 @@ function attachmentPart(r) {
   return { type: "attachment", id: r.id, name: r.name, mime: r.mime, kind: r.kind, size: r.size, ...r.pages ? { pages: r.pages } : {} };
 }
 __name(attachmentPart, "attachmentPart");
-function documentBlock(name, text) {
-  const body = text.length > MAX_EXTRACTED_CHARS ? `${text.slice(0, MAX_EXTRACTED_CHARS)}
-[\u2026 the rest of this file was left out \u2026]` : text;
+function documentBlock(name, text2) {
+  const body = text2.length > MAX_EXTRACTED_CHARS ? `${text2.slice(0, MAX_EXTRACTED_CHARS)}
+[\u2026 the rest of this file was left out \u2026]` : text2;
   return `<document name="${name.replace(/"/g, "'")}">
 ${body.replace(/<\/document>/gi, "</ document>")}
 </document>`;
@@ -8391,9 +8391,9 @@ var onRequestPost8 = adminPost(async ({ env, body, audit: audit2, me }) => {
   }
   if (body.action === "reply") {
     const id = idOf2(body.id);
-    const text = clip(body.message, 300);
+    const text2 = clip(body.message, 300);
     const title = clip(body.title, 120) ?? "Thanks for your feedback";
-    if (!id || !text) return badRequest("message_required");
+    if (!id || !text2) return badRequest("message_required");
     const e = env;
     if (!pushConfigured(e) && !fcmConfigured(e)) return adminJson({ error: "push_not_configured" }, 400);
     const fb = await db.one(env, "feedback", q().eq("id", id).select("id,listener_id,note,status"));
@@ -8405,11 +8405,11 @@ var onRequestPost8 = adminPost(async ({ env, body, audit: audit2, me }) => {
     if (!devs.ok) return adminJson({ error: "db_unavailable" }, 502);
     if (!devs.rows.length) return adminJson({ error: "no_device", message: "This person has not turned on notifications on any phone or browser." }, 409);
     const digest2 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${title}
-${text}`)))].slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
+${text2}`)))].slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
     const made = await db.insert(env, "notifications", {
       kind: "announcement",
       title,
-      body: text,
+      body: text2,
       link: "/",
       status: "sent",
       created_by: me.email,
@@ -8421,13 +8421,13 @@ ${text}`)))].slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
     }, { returning: true });
     if (!made.ok && made.error === "conflict") return adminJson({ error: "duplicate", message: "This reply was already sent." }, 409);
     if (!made.ok) return dbFailure(made);
-    const msg = { title, body: text, link: "/", id: made.rows[0]?.id };
+    const msg = { title, body: text2, link: "/", id: made.rows[0]?.id };
     const report = await fanOut(e, devs.rows, msg);
     if (made.rows[0]?.id != null) await recordReceipt(env, made.rows[0].id, report);
     const sent = report.web.sent + report.fcm.sent;
-    const note = [fb.value.note, `Replied by notification ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}: ${text}`].filter(Boolean).join("\n").slice(0, 1e3);
+    const note = [fb.value.note, `Replied by notification ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}: ${text2}`].filter(Boolean).join("\n").slice(0, 1e3);
     await db.update(env, "feedback", q().eq("id", id), { note, ...fb.value.status === "new" ? { status: "read" } : {} });
-    await audit2({ action: "feedback-reply", summary: `replied to feedback #${id} by notification (${sent} of ${devs.rows.length} devices)`, target: String(id), after: { title, body: text } });
+    await audit2({ action: "feedback-reply", summary: `replied to feedback #${id} by notification (${sent} of ${devs.rows.length} devices)`, target: String(id), after: { title, body: text2 } });
     return adminJson({ ok: true, sent, devices: devs.rows.length });
   }
   return badRequest("unknown_action");
@@ -8762,8 +8762,8 @@ var audienceJson = /* @__PURE__ */ __name((a, ts, reach) => ({ ...a.filter, ...a
 var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
   const e = env;
   const title = clip(body.title, 120) ?? "VinaX";
-  const text = clip(body.body, 300);
-  if (!text) return badRequest("body_required");
+  const text2 = clip(body.body, 300);
+  if (!text2) return badRequest("body_required");
   const link = clip(body.link, 300) ?? "/";
   if (!isInternalLink(link)) return badRequest("bad_link");
   const image = cleanImage(body.image);
@@ -8777,11 +8777,11 @@ var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
     if (!own2.ok) return dbFailure(own2);
     if (!own2.rows.length) return adminJson({ error: "no_own_devices", message: "Your account has no phone or browser set up for notifications yet. Turn notifications on in the VinaX app while signed in with this Google account." }, 400);
     if (!pushConfigured(e) && !fcmConfigured(e)) return adminJson({ error: "push_not_configured" }, 400);
-    const report2 = await fanOut(e, own2.rows, { title, body: text, link, image });
+    const report2 = await fanOut(e, own2.rows, { title, body: text2, link, image });
     return adminJson({ ok: true, test: true, devices: own2.rows.length, web: report2.web, fcm: report2.fcm });
   }
   if (body.draft === true) {
-    const row = { kind: "announcement", title, body: text, link, image, audience: audienceJson(audience, now), status: "draft", created_by: me.email, sent_by: me.email };
+    const row = { kind: "announcement", title, body: text2, link, image, audience: audienceJson(audience, now), status: "draft", created_by: me.email, sent_by: me.email };
     const w = draftId ? await db.update(env, "notifications", q().eq("id", draftId).eq("status", "draft"), row, { returning: true }) : await db.insert(env, "notifications", row, { returning: true });
     if (!w.ok) return dbFailure(w);
     if (!w.rows.length) return adminJson({ error: "not_found" }, 404);
@@ -8808,7 +8808,7 @@ var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
     const row = {
       kind: "announcement",
       title,
-      body: text,
+      body: text2,
       link,
       image,
       audience: audienceJson(audience, now, reach),
@@ -8833,7 +8833,7 @@ var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
   const rowFields = {
     kind: "announcement",
     title,
-    body: text,
+    body: text2,
     link,
     image,
     audience: audienceJson(audience, ts, reach),
@@ -8848,11 +8848,11 @@ var onRequestPost12 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (!made.ok) return dbFailure(made);
   if (draftId && !made.rows.length) return adminJson({ error: "not_found" }, 404);
   const id = made.rows[0]?.id ?? null;
-  const msg = { title, body: text, link, image, id };
+  const msg = { title, body: text2, link, image, id };
   const report = await fanOut(e, capped.allowed, msg);
   if (id !== null) await recordReceipt(env, id, report, sentAt);
   if (audience.everyone) await publishAnnouncement(env, msg, ts);
-  await audit2({ action: "push-send", summary: `"${title.slice(0, 60)}" to ${audience.label}`, target: audience.label, after: { title, body: text, link, audience: audience.label, web: report.web.sent, fcm: report.fcm.sent } });
+  await audit2({ action: "push-send", summary: `"${title.slice(0, 60)}" to ${audience.label}`, target: audience.label, after: { title, body: text2, link, audience: audience.label, web: report.web.sent, fcm: report.fcm.sent } });
   return adminJson({
     ok: true,
     id,
@@ -9938,9 +9938,9 @@ var FEAT_BRACKET = /\s*[([]\s*(?:feat|ft|featuring)\b[^)\]]*[)\]]/gi;
 var FEAT_TRAIL = /\s+(?:feat\.?|ft\.?|featuring)\s+.+$/i;
 var FROM_TRAIL = /\s*[-–—]\s*from\s+.+$/i;
 var ARTIST_SPLIT = /\s*(?:[,&;/]|\s(?:feat|ft)\.?\s|\sfeaturing\s)\s*/i;
-var squash = /* @__PURE__ */ __name((text) => text.replace(/[^\p{L}\p{N}\p{M}]+/gu, ""), "squash");
-function normalizeIdentityText(text) {
-  return String(text ?? "").normalize("NFKC").replace(INVISIBLE, "").normalize("NFD").replace(LATIN_MARKS, "").normalize("NFC").toLowerCase();
+var squash = /* @__PURE__ */ __name((text2) => text2.replace(/[^\p{L}\p{N}\p{M}]+/gu, ""), "squash");
+function normalizeIdentityText(text2) {
+  return String(text2 ?? "").normalize("NFKC").replace(INVISIBLE, "").normalize("NFD").replace(LATIN_MARKS, "").normalize("NFC").toLowerCase();
 }
 __name(normalizeIdentityText, "normalizeIdentityText");
 function primaryArtistName(artist) {
@@ -10025,9 +10025,9 @@ function indicBlock(cp) {
   return null;
 }
 __name(indicBlock, "indicBlock");
-function scriptLanguage(text) {
+function scriptLanguage(text2) {
   const counts = /* @__PURE__ */ new Map();
-  for (const ch of String(text ?? "")) {
+  for (const ch of String(text2 ?? "")) {
     const b = indicBlock(ch.codePointAt(0) ?? 0);
     if (b) counts.set(b.script, (counts.get(b.script) ?? 0) + 1);
   }
@@ -10040,12 +10040,12 @@ function scriptLanguage(text) {
   return best;
 }
 __name(scriptLanguage, "scriptLanguage");
-function hasIndic(text) {
-  return scriptLanguage(text) !== null || [...text].some((ch) => indicBlock(ch.codePointAt(0) ?? 0) !== null);
+function hasIndic(text2) {
+  return scriptLanguage(text2) !== null || [...text2].some((ch) => indicBlock(ch.codePointAt(0) ?? 0) !== null);
 }
 __name(hasIndic, "hasIndic");
-function transliterate(text) {
-  const chars = [...String(text ?? "").normalize("NFC")];
+function transliterate(text2) {
+  const chars = [...String(text2 ?? "").normalize("NFC")];
   let out = "";
   for (let i = 0; i < chars.length; i++) {
     const cp = chars[i].codePointAt(0) ?? 0;
@@ -10085,8 +10085,8 @@ function transliterate(text) {
   return out;
 }
 __name(transliterate, "transliterate");
-function latinKey(text) {
-  let s = normalizeIdentityText(hasIndic(text) ? transliterate(text) : text);
+function latinKey(text2) {
+  let s = normalizeIdentityText(hasIndic(text2) ? transliterate(text2) : text2);
   s = s.replace(/[^\p{L}\p{N}]+/gu, "");
   s = s.replace(/aa+/g, "a").replace(/ee|ii/g, "i").replace(/oo|uu/g, "u").replace(/ph/g, "f").replace(/w/g, "v").replace(/q/g, "k").replace(/ck/g, "k").replace(/z/g, "j").replace(/([kgcjtdpbs])h/g, "$1").replace(/iy(?=[aeiou])/g, "i").replace(/(.)\1+/g, "$1");
   return s;
@@ -11186,9 +11186,9 @@ function publicGreeting(g, now = /* @__PURE__ */ new Date()) {
     const t = str3(g[k], 160);
     if (t) parts[k] = t;
   }
-  const text = str3(g.text, 160) || parts.morning || parts.afternoon || parts.evening || parts.night || "";
-  if (!text) return null;
-  return { text, ...Object.keys(parts).length ? { parts } : {}, ...g.withName === true ? { withName: true } : {} };
+  const text2 = str3(g.text, 160) || parts.morning || parts.afternoon || parts.evening || parts.night || "";
+  if (!text2) return null;
+  return { text: text2, ...Object.keys(parts).length ? { parts } : {}, ...g.withName === true ? { withName: true } : {} };
 }
 __name(publicGreeting, "publicGreeting");
 function publicBroadcast(b, now = /* @__PURE__ */ new Date()) {
@@ -11322,8 +11322,8 @@ function upcomingMaintenance(raw, now = /* @__PURE__ */ new Date()) {
   };
 }
 __name(upcomingMaintenance, "upcomingMaintenance");
-var BANNER_PAGES = ["/charts", "/discover", "/radio", "/mixes", "/made-for-you", "/weekly", "/vinaxai", "/library", "/search"];
-var BANNER_PAGE_MOVED = { "/explore": "/discover" };
+var BANNER_PAGES = ["/charts", "/discover", "/radio", "/made-for-you", "/weekly", "/vinaxai", "/library", "/search"];
+var BANNER_PAGE_MOVED = { "/explore": "/discover", "/mixes": "/made-for-you" };
 function activeBanners(value, now = /* @__PURE__ */ new Date()) {
   if (!Array.isArray(value)) return [];
   const today = now.toISOString().slice(0, 10);
@@ -11768,20 +11768,111 @@ var onRequestGet35 = /* @__PURE__ */ __name(async (context) => {
   return json8({ flags: publicFlags(values.flags) }, 60);
 }, "onRequestGet");
 
+// functions/api/charts/vinax.ts
+var vinax_exports = {};
+__export(vinax_exports, {
+  CACHE_S: () => CACHE_S,
+  CHART_DAYS: () => CHART_DAYS,
+  CHART_POOL: () => CHART_POOL,
+  MIN_LISTENERS: () => MIN_LISTENERS,
+  onRequestGet: () => onRequestGet36,
+  onRequestOptions: () => onRequestOptions4,
+  publicChart: () => publicChart,
+  resetChartMemo: () => resetChartMemo
+});
+var CHART_DAYS = 7;
+var CHART_POOL = 100;
+var MIN_LISTENERS = 5;
+var CACHE_S = 3 * 60 * 60;
+var EMPTY_CACHE_S = 5 * 60;
+var EDGE_KEY = "https://vinax-charts.internal/v1/vinax";
+var CORS4 = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, OPTIONS"
+};
+var text = /* @__PURE__ */ __name((v, max) => typeof v === "string" ? v.trim().slice(0, max) : "", "text");
+var num5 = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0, "num");
+function publicChart(data, now = /* @__PURE__ */ new Date()) {
+  const raw = data && typeof data === "object" ? data.songs : null;
+  const rows3 = Array.isArray(raw) ? raw : [];
+  const kept = rows3.map((r) => r && typeof r === "object" ? r : {}).filter((r) => num5(r.listeners) >= MIN_LISTENERS && text(r.id, 64) && text(r.title, 200)).sort((a, b) => num5(a.rank) - num5(b.rank));
+  const seen = /* @__PURE__ */ new Set();
+  const songs = [];
+  for (const r of kept) {
+    const id = text(r.id, 64);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const image = text(r.image, 500);
+    songs.push({ id, title: text(r.title, 200), artist: text(r.artist, 200), image: /^https:\/\//.test(image) ? image : null, rank: songs.length + 1 });
+  }
+  return { updatedAt: now.toISOString(), days: CHART_DAYS, minListeners: MIN_LISTENERS, songs };
+}
+__name(publicChart, "publicChart");
+var memo6 = null;
+function resetChartMemo() {
+  memo6 = null;
+}
+__name(resetChartMemo, "resetChartMemo");
+var edgeCache4 = /* @__PURE__ */ __name(() => globalThis.caches?.default ?? null, "edgeCache");
+function respond2(body, maxAge) {
+  return new Response(body, {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": `public, max-age=${Math.min(maxAge, 30 * 60)}, s-maxage=${maxAge}`,
+      ...CORS4
+    }
+  });
+}
+__name(respond2, "respond");
+var onRequestOptions4 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS4 }), "onRequestOptions");
+var onRequestGet36 = /* @__PURE__ */ __name(async (context) => {
+  const now = Date.now();
+  if (memo6 && now < memo6.until) return respond2(memo6.body, Math.max(60, Math.floor((memo6.until - now) / 1e3)));
+  const cache = edgeCache4();
+  if (cache) {
+    try {
+      const hit = await cache.match(EDGE_KEY);
+      if (hit) {
+        const body2 = await hit.text();
+        const at = Date.parse(String(JSON.parse(body2).updatedAt));
+        if (Number.isFinite(at) && now - at < CACHE_S * 1e3) {
+          memo6 = { until: at + CACHE_S * 1e3, body: body2 };
+          return respond2(body2, Math.max(60, CACHE_S - Math.floor((now - at) / 1e3)));
+        }
+      }
+    } catch {
+    }
+  }
+  const r = await db.rpc(context.env ?? {}, "stats_trending", { p_days: CHART_DAYS, p_limit: CHART_POOL });
+  if (!r.ok) {
+    const empty = JSON.stringify(publicChart(null, new Date(now)));
+    memo6 = { until: now + EMPTY_CACHE_S * 1e3, body: empty };
+    return respond2(empty, EMPTY_CACHE_S);
+  }
+  const body = JSON.stringify(publicChart(r.value, new Date(now)));
+  memo6 = { until: now + CACHE_S * 1e3, body };
+  if (cache) {
+    const put = cache.put(EDGE_KEY, respond2(body, CACHE_S)).catch(() => void 0);
+    if (context.waitUntil) context.waitUntil(put);
+    else await put;
+  }
+  return respond2(body, CACHE_S);
+}, "onRequestGet");
+
 // functions/api/blocklist.ts
 var blocklist_exports = {};
 __export(blocklist_exports, {
-  onRequestGet: () => onRequestGet36,
-  onRequestOptions: () => onRequestOptions4
+  onRequestGet: () => onRequestGet37,
+  onRequestOptions: () => onRequestOptions5
 });
-var CORS4 = {
+var CORS5 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var answer = /* @__PURE__ */ __name((body) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...CORS4 } }), "answer");
-var onRequestOptions4 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS4 }), "onRequestOptions");
-var onRequestGet36 = /* @__PURE__ */ __name(async (ctx) => {
+var answer = /* @__PURE__ */ __name((body) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...CORS5 } }), "answer");
+var onRequestOptions5 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS5 }), "onRequestOptions");
+var onRequestGet37 = /* @__PURE__ */ __name(async (ctx) => {
   const env = ctx?.env ?? {};
   const empty = { ids: [], albums: [], artists: [], keywords: [] };
   if (!dbConfigured(env)) return answer(empty);
@@ -11805,7 +11896,7 @@ __export(events_exports, {
   EVENTS_REQUEST_HEADERS: () => EVENTS_REQUEST_HEADERS,
   eventsCors: () => eventsCors,
   isReservedKind: () => isReservedKind,
-  onRequestOptions: () => onRequestOptions5,
+  onRequestOptions: () => onRequestOptions6,
   onRequestPost: () => onRequestPost23,
   sanitizeMeta: () => sanitizeMeta
 });
@@ -11949,7 +12040,7 @@ function sanitizeMeta(kind, raw) {
   return new TextEncoder().encode(JSON.stringify(out)).length <= META_MAX_BYTES ? out : null;
 }
 __name(sanitizeMeta, "sanitizeMeta");
-var onRequestOptions5 = /* @__PURE__ */ __name(async (context) => new Response(null, { status: 204, headers: eventsCors(context.request.headers.get("origin")) }), "onRequestOptions");
+var onRequestOptions6 = /* @__PURE__ */ __name(async (context) => new Response(null, { status: 204, headers: eventsCors(context.request.headers.get("origin")) }), "onRequestOptions");
 var onRequestPost23 = /* @__PURE__ */ __name(async (context) => {
   const { request } = context;
   const env = context.env ?? {};
@@ -12045,19 +12136,19 @@ var onRequestPost23 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/experiments.ts
 var experiments_exports2 = {};
 __export(experiments_exports2, {
-  onRequestGet: () => onRequestGet37,
-  onRequestOptions: () => onRequestOptions6
+  onRequestGet: () => onRequestGet38,
+  onRequestOptions: () => onRequestOptions7
 });
-var CORS5 = {
+var CORS6 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
 var answer2 = /* @__PURE__ */ __name((experiments) => new Response(JSON.stringify({ experiments }), {
-  headers: { "content-type": "application/json", "cache-control": "public, max-age=300", ...CORS5 }
+  headers: { "content-type": "application/json", "cache-control": "public, max-age=300", ...CORS6 }
 }), "answer");
-var onRequestOptions6 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS5 }), "onRequestOptions");
-var onRequestGet37 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions7 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS6 }), "onRequestOptions");
+var onRequestGet38 = /* @__PURE__ */ __name(async (ctx) => {
   const env = ctx?.env ?? {};
   if (!dbConfigured(env)) return answer2([]);
   let r = await db.select(env, "experiments", q().eq("active", "true").select("key,variants,audience,status").order("key").limit(50));
@@ -12071,26 +12162,26 @@ var onRequestGet37 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/feedback.ts
 var feedback_exports2 = {};
 __export(feedback_exports2, {
-  onRequestGet: () => onRequestGet38,
-  onRequestOptions: () => onRequestOptions7,
+  onRequestGet: () => onRequestGet39,
+  onRequestOptions: () => onRequestOptions8,
   onRequestPost: () => onRequestPost24
 });
-var CORS6 = {
+var CORS7 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
 var KINDS3 = /* @__PURE__ */ new Set(["bug", "idea", "content", "other"]);
-var onRequestOptions7 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS6 }), "onRequestOptions");
-var onRequestGet38 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestGet");
+var onRequestOptions8 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS7 }), "onRequestOptions");
+var onRequestGet39 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestGet");
 var onRequestPost24 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = await rateLimitAsync(request, "feedback", { capacity: 5, refillPerMinute: 2 }, env);
   if (limited) return limited;
-  if (!dbConfigured(env)) return jsonResponse({ error: "not_configured" }, 503, CORS6);
+  if (!dbConfigured(env)) return jsonResponse({ error: "not_configured" }, 503, CORS7);
   const body = asObject(await request.json().catch(() => null)) ?? {};
   const message = clip(body.message, 2e3);
-  if (!message) return jsonResponse({ error: "message_required" }, 400, CORS6);
+  if (!message) return jsonResponse({ error: "message_required" }, 400, CORS7);
   const kindRaw = clip(body.type, 16)?.toLowerCase() ?? "other";
   const geo = edgeGeo(request);
   const identity = typeof body.deviceId === "string" || typeof body.signed_device_id === "string" ? await resolveIdentity(env, body) : null;
@@ -12104,21 +12195,21 @@ var onRequestPost24 = /* @__PURE__ */ __name(async (context) => {
     country: geo.country,
     city: geo.city
   });
-  if (!r.ok) return jsonResponse({ error: "unavailable" }, 503, CORS6);
-  return jsonResponse({ ok: true }, 200, CORS6);
+  if (!r.ok) return jsonResponse({ error: "unavailable" }, 503, CORS7);
+  return jsonResponse({ ok: true }, 200, CORS7);
 }, "onRequestPost");
 
 // functions/api/geo.ts
 var geo_exports = {};
 __export(geo_exports, {
   geoAnswer: () => geoAnswer,
-  onRequestGet: () => onRequestGet39,
-  onRequestOptions: () => onRequestOptions8,
+  onRequestGet: () => onRequestGet40,
+  onRequestOptions: () => onRequestOptions9,
   placeName: () => placeName,
   readCountry: () => readCountry,
   readTimezone: () => readTimezone
 });
-var CORS7 = {
+var CORS8 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type"
@@ -12127,9 +12218,9 @@ var ISO_COUNTRY = /^[A-Z]{2}$/;
 var IANA_ZONE = /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+){0,2}$/;
 function placeName(value, max = 60) {
   if (typeof value !== "string") return null;
-  const text = value.replace(/\s+/g, " ").trim();
-  if (!text || text.length > max) return null;
-  return /^[\p{L}\p{M}][\p{L}\p{M} .'’\-()]*$/u.test(text) ? text : null;
+  const text2 = value.replace(/\s+/g, " ").trim();
+  if (!text2 || text2.length > max) return null;
+  return /^[\p{L}\p{M}][\p{L}\p{M} .'’\-()]*$/u.test(text2) ? text2 : null;
 }
 __name(placeName, "placeName");
 function readCountry(value) {
@@ -12163,28 +12254,28 @@ function geoAnswer(request) {
   };
 }
 __name(geoAnswer, "geoAnswer");
-var onRequestOptions8 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS7 }), "onRequestOptions");
-var onRequestGet39 = /* @__PURE__ */ __name(async (context) => new Response(JSON.stringify(geoAnswer(context.request)), {
+var onRequestOptions9 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS8 }), "onRequestOptions");
+var onRequestGet40 = /* @__PURE__ */ __name(async (context) => new Response(JSON.stringify(geoAnswer(context.request)), {
   headers: {
     "content-type": "application/json; charset=utf-8",
     // Per-visitor by definition: never share it between them.
     "cache-control": "private, no-store",
-    ...CORS7
+    ...CORS8
   }
 }), "onRequestGet");
 
 // functions/api/handoff.ts
 var handoff_exports = {};
 __export(handoff_exports, {
-  onRequestGet: () => onRequestGet40,
-  onRequestOptions: () => onRequestOptions9,
+  onRequestGet: () => onRequestGet41,
+  onRequestOptions: () => onRequestOptions10,
   onRequestPost: () => onRequestPost25
 });
 var HEADERS = { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" };
 var gone = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ error: "gone" }), { status: 410, headers: HEADERS }), "gone");
-var onRequestGet40 = gone;
+var onRequestGet41 = gone;
 var onRequestPost25 = gone;
-var onRequestOptions9 = /* @__PURE__ */ __name(async () => new Response(null, {
+var onRequestOptions10 = /* @__PURE__ */ __name(async () => new Response(null, {
   status: 204,
   headers: {
     "access-control-allow-origin": "*",
@@ -12197,8 +12288,8 @@ var onRequestOptions9 = /* @__PURE__ */ __name(async () => new Response(null, {
 // functions/api/recommendations.ts
 var recommendations_exports = {};
 __export(recommendations_exports, {
-  onRequestGet: () => onRequestGet41,
-  onRequestOptions: () => onRequestOptions10,
+  onRequestGet: () => onRequestGet42,
+  onRequestOptions: () => onRequestOptions11,
   onRequestPost: () => onRequestPost26
 });
 
@@ -12313,18 +12404,18 @@ function parseIds(raw, max) {
 __name(parseIds, "parseIds");
 
 // functions/api/recommendations.ts
-var CORS8 = {
+var CORS9 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type, x-vinax-client"
 };
 function json9(body, status = 200, cache = "no-store") {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS8 } });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS9 } });
 }
 __name(json9, "json");
-var onRequestOptions10 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS8 }), "onRequestOptions");
+var onRequestOptions11 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
 var onRequestPost26 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
-var onRequestGet41 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet42 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = await rateLimitAsync(request, "recs", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -12359,18 +12450,18 @@ var onRequestGet41 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/auth/google.ts
 var google_exports = {};
 __export(google_exports, {
-  onRequestGet: () => onRequestGet42,
-  onRequestOptions: () => onRequestOptions11,
+  onRequestGet: () => onRequestGet43,
+  onRequestOptions: () => onRequestOptions12,
   onRequestPost: () => onRequestPost27
 });
 
 // functions/_lib/authShared.ts
-var CORS9 = {
+var CORS10 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type, authorization, x-vinax-device, x-vinax-platform, x-vinax-version"
 };
-var json10 = /* @__PURE__ */ __name((body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...CORS9 } }), "json");
+var json10 = /* @__PURE__ */ __name((body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...CORS10 } }), "json");
 function accountOf(env, sub) {
   return db.one(env, "accounts", q().eq("id", sub));
 }
@@ -12515,8 +12606,8 @@ async function finishSignIn(ctx, person, body, method, afterStore) {
 __name(finishSignIn, "finishSignIn");
 
 // functions/api/auth/google.ts
-var onRequestOptions11 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
-var onRequestGet42 = /* @__PURE__ */ __name(async (ctx) => json10({ turnstileSiteKey: turnstileSiteKey(ctx.env) }), "onRequestGet");
+var onRequestOptions12 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestGet43 = /* @__PURE__ */ __name(async (ctx) => json10({ turnstileSiteKey: turnstileSiteKey(ctx.env) }), "onRequestGet");
 async function accountIdFor(env, sub, email, verified) {
   if (!email || !verified || !dbConfigured(env)) return sub;
   const own2 = await db.one(env, "accounts", q().eq("id", sub).select("id"));
@@ -12546,8 +12637,8 @@ var me_exports = {};
 __export(me_exports, {
   TOUCH_MS: () => TOUCH_MS,
   deviceSignedOut: () => deviceSignedOut,
-  onRequestGet: () => onRequestGet43,
-  onRequestOptions: () => onRequestOptions12,
+  onRequestGet: () => onRequestGet44,
+  onRequestOptions: () => onRequestOptions13,
   onRequestPost: () => onRequestPost28,
   touchAccount: () => touchAccount
 });
@@ -12575,8 +12666,8 @@ async function deviceSignedOut(request, env, iat) {
   return Number.isFinite(at) && at >= iat * 1e3;
 }
 __name(deviceSignedOut, "deviceSignedOut");
-var onRequestOptions12 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
-var onRequestGet43 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions13 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestGet44 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const claims = await readSessionClaims(env, bearer(request));
   if (!claims) return json10({ error: "signed_out" }, 401);
@@ -12616,8 +12707,8 @@ var onRequestPost28 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/auth/password.ts
 var password_exports = {};
 __export(password_exports, {
-  onRequestGet: () => onRequestGet44,
-  onRequestOptions: () => onRequestOptions13,
+  onRequestGet: () => onRequestGet45,
+  onRequestOptions: () => onRequestOptions14,
   onRequestPost: () => onRequestPost29
 });
 
@@ -12666,8 +12757,8 @@ async function accountByEmail(env, email) {
 __name(accountByEmail, "accountByEmail");
 
 // functions/api/auth/password.ts
-var onRequestOptions13 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
-var onRequestGet44 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions14 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestGet45 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const sub = await readSession(env, bearer(request));
   if (!sub) return json10({ error: "signed_out" }, 401);
@@ -12699,10 +12790,10 @@ var onRequestPost29 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/auth/email/code.ts
 var code_exports = {};
 __export(code_exports, {
-  onRequestOptions: () => onRequestOptions14,
+  onRequestOptions: () => onRequestOptions15,
   onRequestPost: () => onRequestPost30
 });
-var onRequestOptions14 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
+var onRequestOptions15 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
 var onRequestPost30 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-code", { capacity: 5, refillPerMinute: 3 }, env);
@@ -12737,10 +12828,10 @@ var onRequestPost30 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/auth/email/verify.ts
 var verify_exports = {};
 __export(verify_exports, {
-  onRequestOptions: () => onRequestOptions15,
+  onRequestOptions: () => onRequestOptions16,
   onRequestPost: () => onRequestPost31
 });
-var onRequestOptions15 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
+var onRequestOptions16 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
 var onRequestPost31 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-verify", { capacity: 10, refillPerMinute: 5 }, env);
@@ -12786,10 +12877,10 @@ var onRequestPost31 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/auth/email/login.ts
 var login_exports = {};
 __export(login_exports, {
-  onRequestOptions: () => onRequestOptions16,
+  onRequestOptions: () => onRequestOptions17,
   onRequestPost: () => onRequestPost32
 });
-var onRequestOptions16 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
+var onRequestOptions17 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
 var onRequestPost32 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "auth-email-login", { capacity: 10, refillPerMinute: 5 }, env);
@@ -12817,20 +12908,20 @@ var onRequestPost32 = /* @__PURE__ */ __name(async (ctx) => {
 var data_exports = {};
 __export(data_exports, {
   MAX_BYTES: () => MAX_BYTES2,
-  onRequestGet: () => onRequestGet45,
-  onRequestOptions: () => onRequestOptions17,
+  onRequestGet: () => onRequestGet46,
+  onRequestOptions: () => onRequestOptions18,
   onRequestPut: () => onRequestPut2
 });
 var MAX_BYTES2 = 2e6;
 var copy = /* @__PURE__ */ __name((row) => ({ version: row.version, updatedAt: row.updated_at, backup: row.payload }), "copy");
-var onRequestOptions17 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
-var onRequestGet45 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions18 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
+var onRequestGet46 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await readSession(ctx.env, bearer(ctx.request));
   if (!sub) return json10({ error: "signed_out" }, 401);
   if (!dbConfigured(ctx.env)) return json10({ error: "unavailable" }, 503);
   const r = await db.one(ctx.env, "account_backups", q().eq("account_id", sub).select("version,updated_at,payload"));
   if (!r.ok) return json10({ error: "unavailable" }, 503);
-  if (!r.value) return new Response(null, { status: 204, headers: CORS9 });
+  if (!r.value) return new Response(null, { status: 204, headers: CORS10 });
   return json10(copy(r.value));
 }, "onRequestGet");
 var onRequestPut2 = /* @__PURE__ */ __name(async (ctx) => {
@@ -12878,7 +12969,7 @@ __export(chat_exports, {
   REPLY_BUDGET_SLOW_MS: () => REPLY_BUDGET_SLOW_MS,
   TITLE_WAIT_MS: () => TITLE_WAIT_MS,
   firstEventMsFor: () => firstEventMsFor,
-  onRequestOptions: () => onRequestOptions18,
+  onRequestOptions: () => onRequestOptions19,
   onRequestPost: () => onRequestPost33,
   parseContent: () => parseContent,
   tailStop: () => tailStop
@@ -12962,12 +13053,12 @@ function typedText(content) {
   return content.filter((p) => p?.type === "text").map((p) => String(p.text ?? "")).filter(Boolean).join("\n\n");
 }
 __name(typedText, "typedText");
-function clipMiddle(text, max) {
-  if (text.length <= max) return text;
+function clipMiddle(text2, max) {
+  if (text2.length <= max) return text2;
   const note = "\n\n[\u2026 part of this message was left out to fit \u2026]\n\n";
   const keep = Math.max(0, max - note.length);
   const head = Math.ceil(keep * 0.6);
-  return text.slice(0, head) + note + text.slice(text.length - (keep - head));
+  return text2.slice(0, head) + note + text2.slice(text2.length - (keep - head));
 }
 __name(clipMiddle, "clipMiddle");
 function trimHistory(messages, maxChars) {
@@ -12985,8 +13076,8 @@ function trimHistory(messages, maxChars) {
   return kept;
 }
 __name(trimHistory, "trimHistory");
-function fallbackTitle(text) {
-  const words = text.replace(/\s+/g, " ").trim().split(" ").slice(0, 6).join(" ");
+function fallbackTitle(text2) {
+  const words = text2.replace(/\s+/g, " ").trim().split(" ").slice(0, 6).join(" ");
   const t = words.length > 60 ? `${words.slice(0, 57).trimEnd()}\u2026` : words;
   return t || "New chat";
 }
@@ -12997,14 +13088,14 @@ function toTurns(path) {
   const out = [];
   for (const r of path) {
     const parts = Array.isArray(r.content) ? r.content : [];
-    const text = typedText(parts);
+    const text2 = typedText(parts);
     const files = parts.filter((p) => p?.type === "attachment" && typeof p.id === "string").map((p) => p.id);
-    if (!text.trim() && !files.length) continue;
+    if (!text2.trim() && !files.length) continue;
     const prev = out[out.length - 1];
     if (prev && prev.role === r.role) {
-      prev.text = [prev.text, text].filter(Boolean).join("\n\n");
+      prev.text = [prev.text, text2].filter(Boolean).join("\n\n");
       prev.files.push(...files);
-    } else out.push({ role: r.role, text, files });
+    } else out.push({ role: r.role, text: text2, files });
   }
   return out;
 }
@@ -13030,8 +13121,8 @@ function recentUserTurns(turns) {
 }
 __name(recentUserTurns, "recentUserTurns");
 var newMemo = /* @__PURE__ */ __name(() => ({ images: /* @__PURE__ */ new Map(), gemini: /* @__PURE__ */ new Map() }), "newMemo");
-function imageData(env, row, memo6) {
-  let p = memo6.images.get(row.id);
+function imageData(env, row, memo7) {
+  let p = memo7.images.get(row.id);
   if (!p) {
     p = (async () => {
       const res = await storageGet(env, row.storage_path);
@@ -13039,21 +13130,21 @@ function imageData(env, row, memo6) {
       const bytes = new Uint8Array(await res.arrayBuffer());
       return { mime: row.mime, data: toBase64(bytes) };
     })().catch(() => null);
-    memo6.images.set(row.id, p);
+    memo7.images.set(row.id, p);
   }
   return p;
 }
 __name(imageData, "imageData");
-function geminiUri(env, row, memo6) {
-  let p = memo6.gemini.get(row.id);
+function geminiUri(env, row, memo7) {
+  let p = memo7.gemini.get(row.id);
   if (!p) {
     p = ensureGeminiFile(env, row).catch(() => null);
-    memo6.gemini.set(row.id, p);
+    memo7.gemini.set(row.id, p);
   }
   return p;
 }
 __name(geminiUri, "geminiUri");
-async function materialize(env, turns, spec, rows3, memo6) {
+async function materialize(env, turns, spec, rows3, memo7) {
   const recent = recentUserTurns(turns);
   const out = [];
   for (let i = 0; i < turns.length; i++) {
@@ -13070,19 +13161,19 @@ async function materialize(env, turns, spec, rows3, memo6) {
       }
       if (row.kind === "image") {
         if (spec.flags.vision && recent.has(i)) {
-          const img = await imageData(env, row, memo6);
+          const img = await imageData(env, row, memo7);
           if (img) images.push(img);
           else notes.push(`[image: ${row.name} (it could not be loaded)]`);
         } else notes.push(spec.flags.vision ? `[image: ${row.name}]` : `[image: ${row.name} (this model cannot see images)]`);
       } else if (row.kind === "pdf") {
-        const uri = spec.provider === "gemini" && spec.flags.pdf ? await geminiUri(env, row, memo6) : null;
+        const uri = spec.provider === "gemini" && spec.flags.pdf ? await geminiUri(env, row, memo7) : null;
         if (uri) files.push({ mime: row.mime, uri });
         else if (row.extracted_text?.trim()) docs.push(documentBlock(row.name, row.extracted_text));
         else notes.push(`[document: ${row.name} (its text could not be read)]`);
       } else docs.push(documentBlock(row.name, row.extracted_text ?? ""));
     }
-    const text = [...docs, ...notes, t.text].filter(Boolean).join("\n\n");
-    out.push({ role: t.role, text: text || (images.length || files.length ? "(see the attached files)" : ""), ...images.length ? { images } : {}, ...files.length ? { files } : {} });
+    const text2 = [...docs, ...notes, t.text].filter(Boolean).join("\n\n");
+    out.push({ role: t.role, text: text2 || (images.length || files.length ? "(see the attached files)" : ""), ...images.length ? { images } : {}, ...files.length ? { files } : {} });
   }
   return out.filter((m2) => m2.text.trim() || m2.images?.length || m2.files?.length);
 }
@@ -13122,7 +13213,7 @@ __name(cleanTitle, "cleanTitle");
 async function generateTitle(env, candidates, firstMessage) {
   if (!candidates.length || !firstMessage.trim()) return null;
   const ac = new AbortController();
-  let text = "";
+  let text2 = "";
   try {
     for await (const ev of runChat(env, {
       candidates,
@@ -13142,13 +13233,13 @@ ${firstMessage.slice(0, 2e3)}
       firstEventMs: 8e3,
       budgetMs: 12e3
     })) {
-      if (ev.type === "text") text += ev.delta;
+      if (ev.type === "text") text2 += ev.delta;
       if (ev.type === "failed") return null;
     }
   } catch {
     return null;
   }
-  return cleanTitle(text);
+  return cleanTitle(text2);
 }
 __name(generateTitle, "generateTitle");
 
@@ -13345,9 +13436,9 @@ function turnLines(raw, turns = RECAP_TURNS, chars = RECAP_CHARS) {
   let used = 0;
   for (const t of raw.slice(-turns).reverse()) {
     const role = t?.role;
-    const text = t?.text;
-    if (role !== "user" && role !== "assistant" || typeof text !== "string") continue;
-    const clean2 = text.replace(/[<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, RECAP_TURN_CHARS);
+    const text2 = t?.text;
+    if (role !== "user" && role !== "assistant" || typeof text2 !== "string") continue;
+    const clean2 = text2.replace(/[<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, RECAP_TURN_CHARS);
     if (!clean2) continue;
     const line = `${role === "user" ? "User" : "You"}: ${clean2}`;
     if (used + line.length > chars) break;
@@ -13448,8 +13539,8 @@ ${lines.join("\n\n")}
 </user_preferences>`;
 }
 __name(personalBlock, "personalBlock");
-function ownerBlock(text) {
-  const t = (text ?? "").trim();
+function ownerBlock(text2) {
+  const t = (text2 ?? "").trim();
   if (!t) return null;
   return `# Instructions from VinaX
 VinaX's owner set these for every reply. Follow them, together with everything above; they don't override the rules about what you won't help with.
@@ -13659,7 +13750,7 @@ function bytesBody(chunks) {
 }
 __name(bytesBody, "bytesBody");
 var enc5 = new TextEncoder();
-var textBody = /* @__PURE__ */ __name((text) => bytesBody(text ? [enc5.encode(text)] : []), "textBody");
+var textBody = /* @__PURE__ */ __name((text2) => bytesBody(text2 ? [enc5.encode(text2)] : []), "textBody");
 async function collect(events) {
   const out = [];
   try {
@@ -13773,44 +13864,44 @@ function attrs(header) {
 }
 __name(attrs, "attrs");
 var slug = /* @__PURE__ */ __name((s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60), "slug");
-function fences(text) {
+function fences(text2) {
   const out = [];
   const re = /^ {0,3}(```|~~~)/gm;
   let open = -1;
-  for (let m2 = re.exec(text); m2; m2 = re.exec(text)) {
+  for (let m2 = re.exec(text2); m2; m2 = re.exec(text2)) {
     if (open < 0) open = m2.index;
     else {
       out.push([open, m2.index]);
       open = -1;
     }
   }
-  if (open >= 0) out.push([open, text.length]);
+  if (open >= 0) out.push([open, text2.length]);
   return out;
 }
 __name(fences, "fences");
-function parseTagged(text) {
+function parseTagged(text2) {
   const segs = [];
-  const fenced = fences(text);
+  const fenced = fences(text2);
   const inFence = /* @__PURE__ */ __name((i) => fenced.some(([a, b]) => i > a && i < b), "inFence");
   let pos = 0;
   let n3 = 0;
   for (; ; ) {
-    let at = text.indexOf(OPEN2, pos);
-    while (at >= 0 && (inFence(at) || !/[\s>]/.test(text[at + OPEN2.length] ?? " "))) at = text.indexOf(OPEN2, at + 1);
+    let at = text2.indexOf(OPEN2, pos);
+    while (at >= 0 && (inFence(at) || !/[\s>]/.test(text2[at + OPEN2.length] ?? " "))) at = text2.indexOf(OPEN2, at + 1);
     if (at < 0) break;
-    const before = text.slice(pos, at);
+    const before = text2.slice(pos, at);
     if (before.trim()) segs.push({ kind: "text", text: before });
-    const headerEnd = text.indexOf(">", at);
+    const headerEnd = text2.indexOf(">", at);
     n3 += 1;
     if (headerEnd < 0) {
       segs.push({ kind: "artifact", artifact: { id: `artifact-${n3}`, type: "code", title: "", language: null, content: "", incomplete: true } });
       return segs;
     }
-    const a = attrs(text.slice(at + OPEN2.length, headerEnd));
+    const a = attrs(text2.slice(at + OPEN2.length, headerEnd));
     const type = ARTIFACT_TYPES.includes(a.type) ? a.type : "code";
     const title = a.title || "";
-    const closeAt = text.indexOf(CLOSE2, headerEnd + 1);
-    let body = closeAt >= 0 ? text.slice(headerEnd + 1, closeAt) : text.slice(headerEnd + 1);
+    const closeAt = text2.indexOf(CLOSE2, headerEnd + 1);
+    let body = closeAt >= 0 ? text2.slice(headerEnd + 1, closeAt) : text2.slice(headerEnd + 1);
     if (closeAt < 0) {
       for (let k = CLOSE2.length - 1; k > 0; k--) if (body.endsWith(CLOSE2.slice(0, k))) {
         body = body.slice(0, -k);
@@ -13831,7 +13922,7 @@ function parseTagged(text) {
     if (closeAt < 0) return segs;
     pos = closeAt + CLOSE2.length;
   }
-  const rest = text.slice(pos);
+  const rest = text2.slice(pos);
   if (rest.trim() || !segs.length) segs.push({ kind: "text", text: rest });
   return segs;
 }
@@ -13856,26 +13947,26 @@ function isPage(content, incomplete) {
   return incomplete && "<!doctype html>".startsWith(head.slice(0, 15));
 }
 __name(isPage, "isPage");
-function splitFenced(text) {
+function splitFenced(text2) {
   const out = [];
   const re = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\n`]*)$/gm;
   let pos = 0;
   let open = null;
   const push = /* @__PURE__ */ __name((kind, body, start, incomplete) => {
-    const before = text.slice(pos, start);
+    const before = text2.slice(pos, start);
     if (before.trim()) out.push({ kind: "text", text: before });
     const content = body.replace(/\r?\n$/, "");
     const title = visualTitle(kind, content);
     out.push({ kind: "artifact", artifact: { id: slug(title) || kind, type: kind, title, language: null, content, incomplete } });
   }, "push");
-  for (let m2 = re.exec(text); m2; m2 = re.exec(text)) {
+  for (let m2 = re.exec(text2); m2; m2 = re.exec(text2)) {
     if (!open) {
       open = { mark: m2[1], lang: (m2[2].trim().split(/\s+/)[0] ?? "").toLowerCase(), at: m2.index, body: m2.index + m2[0].length + 1 };
       continue;
     }
     if (m2[1][0] !== open.mark[0] || m2[1].length < open.mark.length || m2[2].trim()) continue;
     const kind = VISUAL_LANGS[open.lang];
-    const body = text.slice(Math.min(open.body, m2.index), m2.index);
+    const body = text2.slice(Math.min(open.body, m2.index), m2.index);
     if (kind && (kind !== "html" || isPage(body, false))) {
       push(kind, body, open.at, false);
       pos = m2.index + m2[0].length;
@@ -13884,24 +13975,24 @@ function splitFenced(text) {
   }
   if (open) {
     const kind = VISUAL_LANGS[open.lang];
-    const body = text.slice(Math.min(open.body, text.length));
+    const body = text2.slice(Math.min(open.body, text2.length));
     if (kind && (kind !== "html" || isPage(body, true))) {
       push(kind, body, open.at, true);
       return out;
     }
   }
-  const rest = text.slice(pos);
+  const rest = text2.slice(pos);
   if (rest.trim() || !out.length) out.push({ kind: "text", text: rest });
   return out;
 }
 __name(splitFenced, "splitFenced");
-function parseArtifacts(text) {
-  const tagged = text.includes("<artifact") ? parseTagged(text) : [{ kind: "text", text }];
+function parseArtifacts(text2) {
+  const tagged = text2.includes("<artifact") ? parseTagged(text2) : [{ kind: "text", text: text2 }];
   const segs = tagged.flatMap((s) => s.kind === "text" ? splitFenced(s.text) : [s]);
-  return segs.length ? segs : [{ kind: "text", text }];
+  return segs.length ? segs : [{ kind: "text", text: text2 }];
 }
 __name(parseArtifacts, "parseArtifacts");
-var artifactsOf = /* @__PURE__ */ __name((text) => parseArtifacts(text).flatMap((s) => s.kind === "artifact" ? [s.artifact] : []), "artifactsOf");
+var artifactsOf = /* @__PURE__ */ __name((text2) => parseArtifacts(text2).flatMap((s) => s.kind === "artifact" ? [s.artifact] : []), "artifactsOf");
 
 // functions/_lib/ai/projects.ts
 var PROJECT_LIMITS = Object.freeze({ name: 60, description: 300, instructions: 8e3 });
@@ -13930,9 +14021,9 @@ function parseProject(raw, create) {
       continue;
     }
     if (typeof b[key] !== "string") return { ok: false };
-    const text = cleanText(b[key], Number.MAX_SAFE_INTEGER);
-    if (text.length > PROJECT_LIMITS[key]) return { ok: false };
-    patch[key] = text || null;
+    const text2 = cleanText(b[key], Number.MAX_SAFE_INTEGER);
+    if (text2.length > PROJECT_LIMITS[key]) return { ok: false };
+    patch[key] = text2 || null;
   }
   if ("starred" in b) {
     if (typeof b.starred !== "boolean") return { ok: false };
@@ -13992,7 +14083,7 @@ async function loadProjectContext(env, accountId, projectId) {
 __name(loadProjectContext, "loadProjectContext");
 var LONG_KNOWLEDGE_CHARS = 12e3;
 var longKnowledge = /* @__PURE__ */ __name((ctx) => !!ctx && (ctx.chars > LONG_KNOWLEDGE_CHARS || ctx.files.some((f) => f.kind === "pdf")), "longKnowledge");
-async function knowledgeFor(env, spec, ctx, memo6) {
+async function knowledgeFor(env, spec, ctx, memo7) {
   const documents = [];
   const notes = [];
   const images = [];
@@ -14000,14 +14091,14 @@ async function knowledgeFor(env, spec, ctx, memo6) {
   for (const row of ctx.files) {
     if (row.kind === "image") {
       if (spec.flags.vision && images.length < KNOWLEDGE_IMAGES) {
-        const img = await imageData(env, row, memo6);
+        const img = await imageData(env, row, memo7);
         if (img) {
           images.push(img);
           notes.push(`[image: ${row.name} (attached to the user's latest message)]`);
         } else notes.push(`[image: ${row.name} (it could not be loaded)]`);
       } else notes.push(spec.flags.vision ? `[image: ${row.name}]` : `[image: ${row.name} (this model cannot see images)]`);
     } else if (row.kind === "pdf") {
-      const uri = spec.provider === "gemini" && spec.flags.pdf ? await geminiUri(env, row, memo6) : null;
+      const uri = spec.provider === "gemini" && spec.flags.pdf ? await geminiUri(env, row, memo7) : null;
       if (uri) {
         files.push({ mime: row.mime, uri });
         notes.push(`[document: ${row.name} (attached to the user's latest message)]`);
@@ -14035,8 +14126,8 @@ function withKnowledge(messages, k) {
 __name(withKnowledge, "withKnowledge");
 
 // functions/_lib/ai/askJson.ts
-function extractJson(text) {
-  const t = text.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "").replace(/```(?:json)?/gi, "");
+function extractJson(text2) {
+  const t = text2.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "").replace(/```(?:json)?/gi, "");
   const start = t.indexOf("{");
   if (start < 0) return null;
   let depth = 0;
@@ -14072,7 +14163,7 @@ async function askJson(env, candidates, task) {
   const timer = setTimeout(() => ac.abort(), Math.max(200, task.deadlineMs));
   const onOuter = /* @__PURE__ */ __name(() => ac.abort(), "onOuter");
   task.signal?.addEventListener("abort", onOuter, { once: true });
-  let text = "";
+  let text2 = "";
   let model = null;
   try {
     for await (const ev of runChat(env, {
@@ -14096,8 +14187,8 @@ ${JSON.stringify(task.input)}
     })) {
       if (ev.type === "model") {
         model = ev.spec;
-        text = "";
-      } else if (ev.type === "text") text += ev.delta;
+        text2 = "";
+      } else if (ev.type === "text") text2 += ev.delta;
       else if (ev.type === "failed") return null;
     }
   } catch {
@@ -14107,7 +14198,7 @@ ${JSON.stringify(task.input)}
     task.signal?.removeEventListener("abort", onOuter);
   }
   if (ac.signal.aborted || !model) return null;
-  const value = extractJson(text);
+  const value = extractJson(text2);
   return value == null ? null : { value, model };
 }
 __name(askJson, "askJson");
@@ -14155,13 +14246,13 @@ var LONG_NUMBER = /(?:\d[\s().-]?){9,}\d/;
 var DIGIT_RUN = /\d{6,}/;
 var SECRET_WORDS = /\b(pass(?:word|wd|code|phrase)s?|pins?|otps?|one[- ]time (?:code|password)|2fa|api[ _-]?keys?|secret keys?|access keys?|private keys?|tokens?|seed phrase|recovery (?:phrase|code)s?|cvv|cvc|iban|ifsc|sort code|routing number|(?:bank )?account numbers?|card numbers?|credit card|debit card|ssn|social security|aadhaa?r|pan (?:card|number)|passport number|login details|credentials?)\b/i;
 var KEYLIKE = /\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\b|\b(?:sk|pk|rk|gsk|ghp|gho|xox[abps]|AKIA|AIza)[-_A-Za-z0-9]{8,}/;
-function looksSensitive(text) {
-  return EMAIL.test(text) || LONG_NUMBER.test(text) || DIGIT_RUN.test(text) || SECRET_WORDS.test(text) || KEYLIKE.test(text);
+function looksSensitive(text2) {
+  return EMAIL.test(text2) || LONG_NUMBER.test(text2) || DIGIT_RUN.test(text2) || SECRET_WORDS.test(text2) || KEYLIKE.test(text2);
 }
 __name(looksSensitive, "looksSensitive");
-var memoryKey = /* @__PURE__ */ __name((text) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), "memoryKey");
-function asksToRemember(text) {
-  return /\b(remember|forget|memori[sz]e|keep in mind|don'?t forget|note (?:that|this|down))\b/i.test(text);
+var memoryKey = /* @__PURE__ */ __name((text2) => text2.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), "memoryKey");
+function asksToRemember(text2) {
+  return /\b(remember|forget|memori[sz]e|keep in mind|don'?t forget|note (?:that|this|down))\b/i.test(text2);
 }
 __name(asksToRemember, "asksToRemember");
 var shouldLearn = /* @__PURE__ */ __name((userTurns, latestText) => asksToRemember(latestText) || userTurns > 0 && userTurns % LEARN_EVERY === 0, "shouldLearn");
@@ -14239,8 +14330,8 @@ function learnCandidates(registry) {
   return out;
 }
 __name(learnCandidates, "learnCandidates");
-function replyForLearning(text) {
-  return text.replace(/<artifact\b[^>]*?title="([^"]*)"[^>]*>[\s\S]*?(<\/artifact>|$)/g, "[artifact: $1]").replace(/<artifact\b[\s\S]*?(<\/artifact>|$)/g, "[artifact]").replace(/```[\s\S]*?(```|$)/g, "[code]").slice(0, LEARN_REPLY_CHARS);
+function replyForLearning(text2) {
+  return text2.replace(/<artifact\b[^>]*?title="([^"]*)"[^>]*>[\s\S]*?(<\/artifact>|$)/g, "[artifact: $1]").replace(/<artifact\b[\s\S]*?(<\/artifact>|$)/g, "[artifact]").replace(/```[\s\S]*?(```|$)/g, "[code]").slice(0, LEARN_REPLY_CHARS);
 }
 __name(replyForLearning, "replyForLearning");
 function learnInput(items, path) {
@@ -14249,8 +14340,8 @@ function learnInput(items, path) {
   for (let i = path.length - 1; i >= 0 && users < LEARN_EVERY; i -= 1) {
     const m2 = path[i];
     if (m2.role === "user") users += 1;
-    const text = m2.role === "user" ? m2.text.slice(0, LEARN_USER_CHARS) : replyForLearning(m2.text);
-    if (text.trim()) recent.unshift({ role: m2.role, text });
+    const text2 = m2.role === "user" ? m2.text.slice(0, LEARN_USER_CHARS) : replyForLearning(m2.text);
+    if (text2.trim()) recent.unshift({ role: m2.role, text: text2 });
   }
   return { memory: items.map((m2) => ({ id: m2.id, text: m2.text })), recent };
 }
@@ -14270,12 +14361,12 @@ function parseLearnAnswer(raw, current) {
   const add = [];
   if (Array.isArray(v.add)) {
     for (const a of v.add) {
-      const text = cleanMemoryText(a);
-      if (!text || looksSensitive(text)) continue;
-      const key = memoryKey(text);
+      const text2 = cleanMemoryText(a);
+      if (!text2 || looksSensitive(text2)) continue;
+      const key = memoryKey(text2);
       if (!key || kept.has(key)) continue;
       kept.add(key);
-      add.push(text);
+      add.push(text2);
       if (add.length >= LEARN_MAX_ADD) break;
     }
   }
@@ -14299,9 +14390,9 @@ async function learnFromChat(env, o) {
       if (r.ok) removed = remove.length;
     }
     const room = Math.max(0, MEMORY_MAX_ITEMS - (o.items.length - removed));
-    const rows3 = add.slice(0, room).map((text) => {
+    const rows3 = add.slice(0, room).map((text2) => {
       const now = (/* @__PURE__ */ new Date()).toISOString();
-      return { id: crypto.randomUUID(), account_id: o.accountId, text, origin: "chat", conversation_id: o.conversationId, created_at: now, updated_at: now };
+      return { id: crypto.randomUUID(), account_id: o.accountId, text: text2, origin: "chat", conversation_id: o.conversationId, created_at: now, updated_at: now };
     });
     let added = 0;
     if (rows3.length) {
@@ -14353,9 +14444,9 @@ function exportChats(env, accountId) {
 __name(exportChats, "exportChats");
 async function listConversations(env, accountId, o = {}) {
   const limit = Math.max(1, Math.min(100, o.limit ?? 30));
-  const text = (o.query ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
-  if (text) {
-    const r = await db.rpc(env, "ai_conversation_search", { p_account: accountId, p_query: text, p_before: o.before ?? null, p_limit: limit });
+  const text2 = (o.query ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
+  if (text2) {
+    const r = await db.rpc(env, "ai_conversation_search", { p_account: accountId, p_query: text2, p_before: o.before ?? null, p_limit: limit });
     const rows3 = r.ok && Array.isArray(r.value) ? r.value : [];
     return r.ok ? { ok: true, rows: o.projectId ? rows3.filter((c) => c.project_id === o.projectId) : rows3 } : { ...r, rows: [] };
   }
@@ -14414,9 +14505,9 @@ var SSE_HEADERS = {
   "content-type": "text/event-stream; charset=utf-8",
   "cache-control": "no-store, no-transform",
   "x-accel-buffering": "no",
-  ...CORS9
+  ...CORS10
 };
-var onRequestOptions18 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions19 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function parseContent(raw) {
   if (raw == null) return { ok: true, parts: [], text: "", files: [] };
   if (!Array.isArray(raw) || raw.length > 50) return { ok: false, error: "bad_request" };
@@ -14430,9 +14521,9 @@ function parseContent(raw) {
     } else return { ok: false, error: "bad_request" };
   }
   if (files.length > LIMIT_RANGES.filesPerMessage[1]) return { ok: false, error: "bad_attachment" };
-  const text = textOf(parts);
-  if (text.length > MAX_TEXT_CHARS) return { ok: false, error: "too_long" };
-  return { ok: true, parts: text.trim() ? parts : [], text, files };
+  const text2 = textOf(parts);
+  if (text2.length > MAX_TEXT_CHARS) return { ok: false, error: "too_long" };
+  return { ok: true, parts: text2.trim() ? parts : [], text: text2, files };
 }
 __name(parseContent, "parseContent");
 var errorCode = /* @__PURE__ */ __name((err, exhausted) => {
@@ -14464,7 +14555,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await readSession(env, bearer(request));
   if (!sub) return json10({ error: "signed_out" }, 401);
   if (await bindingAllows(env, "RATE_LIMIT_30", `ai-chat|account|${sub}`) === false) {
-    return new Response(JSON.stringify({ error: "rate_limited", retryAfter: 60 }), { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "60", ...CORS9 } });
+    return new Response(JSON.stringify({ error: "rate_limited", retryAfter: 60 }), { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "60", ...CORS10 } });
   }
   if (!anyProviderConfigured(env)) return json10({ error: "ai_not_configured" }, 503);
   if (!dbConfigured(env)) return json10({ error: "unavailable" }, 503);
@@ -14659,7 +14750,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
     searchLog = { via: "search", ok: r.ok, ...r.ok ? { count: r.sources.length, cached: r.cached, provider: r.provider } : { reason: r.reason } };
     return r;
   })(), "runApiSearch");
-  const memo6 = newMemo();
+  const memo7 = newMemo();
   const readNames = [...fileRows.values(), ...project?.files ?? []].map((a) => a.name).filter(Boolean);
   let saidReading = false;
   const build = /* @__PURE__ */ __name(async (spec) => {
@@ -14673,11 +14764,11 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
       const r = await runApiSearch();
       if (r.ok) search = { sources: r.sources };
     }
-    const knowledge = project ? await knowledgeFor(env, spec, project, memo6) : null;
+    const knowledge = project ? await knowledgeFor(env, spec, project, memo7) : null;
     const level = resolveLevel(spec, wanted);
     const asked = specAtLevel(spec, level);
     const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText, thinking: level });
-    const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo6), knowledge);
+    const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo7), knowledge);
     return {
       model: asked,
       system,
@@ -14716,7 +14807,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
   const pump = /* @__PURE__ */ __name(async () => {
     const started = Date.now();
     let model = candidates[0];
-    let text = "";
+    let text2 = "";
     let thinking = "";
     let thinkMs = null;
     let usage = null;
@@ -14811,11 +14902,11 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
           const parsed = await collect(ADAPTERS[model.provider].parse(textBody(raw)));
           for (const ev of parsed.events) {
             if (ev.type === "thinking") thinking += ev.delta;
-            else if (ev.type === "text") text += ev.delta;
+            else if (ev.type === "text") text2 += ev.delta;
             else if (ev.type === "usage") usage = { input: ev.input, output: ev.output };
             else if (ev.type === "end") stop = ev.reason === "length" ? "length" : "end";
             else if (ev.type === "sources") {
-              markers = placeMarkers(text, ev.supports ?? []);
+              markers = placeMarkers(text2, ev.supports ?? []);
               searched = { items: ev.items, via: "grounding", queries: ev.queries, ...ev.entryPointHtml ? { entryPointHtml: ev.entryPointHtml } : {} };
               searchLog = { via: "grounding", count: ev.items.length };
               send("status", { step: "searched", count: ev.items.length, sites: sitesOf(ev.items) });
@@ -14824,10 +14915,10 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
           }
           if (parsed.error) {
             noteFailure(model, parsed.error);
-            failed2(parsed.error, model, text.trim().length > 0);
+            failed2(parsed.error, model, text2.trim().length > 0);
           }
           complete = true;
-          if (thinking) thinkMs = Math.round((Date.now() - opened.firstAt) * (thinking.length / Math.max(1, thinking.length + text.length)));
+          if (thinking) thinkMs = Math.round((Date.now() - opened.firstAt) * (thinking.length / Math.max(1, thinking.length + text2.length)));
         }
       }
     } catch {
@@ -14841,7 +14932,7 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
       stop = "error";
       send("error", { code: "model_unavailable", message: "VinaX AI couldn\u2019t save this chat just now. Try again.", retryable: true });
     }
-    const savedReply = userOk && complete && !abort.signal.aborted && text.trim().length > 0;
+    const savedReply = userOk && complete && !abort.signal.aborted && text2.trim().length > 0;
     send("done", { stopReason: stop, saved: savedReply || !!continuing && !tooBig, ...usage ? { usage } : {} });
     await chain;
     if (open) {
@@ -14851,10 +14942,10 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
       } catch {
       }
     }
-    const finalText = markers.length ? applyMarkers(text, markers) : text;
+    const finalText = markers.length ? applyMarkers(text2, markers) : text2;
     if (continuing) {
       if (savedReply) {
-        const joined = textOf(continuing.content) + text;
+        const joined = textOf(continuing.content) + text2;
         const found = artifactsOf(joined);
         await updateMessage(env, conversation.id, continuing.id, {
           content: [{ type: "text", text: joined }],
@@ -14908,10 +14999,10 @@ var onRequestPost33 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/keep.ts
 var keep_exports = {};
 __export(keep_exports, {
-  onRequestOptions: () => onRequestOptions19,
+  onRequestOptions: () => onRequestOptions20,
   onRequestPost: () => onRequestPost34
 });
-var onRequestOptions19 = onRequestOptions18;
+var onRequestOptions20 = onRequestOptions19;
 var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-keep", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -14925,7 +15016,7 @@ var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
   if (!isUuid(conversationId) || !isUuid(userMessageId) || !isUuid(assistantMessageId)) return json10({ error: "bad_request" }, 400);
   if (typeof b.text !== "string") return json10({ error: "bad_request" }, 400);
   if (b.text.length > MAX_TEXT_CHARS) return json10({ error: "too_long" }, 413);
-  const text = b.text;
+  const text2 = b.text;
   const thinking = typeof b.thinking === "string" && b.thinking ? b.thinking.slice(0, THINK_MAX) : null;
   const stopReason = b.stopReason === "error" || b.stopReason === "end" || b.stopReason === "length" ? b.stopReason : "aborted";
   const spec = modelById(MODELS, b.model);
@@ -14935,14 +15026,14 @@ var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const rows3 = await listMessages(env, conversationId);
   if (!rows3.ok) return json10({ error: "unavailable" }, 503);
   if (!rows3.rows.some((r) => r.id === userMessageId && r.role === "user")) return json10({ error: "not_found" }, 404);
-  const found = artifactsOf(text);
+  const found = artifactsOf(text2);
   const existing = rows3.rows.find((r) => r.id === assistantMessageId);
   if (b.continued === true) {
     if (!existing || existing.role !== "assistant" || existing.parent_id !== userMessageId) return json10({ error: "not_found" }, 404);
     const before = textOf(existing.content);
-    if (text.length <= before.length || !text.startsWith(before)) return json10({ ok: true, saved: false });
+    if (text2.length <= before.length || !text2.startsWith(before)) return json10({ ok: true, saved: false });
     const updated = await updateMessage(env, conversationId, assistantMessageId, {
-      content: [{ type: "text", text }],
+      content: [{ type: "text", text: text2 }],
       artifacts: found.length ? found : null,
       // The page's reasoning may already hold the saved part; never write it twice.
       thinking: (thinking && existing.thinking && thinking.startsWith(existing.thinking) ? thinking : [existing.thinking, thinking].filter(Boolean).join("\n\n")).slice(0, THINK_MAX) || null,
@@ -14953,13 +15044,13 @@ var onRequestPost34 = /* @__PURE__ */ __name(async ({ request, env }) => {
     await updateConversation(env, sub, conversationId, { updated_at: (/* @__PURE__ */ new Date()).toISOString(), active_leaf_id: assistantMessageId });
     return json10({ ok: true, saved: true });
   }
-  if (existing || !text.trim()) return json10({ ok: true, saved: false });
+  if (existing || !text2.trim()) return json10({ ok: true, saved: false });
   const saved = await insertMessage(env, {
     id: assistantMessageId,
     conversation_id: conversationId,
     parent_id: userMessageId,
     role: "assistant",
-    content: [{ type: "text", text }],
+    content: [{ type: "text", text: text2 }],
     thinking,
     thinking_ms: null,
     sources: null,
@@ -14979,8 +15070,8 @@ var models_exports = {};
 __export(models_exports, {
   LONG_CONTEXT_CHARS: () => LONG_CONTEXT_CHARS,
   kindsOf: () => kindsOf,
-  onRequestGet: () => onRequestGet46,
-  onRequestOptions: () => onRequestOptions20,
+  onRequestGet: () => onRequestGet47,
+  onRequestOptions: () => onRequestOptions21,
   recommendedIds: () => recommendedIds
 });
 function kindsOf(spec) {
@@ -14995,8 +15086,8 @@ function kindsOf(spec) {
 __name(kindsOf, "kindsOf");
 var LONG_CONTEXT_CHARS = 3e5;
 var recommendedIds = /* @__PURE__ */ __name(() => new Set(["default", "code", "deep", "vision", "fast"].map((l) => LADDERS[l][0]).filter(Boolean)), "recommendedIds");
-var onRequestOptions20 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
-var onRequestGet46 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions21 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestGet47 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-models", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -15042,12 +15133,12 @@ var onRequestGet46 = /* @__PURE__ */ __name(async (ctx) => {
 var conversations_exports = {};
 __export(conversations_exports, {
   PAGE_SIZE: () => PAGE_SIZE,
-  onRequestGet: () => onRequestGet47,
-  onRequestOptions: () => onRequestOptions21
+  onRequestGet: () => onRequestGet48,
+  onRequestOptions: () => onRequestOptions22
 });
 var PAGE_SIZE = 30;
-var onRequestOptions21 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
-var onRequestGet47 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions22 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestGet48 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-conversations", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -15069,11 +15160,11 @@ var onRequestGet47 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/export.ts
 var export_exports = {};
 __export(export_exports, {
-  onRequestGet: () => onRequestGet48,
-  onRequestOptions: () => onRequestOptions22
+  onRequestGet: () => onRequestGet49,
+  onRequestOptions: () => onRequestOptions23
 });
-var onRequestOptions22 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
-var onRequestGet48 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions23 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestGet49 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-export", { capacity: 3, refillPerMinute: 2 }, env);
   if (limited) return limited;
@@ -15085,17 +15176,17 @@ var onRequestGet48 = /* @__PURE__ */ __name(async (ctx) => {
   const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   return new Response(JSON.stringify(r.value), {
     status: 200,
-    headers: { "content-type": "application/json", "cache-control": "no-store", "content-disposition": `attachment; filename="vinax-ai-chats-${day}.json"`, ...CORS9 }
+    headers: { "content-type": "application/json", "cache-control": "no-store", "content-disposition": `attachment; filename="vinax-ai-chats-${day}.json"`, ...CORS10 }
   });
 }, "onRequestGet");
 
 // functions/api/ai/attachments.ts
 var attachments_exports = {};
 __export(attachments_exports, {
-  onRequestOptions: () => onRequestOptions23,
+  onRequestOptions: () => onRequestOptions24,
   onRequestPost: () => onRequestPost35
 });
-var onRequestOptions23 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS9["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
+var onRequestOptions24 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
 async function checkedStream(body, length, kind, mime) {
   const reader = body.getReader();
   const head = [];
@@ -15216,11 +15307,11 @@ var onRequestPost35 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports2 = {};
 __export(id_exports2, {
   onRequestDelete: () => onRequestDelete,
-  onRequestGet: () => onRequestGet49,
-  onRequestOptions: () => onRequestOptions24,
+  onRequestGet: () => onRequestGet50,
+  onRequestOptions: () => onRequestOptions25,
   onRequestPatch: () => onRequestPatch
 });
-var onRequestOptions24 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions25 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned(ctx, route2, capacity = 60) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity, refillPerMinute: capacity }, ctx.env);
   if (limited) return limited;
@@ -15235,7 +15326,7 @@ async function owned(ctx, route2, capacity = 60) {
   return { sub, row: r.value };
 }
 __name(owned, "owned");
-var onRequestGet49 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet50 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned(ctx, "ai-attachment", 120);
   if (o instanceof Response) return o;
   const file = await storageGet(ctx.env, o.row.storage_path);
@@ -15250,7 +15341,7 @@ var onRequestGet49 = /* @__PURE__ */ __name(async (ctx) => {
       "x-content-type-options": "nosniff",
       "content-security-policy": "default-src 'none'; sandbox",
       "cache-control": "private, max-age=3600",
-      ...CORS9
+      ...CORS10
     }
   });
 }, "onRequestGet");
@@ -15263,13 +15354,13 @@ var onRequestPatch = /* @__PURE__ */ __name(async (ctx) => {
   const pages = Number(read.value?.pages);
   if (!Number.isInteger(pages) || pages < 1) return json10({ error: "bad_request" }, 400);
   if (pages > (await aiSettings(ctx.env)).limits.pdfPages) return json10({ error: "too_many_pages" }, 413);
-  const text = typeof read.value?.text === "string" ? read.value.text.slice(0, MAX_EXTRACTED_CHARS) : "";
-  if (o.row.project_id && text) {
+  const text2 = typeof read.value?.text === "string" ? read.value.text.slice(0, MAX_EXTRACTED_CHARS) : "";
+  if (o.row.project_id && text2) {
     const used = await knowledgeUsage(ctx.env, o.sub, o.row.project_id, o.row.id);
     if (!used.ok) return json10({ error: "unavailable" }, 503);
-    if (used.value.chars + text.length > MAX_PROJECT_CHARS) return json10({ error: "knowledge_full" }, 409);
+    if (used.value.chars + text2.length > MAX_PROJECT_CHARS) return json10({ error: "knowledge_full" }, 409);
   }
-  const r = await db.update(ctx.env, "ai_attachments", q().eq("id", o.row.id).eq("account_id", o.sub), { extracted_text: text || null, pages });
+  const r = await db.update(ctx.env, "ai_attachments", q().eq("id", o.row.id).eq("account_id", o.sub), { extracted_text: text2 || null, pages });
   return r.ok ? json10({ ok: true }) : json10({ error: "unavailable" }, 503);
 }, "onRequestPatch");
 var onRequestDelete = /* @__PURE__ */ __name(async (ctx) => {
@@ -15285,14 +15376,14 @@ var onRequestDelete = /* @__PURE__ */ __name(async (ctx) => {
 var transcribe_exports = {};
 __export(transcribe_exports, {
   looksLikeAudio: () => looksLikeAudio,
-  onRequestOptions: () => onRequestOptions25,
+  onRequestOptions: () => onRequestOptions26,
   onRequestPost: () => onRequestPost36
 });
 
 // functions/_lib/ai/voiceGate.ts
 var rateLimited = /* @__PURE__ */ __name(() => new Response(JSON.stringify({ error: "rate_limited", retryAfter: 60 }), {
   status: 429,
-  headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "60", ...CORS9 }
+  headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "60", ...CORS10 }
 }), "rateLimited");
 async function voiceGate(request, env, route2, feature, bucket2 = { capacity: 12, refillPerMinute: 10 }) {
   const limited = await rateLimitAsync(request, route2, bucket2, env);
@@ -15313,7 +15404,7 @@ function voiceFailure(kinds) {
 __name(voiceFailure, "voiceFailure");
 
 // functions/api/ai/transcribe.ts
-var onRequestOptions25 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS9["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
+var onRequestOptions26 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": `${CORS10["access-control-allow-headers"]}, content-length` } }), "onRequestOptions");
 function looksLikeAudio(b) {
   const ascii = /* @__PURE__ */ __name((at, s) => [...s].every((c, i) => b[at + i] === c.charCodeAt(0)), "ascii");
   return b[0] === 26 && b[1] === 69 && b[2] === 223 && b[3] === 163 || ascii(4, "ftyp") || ascii(0, "OggS") || ascii(0, "RIFF") && ascii(8, "WAVE") || ascii(0, "fLaC") || ascii(0, "ID3") || b[0] === 255 && (b[1] & 224) === 224;
@@ -15338,9 +15429,9 @@ var onRequestPost36 = /* @__PURE__ */ __name(async (ctx) => {
     for (const model of STT_GROQ_MODELS) {
       if (voiceResting(model)) continue;
       try {
-        const text = await groqTranscribe(env, model, clip3, audioMime);
+        const text2 = await groqTranscribe(env, model, clip3, audioMime);
         console.log(JSON.stringify({ route: "ai-transcribe", provider: "groq", model, ms: Date.now() - t0, bytes: clip3.length, ok: true }));
-        return json10({ text });
+        return json10({ text: text2 });
       } catch (e) {
         const err = asProviderError(e);
         kinds.push(err.kind);
@@ -15374,7 +15465,7 @@ __export(speak_exports, {
   MAX_SPEAK_CHARS: () => MAX_SPEAK_CHARS,
   audioFrame: () => audioFrame,
   frame: () => frame2,
-  onRequestOptions: () => onRequestOptions26,
+  onRequestOptions: () => onRequestOptions27,
   onRequestPost: () => onRequestPost37
 });
 var MAX_SPEAK_CHARS = 6500;
@@ -15404,7 +15495,7 @@ function audioFrame(a) {
 ${a.data}`));
 }
 __name(audioFrame, "audioFrame");
-var onRequestOptions26 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, "ai-speak", "readAloud");
@@ -15413,14 +15504,14 @@ var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
   if (!read.ok) return json10({ error: read.reason === "too_large" ? "too_long" : "bad_request" }, read.reason === "too_large" ? 413 : 400);
   const body = read.value && typeof read.value === "object" ? read.value : {};
   if (typeof body.text !== "string") return json10({ error: "bad_request" }, 400);
-  const text = body.text.replace(/\s+/g, " ").trim();
-  if (!text) return json10({ error: "bad_request" }, 400);
-  if (text.length > MAX_SPEAK_CHARS) return json10({ error: "too_long" }, 413);
+  const text2 = body.text.replace(/\s+/g, " ").trim();
+  if (!text2) return json10({ error: "bad_request" }, 400);
+  if (text2.length > MAX_SPEAK_CHARS) return json10({ error: "too_long" }, 413);
   const voices = {
     read: READ_VOICES.includes(body.voice) ? body.voice : DEFAULT_READ_VOICE,
     live: LIVE_VOICES.includes(body.liveVoice) ? body.liveVoice : DEFAULT_LIVE_VOICE
   };
-  const plan = planSpeech(env, text, voices);
+  const plan = planSpeech(env, text2, voices);
   if (!plan) return voiceFailure([]);
   let { engine, model, voice } = plan;
   let queue = [...plan.pieces];
@@ -15486,11 +15577,11 @@ var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
       await writer.write(frame2(FRAME_STOPPED, enc7.encode(JSON.stringify({ error: busy ? "voice_busy" : "voice_unavailable" })))).catch(() => void 0);
       await writer.close().catch(() => void 0);
     } finally {
-      console.log(JSON.stringify({ route: "ai-speak", engine, model, ok: queue.length === 0, pieces, chars: text.length, ms: Date.now() - t0 }));
+      console.log(JSON.stringify({ route: "ai-speak", engine, model, ok: queue.length === 0, pieces, chars: text2.length, ms: Date.now() - t0 }));
     }
   })();
   if (ctx.waitUntil) ctx.waitUntil(pump);
-  return new Response(readable, { status: 200, headers: { ...CORS9, "content-type": "application/x-vinax-speech", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+  return new Response(readable, { status: 200, headers: { ...CORS10, "content-type": "application/x-vinax-speech", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 }, "onRequestPost");
 
 // functions/api/ai/images.ts
@@ -15499,13 +15590,13 @@ __export(images_exports, {
   IMAGE_REPLY_TEXT: () => IMAGE_REPLY_TEXT,
   IMAGE_REQUEST_PREFIX: () => IMAGE_REQUEST_PREFIX,
   MAX_BODY_BYTES: () => MAX_BODY_BYTES2,
-  onRequestOptions: () => onRequestOptions27,
+  onRequestOptions: () => onRequestOptions28,
   onRequestPost: () => onRequestPost38
 });
 var MAX_BODY_BYTES2 = 8192;
 var IMAGE_REQUEST_PREFIX = "Create an image: ";
 var IMAGE_REPLY_TEXT = "Here\u2019s your image.";
-var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 var label = /* @__PURE__ */ __name((id) => id === IMAGE_MODEL_ID ? IMAGE_MODEL_LABEL : null, "label");
 var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
@@ -15664,11 +15755,11 @@ var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
 var live_token_exports = {};
 __export(live_token_exports, {
   liveCandidates: () => liveCandidates,
-  onRequestOptions: () => onRequestOptions28,
+  onRequestOptions: () => onRequestOptions29,
   onRequestPost: () => onRequestPost39
 });
 var UUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function liveCandidates(thinking, skip, now = Date.now(), picked = null, search = false) {
   const first = ALL_LIVE_MODELS.find((m2) => m2.id === picked);
   const searchers = search ? LIVE_MODELS.filter((m2) => LIVE_SEARCH_MODELS.includes(m2.id)) : [];
@@ -15742,7 +15833,7 @@ __export(live_transcript_exports, {
   MAX_TURN_SOURCES: () => MAX_TURN_SOURCES,
   cleanSources: () => cleanSources,
   cleanTurns: () => cleanTurns,
-  onRequestOptions: () => onRequestOptions29,
+  onRequestOptions: () => onRequestOptions30,
   onRequestPost: () => onRequestPost40
 });
 
@@ -15762,7 +15853,7 @@ async function completeText(env, o) {
   const onAbort = /* @__PURE__ */ __name(() => ac.abort(), "onAbort");
   o.signal?.addEventListener("abort", onAbort, { once: true });
   const started = Date.now();
-  let text = "";
+  let text2 = "";
   let spec = null;
   try {
     for await (const ev of runChat(env, {
@@ -15783,16 +15874,16 @@ async function completeText(env, o) {
     })) {
       if (ev.type === "model") {
         spec = ev.spec;
-        text = "";
-      } else if (ev.type === "text") text += ev.delta;
-      else if (ev.type === "failed") return text.trim() && ev.partial ? { text, spec, ms: Date.now() - started } : null;
+        text2 = "";
+      } else if (ev.type === "text") text2 += ev.delta;
+      else if (ev.type === "failed") return text2.trim() && ev.partial ? { text: text2, spec, ms: Date.now() - started } : null;
     }
   } catch {
     return null;
   } finally {
     o.signal?.removeEventListener("abort", onAbort);
   }
-  return text.trim() ? { text, spec, ms: Date.now() - started } : null;
+  return text2.trim() ? { text: text2, spec, ms: Date.now() - started } : null;
 }
 __name(completeText, "completeText");
 
@@ -15872,15 +15963,15 @@ function cleanSources(raw, into = []) {
   return out;
 }
 __name(cleanSources, "cleanSources");
-var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function cleanTurns(raw) {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TURNS) return null;
   const out = [];
   for (const t of raw) {
     const role = t?.role;
-    const text = t?.text;
-    if (role !== "user" && role !== "assistant" || typeof text !== "string") return null;
-    const clean2 = text.replace(/\s+/g, " ").trim().slice(0, MAX_TURN_CHARS);
+    const text2 = t?.text;
+    if (role !== "user" && role !== "assistant" || typeof text2 !== "string") return null;
+    const clean2 = text2.replace(/\s+/g, " ").trim().slice(0, MAX_TURN_CHARS);
     if (!clean2) continue;
     const found = role === "assistant" ? t.sources : void 0;
     const last = out[out.length - 1];
@@ -15986,8 +16077,8 @@ var onRequestPost40 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports3 = {};
 __export(id_exports3, {
   onRequestDelete: () => onRequestDelete2,
-  onRequestGet: () => onRequestGet50,
-  onRequestOptions: () => onRequestOptions30,
+  onRequestGet: () => onRequestGet51,
+  onRequestOptions: () => onRequestOptions31,
   onRequestPatch: () => onRequestPatch2
 });
 
@@ -16026,11 +16117,11 @@ function snapshotOf(conv, rows3) {
   const out = [];
   for (const m2 of pathTo(rows3, leaf)) {
     const parts = Array.isArray(m2.content) ? m2.content : [];
-    const text = parts.filter((p) => p?.type === "text").map((p) => String(p.text ?? "")).filter(Boolean).join("\n\n");
+    const text2 = parts.filter((p) => p?.type === "text").map((p) => String(p.text ?? "")).filter(Boolean).join("\n\n");
     const files = parts.filter((p) => p?.type === "attachment").map((p) => ({ name: clip2(p.name, 200) || "file", kind: KINDS4.has(String(p.kind)) ? p.kind : "text" }));
-    if (!text.trim() && !files.length) continue;
+    if (!text2.trim() && !files.length) continue;
     const sources = m2.role === "assistant" ? cleanSources2(m2.sources) : void 0;
-    out.push({ role: m2.role, text, ...files.length ? { files } : {}, ...sources ? { sources } : {}, createdAt: m2.created_at });
+    out.push({ role: m2.role, text: text2, ...files.length ? { files } : {}, ...sources ? { sources } : {}, createdAt: m2.created_at });
   }
   return out;
 }
@@ -16069,7 +16160,7 @@ function publicShareSummary(r) {
 __name(publicShareSummary, "publicShareSummary");
 
 // functions/api/ai/conversations/[id].ts
-var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned2(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -16093,7 +16184,7 @@ var label2 = /* @__PURE__ */ __name((modelId) => {
   const p = modelId.slice(0, modelId.indexOf(":"));
   return DISCOVERY_PROVIDERS.includes(p) ? { name: prettyName(modelId.slice(p.length + 1)), provider: PROVIDER_NAMES[p] } : null;
 }, "label");
-var onRequestGet50 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet51 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned2(ctx, "ai-conversation");
   if (o instanceof Response) return o;
   const [m2, inc] = await Promise.all([
@@ -16156,12 +16247,12 @@ var onRequestDelete2 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/shares.ts
 var shares_exports = {};
 __export(shares_exports, {
-  onRequestGet: () => onRequestGet51,
-  onRequestOptions: () => onRequestOptions31,
+  onRequestGet: () => onRequestGet52,
+  onRequestOptions: () => onRequestOptions32,
   onRequestPost: () => onRequestPost41
 });
-var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
-var onRequestGet51 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-shares", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16214,8 +16305,8 @@ var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env }) => {
 // functions/api/ai/artifacts.ts
 var artifacts_exports = {};
 __export(artifacts_exports, {
-  onRequestGet: () => onRequestGet52,
-  onRequestOptions: () => onRequestOptions32
+  onRequestGet: () => onRequestGet53,
+  onRequestOptions: () => onRequestOptions33
 });
 
 // functions/_lib/ai/gallery.ts
@@ -16257,11 +16348,11 @@ function publicItem(r) {
 __name(publicItem, "publicItem");
 async function listArtifacts(env, accountId, o = {}) {
   const limit = Math.max(1, Math.min(100, o.limit ?? GALLERY_PAGE));
-  const text = (o.query ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
+  const text2 = (o.query ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
   const r = await db.rpc(env, "ai_artifact_list", {
     p_account: accountId,
     p_kind: o.kind ?? null,
-    p_query: text || null,
+    p_query: text2 || null,
     p_before: o.cursor?.at ?? null,
     p_before_key: o.cursor?.key ?? null,
     p_limit: limit
@@ -16304,8 +16395,8 @@ async function artifactVersions(env, accountId, conversationId, artifactId) {
 __name(artifactVersions, "artifactVersions");
 
 // functions/api/ai/artifacts.ts
-var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
-var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-artifacts", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16325,11 +16416,11 @@ var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
 // functions/api/ai/artifacts/[id].ts
 var id_exports4 = {};
 __export(id_exports4, {
-  onRequestGet: () => onRequestGet53,
-  onRequestOptions: () => onRequestOptions33
+  onRequestGet: () => onRequestGet54,
+  onRequestOptions: () => onRequestOptions34
 });
-var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
-var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestGet54 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-artifact", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16347,13 +16438,13 @@ var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env, params }) => 
 var id_exports5 = {};
 __export(id_exports5, {
   onRequestDelete: () => onRequestDelete3,
-  onRequestGet: () => onRequestGet54,
-  onRequestOptions: () => onRequestOptions34
+  onRequestGet: () => onRequestGet55,
+  onRequestOptions: () => onRequestOptions35
 });
 var NOINDEX = { "x-robots-tag": "noindex, nofollow" };
-var notFound = /* @__PURE__ */ __name(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", ...NOINDEX, ...CORS9 } }), "notFound");
-var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
-var onRequestGet54 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var notFound = /* @__PURE__ */ __name(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", ...NOINDEX, ...CORS10 } }), "notFound");
+var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestGet55 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-read", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
   const id = params?.id;
@@ -16366,7 +16457,7 @@ var onRequestGet54 = /* @__PURE__ */ __name(async ({ request, env, params }) => 
   const body = { share: { id: s.id, title: s.title, messages: s.messages, createdAt: s.created_at, updatedAt: s.updated_at } };
   return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...NOINDEX, ...CORS9 }
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...NOINDEX, ...CORS10 }
   });
 }, "onRequestGet");
 var onRequestDelete3 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
@@ -16386,10 +16477,10 @@ var onRequestDelete3 = /* @__PURE__ */ __name(async ({ request, env, params }) =
 // functions/api/ai/shares/[id]-continue.ts
 var id_continue_exports = {};
 __export(id_continue_exports, {
-  onRequestOptions: () => onRequestOptions35,
+  onRequestOptions: () => onRequestOptions36,
   onRequestPost: () => onRequestPost42
 });
-var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-continue", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
@@ -16408,13 +16499,13 @@ var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) =>
   if (!conv) return json10({ error: "unavailable" }, 503);
   const base3 = Date.now();
   const rows3 = s.value.messages.map((m2, i) => {
-    const text = [m2.text, ...(m2.files ?? []).map((f) => `[file: ${f.name}]`)].filter(Boolean).join("\n\n");
+    const text2 = [m2.text, ...(m2.files ?? []).map((f) => `[file: ${f.name}]`)].filter(Boolean).join("\n\n");
     return {
       id: crypto.randomUUID(),
       conversation_id: conv.id,
       parent_id: null,
       role: m2.role,
-      content: [{ type: "text", text }],
+      content: [{ type: "text", text: text2 }],
       sources: m2.role === "assistant" && m2.sources ? m2.sources : null,
       stop_reason: m2.role === "assistant" ? "end" : null,
       created_at: new Date(base3 + i).toISOString()
@@ -16435,11 +16526,11 @@ var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) =>
 // functions/api/ai/projects.ts
 var projects_exports = {};
 __export(projects_exports, {
-  onRequestGet: () => onRequestGet55,
-  onRequestOptions: () => onRequestOptions36,
+  onRequestGet: () => onRequestGet56,
+  onRequestOptions: () => onRequestOptions37,
   onRequestPost: () => onRequestPost43
 });
-var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 async function session(request, env, route2) {
   const limited = await rateLimitAsync(request, route2, { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16466,7 +16557,7 @@ async function countsOf(env, sub) {
   return out;
 }
 __name(countsOf, "countsOf");
-var onRequestGet55 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet56 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await session(ctx.request, ctx.env, "ai-projects");
   if (sub instanceof Response) return sub;
   const [r, counts] = await Promise.all([listProjects(ctx.env, sub), countsOf(ctx.env, sub)]);
@@ -16503,11 +16594,11 @@ var onRequestPost43 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports6 = {};
 __export(id_exports6, {
   onRequestDelete: () => onRequestDelete4,
-  onRequestGet: () => onRequestGet56,
-  onRequestOptions: () => onRequestOptions37,
+  onRequestGet: () => onRequestGet57,
+  onRequestOptions: () => onRequestOptions38,
   onRequestPatch: () => onRequestPatch3
 });
-var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned3(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -16522,7 +16613,7 @@ async function owned3(ctx, route2) {
   return { sub, project: p.value };
 }
 __name(owned3, "owned");
-var onRequestGet56 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet57 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned3(ctx, "ai-project");
   if (o instanceof Response) return o;
   const [files, chats] = await Promise.all([projectFiles(ctx.env, o.sub, o.project.id), listConversations(ctx.env, o.sub, { projectId: o.project.id, limit: 100 })]);
@@ -16571,12 +16662,12 @@ var onRequestDelete4 = /* @__PURE__ */ __name(async (ctx) => {
 var memories_exports = {};
 __export(memories_exports, {
   onRequestDelete: () => onRequestDelete5,
-  onRequestGet: () => onRequestGet57,
-  onRequestOptions: () => onRequestOptions38,
+  onRequestGet: () => onRequestGet58,
+  onRequestOptions: () => onRequestOptions39,
   onRequestPost: () => onRequestPost44
 });
-var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
-var onRequestGet57 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestGet58 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
   const [items, prefs, enabled] = await Promise.all([listMemories(ctx.env, sub), readPrefs(ctx.env, sub), memoryAllowed(ctx.env)]);
@@ -16588,17 +16679,17 @@ var onRequestPost44 = /* @__PURE__ */ __name(async (ctx) => {
   if (sub instanceof Response) return sub;
   const read = await readJsonCapped(ctx.request, 2048);
   if (!read.ok || !read.value || typeof read.value !== "object") return json10({ error: "bad_request" }, 400);
-  const text = cleanMemoryText(read.value.text);
-  if (!text) return json10({ error: "bad_request" }, 400);
-  if (looksSensitive(text)) return json10({ error: "sensitive" }, 422);
+  const text2 = cleanMemoryText(read.value.text);
+  if (!text2) return json10({ error: "bad_request" }, 400);
+  if (looksSensitive(text2)) return json10({ error: "sensitive" }, 422);
   if (!await memoryAllowed(ctx.env)) return json10({ error: "memory_off" }, 503);
   const have = await listMemories(ctx.env, sub);
   if (!have.ok) return json10({ error: "unavailable" }, 503);
-  const same = have.rows.find((m2) => memoryKey(m2.text) === memoryKey(text));
+  const same = have.rows.find((m2) => memoryKey(m2.text) === memoryKey(text2));
   if (same) return json10({ item: publicMemory(same) });
   if (have.rows.length >= MEMORY_MAX_ITEMS) return json10({ error: "full" }, 409);
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const made = await db.insert(ctx.env, "ai_memories", { id: crypto.randomUUID(), account_id: sub, text, origin: "user", conversation_id: null, created_at: now, updated_at: now }, { returning: true });
+  const made = await db.insert(ctx.env, "ai_memories", { id: crypto.randomUUID(), account_id: sub, text: text2, origin: "user", conversation_id: null, created_at: now, updated_at: now }, { returning: true });
   if (!made.ok) return made.code === "23503" ? json10({ error: "signed_out" }, 401) : json10({ error: "unavailable" }, 503);
   if (!made.rows[0]) return json10({ error: "unavailable" }, 503);
   return json10({ item: publicMemory(made.rows[0]) }, 201);
@@ -16614,12 +16705,12 @@ var onRequestDelete5 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/ai/memories/prefs.ts
 var prefs_exports = {};
 __export(prefs_exports, {
-  onRequestGet: () => onRequestGet58,
-  onRequestOptions: () => onRequestOptions39,
+  onRequestGet: () => onRequestGet59,
+  onRequestOptions: () => onRequestOptions40,
   onRequestPut: () => onRequestPut3
 });
-var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
-var onRequestGet58 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
+var onRequestGet59 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
   const r = await readPrefs(ctx.env, sub);
@@ -16647,9 +16738,9 @@ var onRequestPut3 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports7 = {};
 __export(id_exports7, {
   onRequestDelete: () => onRequestDelete6,
-  onRequestOptions: () => onRequestOptions40
+  onRequestOptions: () => onRequestOptions41
 });
-var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestDelete6 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, true);
   if (sub instanceof Response) return sub;
@@ -16665,8 +16756,8 @@ var onRequestDelete6 = /* @__PURE__ */ __name(async (ctx) => {
 var profile_exports = {};
 __export(profile_exports, {
   onRequestDelete: () => onRequestDelete7,
-  onRequestGet: () => onRequestGet59,
-  onRequestOptions: () => onRequestOptions41,
+  onRequestGet: () => onRequestGet60,
+  onRequestOptions: () => onRequestOptions42,
   onRequestPut: () => onRequestPut4
 });
 
@@ -16790,13 +16881,13 @@ async function isFollowing(env, follower, followee) {
 __name(isFollowing, "isFollowing");
 
 // functions/api/profile.ts
-var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
-var onRequestGet59 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestGet60 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
   const r = await profileOf(ctx.env, who.sub);
   if (!r.ok) return json10({ error: "unavailable" }, 503);
-  if (!r.value) return new Response(null, { status: 204, headers: CORS9 });
+  if (!r.value) return new Response(null, { status: 204, headers: CORS10 });
   const followers = await db.count(ctx.env, "follows", q().eq("followee_id", who.sub));
   return json10({ profile: publicProfile(r.value, { followers: followers.ok ? followers.value : 0, own: true }) });
 }, "onRequestGet");
@@ -16870,35 +16961,35 @@ var onRequestDelete7 = /* @__PURE__ */ __name(async (ctx) => {
   const b = await db.remove(ctx.env, "follows", q().eq("followee_id", who.sub));
   const c = await db.remove(ctx.env, "profiles", q().eq("account_id", who.sub));
   if (!a.ok || !b.ok || !c.ok) return json10({ error: "unavailable" }, 503);
-  return new Response(null, { status: 204, headers: CORS9 });
+  return new Response(null, { status: 204, headers: CORS10 });
 }, "onRequestDelete");
 
 // functions/api/reactions.ts
 var reactions_exports = {};
 __export(reactions_exports, {
-  onRequestGet: () => onRequestGet60,
-  onRequestOptions: () => onRequestOptions42,
+  onRequestGet: () => onRequestGet61,
+  onRequestOptions: () => onRequestOptions43,
   onRequestPost: () => onRequestPost45,
   onRequestPut: () => onRequestPut5
 });
-var CORS10 = {
+var CORS11 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
-var onRequestGet60 = /* @__PURE__ */ __name(async () => jsonResponse({ total: 0, counts: {}, mine: null }, 200, { ...CORS10, "cache-control": "public, max-age=3600" }), "onRequestGet");
+var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
+var onRequestGet61 = /* @__PURE__ */ __name(async () => jsonResponse({ total: 0, counts: {}, mine: null }, 200, { ...CORS11, "cache-control": "public, max-age=3600" }), "onRequestGet");
 var onRequestPut5 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestPut");
-var onRequestPost45 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS10), "onRequestPost");
+var onRequestPost45 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS11), "onRequestPost");
 
 // functions/api/profile/[handle].ts
 var handle_exports = {};
 __export(handle_exports, {
-  onRequestGet: () => onRequestGet61,
-  onRequestOptions: () => onRequestOptions43
+  onRequestGet: () => onRequestGet62,
+  onRequestOptions: () => onRequestOptions44
 });
-var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
-var onRequestGet61 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestGet62 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = rateLimit(ctx.request, "profile-read", { capacity: 60, refillPerMinute: 60 }, ctx.env);
   if (limited) return limited;
   if (!dbConfigured(ctx.env)) return json10({ error: "unavailable" }, 503);
@@ -16928,13 +17019,13 @@ var onRequestGet61 = /* @__PURE__ */ __name(async (ctx) => {
 var follow_exports = {};
 __export(follow_exports, {
   MAX_FOLLOWING: () => MAX_FOLLOWING,
-  onRequestGet: () => onRequestGet62,
-  onRequestOptions: () => onRequestOptions44,
+  onRequestGet: () => onRequestGet63,
+  onRequestOptions: () => onRequestOptions45,
   onRequestPost: () => onRequestPost46
 });
-var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var MAX_FOLLOWING = 500;
-var onRequestGet62 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
   const f = await db.select(ctx.env, "follows", q().eq("follower_id", who.sub).select("followee_id").limit(MAX_FOLLOWING));
@@ -16993,8 +17084,8 @@ var shared_playlist_exports = {};
 __export(shared_playlist_exports, {
   cleanSongs: () => cleanSongs,
   onRequestDelete: () => onRequestDelete8,
-  onRequestGet: () => onRequestGet63,
-  onRequestOptions: () => onRequestOptions45,
+  onRequestGet: () => onRequestGet64,
+  onRequestOptions: () => onRequestOptions46,
   onRequestPost: () => onRequestPost47,
   publicPlaylist: () => publicPlaylist
 });
@@ -17027,8 +17118,8 @@ function publicPlaylist(p, extra = {}) {
   };
 }
 __name(publicPlaylist, "publicPlaylist");
-var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
-var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestGet64 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
   const r = await db.select(ctx.env, "shared_playlists", q().eq("owner_id", who.sub).order("updated_at", "desc").limit(200));
@@ -17092,17 +17183,17 @@ var onRequestDelete8 = /* @__PURE__ */ __name(async (ctx) => {
   if (!/^[a-z0-9]{12}$/.test(id)) return json10({ error: "bad_request" }, 400);
   const r = await db.remove(ctx.env, "shared_playlists", q().eq("id", id).eq("owner_id", who.sub));
   if (!r.ok) return json10({ error: "unavailable" }, 503);
-  return new Response(null, { status: 204, headers: CORS9 });
+  return new Response(null, { status: 204, headers: CORS10 });
 }, "onRequestDelete");
 
 // functions/api/shared-playlist/[id].ts
 var id_exports8 = {};
 __export(id_exports8, {
-  onRequestGet: () => onRequestGet64,
-  onRequestOptions: () => onRequestOptions46,
+  onRequestGet: () => onRequestGet65,
+  onRequestOptions: () => onRequestOptions47,
   onRequestPost: () => onRequestPost48
 });
-var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS10, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var idOf3 = /* @__PURE__ */ __name((v) => typeof v === "string" && /^[a-z0-9]{12}$/.test(v) ? v : null, "idOf");
 async function load(env, id) {
   const r = await db.one(env, "shared_playlists", q().eq("id", id));
@@ -17110,7 +17201,7 @@ async function load(env, id) {
 }
 __name(load, "load");
 var tokenOk = /* @__PURE__ */ __name((row, token) => !!row.collab_token && !!token && safeEqual(token, row.collab_token), "tokenOk");
-var onRequestGet64 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet65 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = rateLimit(ctx.request, "shared-playlist-read", { capacity: 60, refillPerMinute: 60 }, ctx.env);
   if (limited) return limited;
   if (!dbConfigured(ctx.env)) return json10({ error: "unavailable" }, 503);
@@ -17163,7 +17254,7 @@ var onRequestPost48 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/push/fcm-register.ts
 var fcm_register_exports = {};
 __export(fcm_register_exports, {
-  onRequestOptions: () => onRequestOptions47,
+  onRequestOptions: () => onRequestOptions48,
   onRequestPost: () => onRequestPost50
 });
 
@@ -17239,20 +17330,20 @@ var onRequestPost49 = /* @__PURE__ */ __name(async (context) => {
 }, "onRequestPost");
 
 // functions/api/push/fcm-register.ts
-var CORS11 = {
+var CORS12 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type, authorization"
 };
-var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
+var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
 var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-fcm", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const body = asObject(await request.json().catch(() => null));
   const token = typeof body?.token === "string" ? body.token.trim() : "";
-  if (token.length < 20 || token.length > 4096 || /\s/.test(token)) return jsonResponse({ error: "bad_request" }, 400, CORS11);
-  if (!dbConfigured(env)) return jsonResponse({ error: "not_configured" }, 503, CORS11);
+  if (token.length < 20 || token.length > 4096 || /\s/.test(token)) return jsonResponse({ error: "bad_request" }, 400, CORS12);
+  if (!dbConfigured(env)) return jsonResponse({ error: "not_configured" }, 503, CORS12);
   const geo = edgeGeo(request);
   const platform = platformOf(body?.platform, request);
   const accountId = await accountOfRequest(request, env);
@@ -17275,21 +17366,21 @@ var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
     void _linked;
     r = await db.upsert(env, "push_devices", unlinked, "target");
   }
-  return r.ok ? jsonResponse({ ok: true, linked: !!accountId }, 200, CORS11) : jsonResponse({ error: "unavailable" }, 503, CORS11);
+  return r.ok ? jsonResponse({ ok: true, linked: !!accountId }, 200, CORS12) : jsonResponse({ error: "unavailable" }, 503, CORS12);
 }, "onRequestPost");
 
 // functions/api/push/opened.ts
 var opened_exports = {};
 __export(opened_exports, {
-  onRequestOptions: () => onRequestOptions48,
+  onRequestOptions: () => onRequestOptions49,
   onRequestPost: () => onRequestPost51
 });
-var CORS12 = {
+var CORS13 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
+var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
 var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-opened", { capacity: 20, refillPerMinute: 20 }, env);
@@ -17297,9 +17388,9 @@ var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
   const body = asObject(await request.json().catch(() => null));
   const raw = body?.id;
   const id = typeof raw === "number" ? raw : typeof raw === "string" && /^\d{1,15}$/.test(raw) ? Number(raw) : NaN;
-  if (!Number.isInteger(id) || id <= 0) return new Response(JSON.stringify({ error: "bad_request" }), { status: 400, headers: { "content-type": "application/json", ...CORS12 } });
+  if (!Number.isInteger(id) || id <= 0) return new Response(JSON.stringify({ error: "bad_request" }), { status: 400, headers: { "content-type": "application/json", ...CORS13 } });
   if (dbConfigured(env)) await db.rpc(env, "notification_opened", { p_id: id });
-  return new Response(null, { status: 204, headers: CORS12 });
+  return new Response(null, { status: 204, headers: CORS13 });
 }, "onRequestPost");
 
 // functions/api/push/unsubscribe.ts
@@ -17324,9 +17415,9 @@ var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/push/vapid.ts
 var vapid_exports = {};
 __export(vapid_exports, {
-  onRequestGet: () => onRequestGet65
+  onRequestGet: () => onRequestGet66
 });
-var onRequestGet65 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet66 = /* @__PURE__ */ __name(async (context) => {
   return new Response(JSON.stringify({ key: context.env.VAPID_PUBLIC_KEY ?? null }), {
     headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" }
   });
@@ -17343,8 +17434,8 @@ __export(room_exports, {
   memberHandle: () => memberHandle,
   newCode: () => newCode2,
   newHostToken: () => newHostToken,
-  onRequestGet: () => onRequestGet66,
-  onRequestOptions: () => onRequestOptions49,
+  onRequestGet: () => onRequestGet67,
+  onRequestOptions: () => onRequestOptions50,
   onRequestPost: () => onRequestPost53,
   pushMoment: () => pushMoment
 });
@@ -17364,7 +17455,7 @@ function liveLine(env) {
   return { url, key };
 }
 __name(liveLine, "liveLine");
-var CORS13 = {
+var CORS14 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type",
@@ -17379,7 +17470,7 @@ function pushMoment(at, arrived) {
   return Math.round(Math.min(arrived + PUSH_AT_MAX_AHEAD_MS, Math.max(arrived - PUSH_AT_MAX_AGE_MS, at)));
 }
 __name(pushMoment, "pushMoment");
-var json11 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS13), "json");
+var json11 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS14), "json");
 var ROOM_RL = {
   create: { capacity: 3, refillPerMinute: 3 },
   heartbeat: { capacity: 90, refillPerMinute: 90 },
@@ -17412,7 +17503,7 @@ __name(memberHandle, "memberHandle");
 var HANDLE = /^[0-9a-f]{12}$/;
 var jamOf = /* @__PURE__ */ __name((r) => r.jam && typeof r.jam === "object" && !Array.isArray(r.jam) ? r.jam : {}, "jamOf");
 var removedOf = /* @__PURE__ */ __name((r) => new Set(Array.isArray(jamOf(r).removed) ? jamOf(r).removed : []), "removedOf");
-var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
+var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
 function newCode2() {
   const a = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const buf = new Uint8Array(6);
@@ -17504,7 +17595,7 @@ async function jamUpdate(code, room, body) {
   return next.guestControl === jam.guestControl && next.host === jam.host ? {} : { jam: next };
 }
 __name(jamUpdate, "jamUpdate");
-var onRequestGet66 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet67 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "room-get", ROOM_RL.GET, env);
   if (limited) return limited;
@@ -17692,14 +17783,14 @@ var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
     return json11({ ok: r.ok });
   }
   if (action === "say") {
-    const text = clip(body.text, CHAT_TEXT_MAX);
-    if (!memberId || !text) return json11({ error: "bad_request" }, 400);
+    const text2 = clip(body.text, CHAT_TEXT_MAX);
+    if (!memberId || !text2) return json11({ error: "bad_request" }, 400);
     const r = await readRoom(env, code);
     if (!r.ok) return json11({ error: "unavailable" }, 503);
     if (!r.room) return json11({ error: "not_found" }, 404);
     if (removedOf(r.room).has(memberId)) return json11({ error: "removed" }, 403);
     const id = clip(body.id, 24);
-    const line = { by: clip(body.name, 40) ?? "Someone", text, at: now, ...id && /^[A-Za-z0-9_-]{6,24}$/.test(id) ? { id } : {} };
+    const line = { by: clip(body.name, 40) ?? "Someone", text: text2, at: now, ...id && /^[A-Za-z0-9_-]{6,24}$/.test(id) ? { id } : {} };
     const kept = Array.isArray(r.room.messages) ? r.room.messages : [];
     if ("id" in line && kept.some((m2) => m2.id === line.id)) return json11({ ok: true });
     const messages = [...kept, line].slice(-CHAT_MAX);
@@ -17741,24 +17832,6 @@ var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/site-mode.ts
 var site_mode_exports = {};
 __export(site_mode_exports, {
-  onRequestGet: () => onRequestGet67,
-  onRequestOptions: () => onRequestOptions50
-});
-var CORS14 = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, OPTIONS"
-};
-var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
-var onRequestGet67 = /* @__PURE__ */ __name(async (ctx) => {
-  const { values } = await settingsMap(ctx?.env ?? {});
-  return new Response(JSON.stringify(publicSiteMode(values)), {
-    headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...CORS14 }
-  });
-}, "onRequestGet");
-
-// functions/api/trending-searches.ts
-var trending_searches_exports = {};
-__export(trending_searches_exports, {
   onRequestGet: () => onRequestGet68,
   onRequestOptions: () => onRequestOptions51
 });
@@ -17767,13 +17840,16 @@ var CORS15 = {
   "access-control-allow-methods": "GET, OPTIONS"
 };
 var onRequestOptions51 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS15 }), "onRequestOptions");
-var onRequestGet68 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ queries: [] }), {
-  headers: { "content-type": "application/json", "cache-control": "public, max-age=600", ...CORS15 }
-}), "onRequestGet");
+var onRequestGet68 = /* @__PURE__ */ __name(async (ctx) => {
+  const { values } = await settingsMap(ctx?.env ?? {});
+  return new Response(JSON.stringify(publicSiteMode(values)), {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=60", ...CORS15 }
+  });
+}, "onRequestGet");
 
-// functions/api/trends.ts
-var trends_exports2 = {};
-__export(trends_exports2, {
+// functions/api/trending-searches.ts
+var trending_searches_exports = {};
+__export(trending_searches_exports, {
   onRequestGet: () => onRequestGet69,
   onRequestOptions: () => onRequestOptions52
 });
@@ -17782,26 +17858,41 @@ var CORS16 = {
   "access-control-allow-methods": "GET, OPTIONS"
 };
 var onRequestOptions52 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS16 }), "onRequestOptions");
-var onRequestGet69 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), sources: [], items: [] }), {
-  headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60, s-maxage=300", ...CORS16 }
+var onRequestGet69 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ queries: [] }), {
+  headers: { "content-type": "application/json", "cache-control": "public, max-age=600", ...CORS16 }
+}), "onRequestGet");
+
+// functions/api/trends.ts
+var trends_exports2 = {};
+__export(trends_exports2, {
+  onRequestGet: () => onRequestGet70,
+  onRequestOptions: () => onRequestOptions53
+});
+var CORS17 = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, OPTIONS"
+};
+var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
+var onRequestGet70 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), sources: [], items: [] }), {
+  headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60, s-maxage=300", ...CORS17 }
 }), "onRequestGet");
 
 // functions/api/username.ts
 var username_exports = {};
 __export(username_exports, {
   normalizeHandle: () => normalizeHandle2,
-  onRequestGet: () => onRequestGet70,
-  onRequestOptions: () => onRequestOptions53,
+  onRequestGet: () => onRequestGet71,
+  onRequestOptions: () => onRequestOptions54,
   onRequestPost: () => onRequestPost54
 });
 var HANDLE_RE2 = /^[a-z0-9_]{3,20}$/;
-var CORS17 = {
+var CORS18 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var json12 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS17), "json");
-var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
+var json12 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS18), "json");
+var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
 var normalizeHandle2 = /* @__PURE__ */ __name((raw) => {
   if (typeof raw !== "string") return null;
   const u2 = raw.trim().toLowerCase();
@@ -17823,7 +17914,7 @@ async function suggest(env, base3) {
   return out;
 }
 __name(suggest, "suggest");
-var onRequestGet70 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet71 = /* @__PURE__ */ __name(async (ctx) => {
   if (!ctx || !dbConfigured(ctx.env)) return json12({ available: true, unchecked: true });
   const limited = rateLimit(ctx.request, "username-check", { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -17863,10 +17954,10 @@ var onRequestPost54 = /* @__PURE__ */ __name(async (ctx) => {
 var version_exports = {};
 __export(version_exports, {
   buildFromRelease: () => buildFromRelease,
-  onRequestGet: () => onRequestGet71,
-  onRequestOptions: () => onRequestOptions54
+  onRequestGet: () => onRequestGet72,
+  onRequestOptions: () => onRequestOptions55
 });
-var CORS18 = {
+var CORS19 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type"
@@ -17874,7 +17965,7 @@ var CORS18 = {
 function json13(body, status = 200, cache = "no-store") {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json", "cache-control": cache, ...CORS18 }
+    headers: { "content-type": "application/json", "cache-control": cache, ...CORS19 }
   });
 }
 __name(json13, "json");
@@ -17884,8 +17975,8 @@ function buildFromRelease(tagName, body) {
   return parseInt(/build(\d+)/i.exec(tagName)?.[1] ?? "0", 10);
 }
 __name(buildFromRelease, "buildFromRelease");
-var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
-var onRequestGet71 = /* @__PURE__ */ __name(async (context) => {
+var onRequestOptions55 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
+var onRequestGet72 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (!githubConfigured(env)) return json13({ error: "not_configured" }, 503);
   const rel = await latestRelease(env);
@@ -17911,9 +18002,9 @@ var onRequestGet71 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/robots.ts
 var robots_exports = {};
 __export(robots_exports, {
-  onRequestGet: () => onRequestGet72
+  onRequestGet: () => onRequestGet73
 });
-var onRequestGet72 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestGet73 = /* @__PURE__ */ __name(async (ctx) => {
   const raw = await setting(ctx.env, "robots").catch(() => null);
   return new Response(robotsTxt(raw), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" }
@@ -17924,11 +18015,11 @@ var onRequestGet72 = /* @__PURE__ */ __name(async (ctx) => {
 var errors_exports = {};
 __export(errors_exports, {
   ERROR_STATUSES: () => ERROR_STATUSES,
-  onRequestGet: () => onRequestGet73,
+  onRequestGet: () => onRequestGet74,
   onRequestPost: () => onRequestPost55
 });
 var ERROR_STATUSES = ["new", "investigating", "fixed", "ignored"];
-var onRequestGet73 = adminGet(async ({ env, url }) => {
+var onRequestGet74 = adminGet(async ({ env, url }) => {
   const days = daysParam(url, 7, 90);
   const r = await db.rpc(env, "stats_errors", { p_days: days, p_limit: 300 });
   if (!r.ok) return dbFailure(r);
@@ -17967,9 +18058,9 @@ var onRequestPost55 = adminPost(async ({ env, body, audit: audit2, me }) => {
 // functions/apk.ts
 var apk_exports2 = {};
 __export(apk_exports2, {
-  onRequestGet: () => onRequestGet74
+  onRequestGet: () => onRequestGet75
 });
-var onRequestGet74 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet75 = /* @__PURE__ */ __name(async (context) => {
   const origin = new URL(context.request.url).origin;
   return Response.redirect(`${origin}/api/apk`, 302);
 }, "onRequestGet");
@@ -17977,14 +18068,14 @@ var onRequestGet74 = /* @__PURE__ */ __name(async (context) => {
 // functions/artist/[id].ts
 var id_exports9 = {};
 __export(id_exports9, {
-  onRequestGet: () => onRequestGet75
+  onRequestGet: () => onRequestGet76
 });
-var onRequestGet75 = /* @__PURE__ */ __name((context) => renderEntity("artist", String(context.params.id), context.request, context.env), "onRequestGet");
+var onRequestGet76 = /* @__PURE__ */ __name((context) => renderEntity("artist", String(context.params.id), context.request, context.env), "onRequestGet");
 
 // functions/img.ts
 var img_exports = {};
 __export(img_exports, {
-  onRequestGet: () => onRequestGet76
+  onRequestGet: () => onRequestGet77
 });
 var ALLOWED = /(^|\.)(saavncdn\.com|jiosaavn\.com)$|^saavn\.akamaized\.net$/i;
 var MAX_REDIRECTS = 3;
@@ -17999,7 +18090,7 @@ function hostOf3(u2) {
   }
 }
 __name(hostOf3, "hostOf");
-var onRequestGet76 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet77 = /* @__PURE__ */ __name(async (context) => {
   const target = new URL(context.request.url).searchParams.get("url");
   if (!target) return new Response("missing url", { status: 400 });
   const initialHost = hostOf3(target);
@@ -18048,14 +18139,14 @@ var onRequestGet76 = /* @__PURE__ */ __name(async (context) => {
 // functions/playlist/[id].ts
 var id_exports10 = {};
 __export(id_exports10, {
-  onRequestGet: () => onRequestGet77
+  onRequestGet: () => onRequestGet78
 });
-var onRequestGet77 = /* @__PURE__ */ __name((context) => renderEntity("playlist", String(context.params.id), context.request, context.env), "onRequestGet");
+var onRequestGet78 = /* @__PURE__ */ __name((context) => renderEntity("playlist", String(context.params.id), context.request, context.env), "onRequestGet");
 
 // functions/sitemap-albums.xml.ts
 var sitemap_albums_xml_exports = {};
 __export(sitemap_albums_xml_exports, {
-  onRequestGet: () => onRequestGet78
+  onRequestGet: () => onRequestGet79
 });
 var BASES2 = [
   "https://www.vinaxmusic.online/api/cat",
@@ -18088,17 +18179,17 @@ function xml(urls) {
   return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u2) => `<url><loc>${u2}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`).join("") + "</urlset>";
 }
 __name(xml, "xml");
-function respond2(body) {
+function respond3(body) {
   return new Response(body, {
     headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=1800, s-maxage=1800" }
   });
 }
-__name(respond2, "respond");
+__name(respond3, "respond");
 async function results(path, query2, limit = 25) {
   return fetchFirst(`${path}?query=${encodeURIComponent(query2)}&limit=${limit}`);
 }
 __name(results, "results");
-var onRequestGet78 = /* @__PURE__ */ __name(async () => {
+var onRequestGet79 = /* @__PURE__ */ __name(async () => {
   const urls = /* @__PURE__ */ new Set();
   const tasks = [];
   for (const l of LANGS) {
@@ -18115,13 +18206,13 @@ var onRequestGet78 = /* @__PURE__ */ __name(async () => {
       urls.add(`${ORIGIN3}/album/${slugify2(a.name)}-${safeId}`);
     }
   }
-  return respond2(xml([...urls]));
+  return respond3(xml([...urls]));
 }, "onRequestGet");
 
 // functions/sitemap-artists.xml.ts
 var sitemap_artists_xml_exports = {};
 __export(sitemap_artists_xml_exports, {
-  onRequestGet: () => onRequestGet79
+  onRequestGet: () => onRequestGet80
 });
 var BASES3 = [
   "https://www.vinaxmusic.online/api/cat",
@@ -18154,17 +18245,17 @@ function xml2(urls) {
   return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u2) => `<url><loc>${u2}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`).join("") + "</urlset>";
 }
 __name(xml2, "xml");
-function respond3(body) {
+function respond4(body) {
   return new Response(body, {
     headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=1800, s-maxage=1800" }
   });
 }
-__name(respond3, "respond");
+__name(respond4, "respond");
 async function results2(path, query2, limit = 25) {
   return fetchFirst2(`${path}?query=${encodeURIComponent(query2)}&limit=${limit}`);
 }
 __name(results2, "results");
-var onRequestGet79 = /* @__PURE__ */ __name(async () => {
+var onRequestGet80 = /* @__PURE__ */ __name(async () => {
   const urls = /* @__PURE__ */ new Set();
   const tasks = [];
   for (const l of LANGS2) {
@@ -18181,18 +18272,18 @@ var onRequestGet79 = /* @__PURE__ */ __name(async () => {
       urls.add(`${ORIGIN4}/artist/${slugify3(a.name)}-${safeId}`);
     }
   }
-  return respond3(xml2([...urls]));
+  return respond4(xml2([...urls]));
 }, "onRequestGet");
 
 // functions/sitemap-hubs.xml.ts
 var sitemap_hubs_xml_exports = {};
 __export(sitemap_hubs_xml_exports, {
-  onRequestGet: () => onRequestGet80
+  onRequestGet: () => onRequestGet81
 });
 var ORIGIN5 = "https://www.vinaxmusic.online";
 var LANGS3 = ["hindi", "telugu", "tamil", "english", "punjabi", "kannada", "malayalam", "bengali", "marathi", "bhojpuri", "gujarati", "urdu"];
 var MOODS = ["romantic", "sad", "party", "devotional", "melody", "workout"];
-var onRequestGet80 = /* @__PURE__ */ __name(async () => {
+var onRequestGet81 = /* @__PURE__ */ __name(async () => {
   const urls = LANGS3.flatMap((l) => MOODS.map((m2) => `${ORIGIN5}/${l}-${m2}-songs`));
   const body = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u2) => `<url><loc>${u2}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`).join("") + "</urlset>";
   return new Response(body, {
@@ -18203,7 +18294,7 @@ var onRequestGet80 = /* @__PURE__ */ __name(async () => {
 // functions/sitemap-movies.xml.ts
 var sitemap_movies_xml_exports = {};
 __export(sitemap_movies_xml_exports, {
-  onRequestGet: () => onRequestGet81
+  onRequestGet: () => onRequestGet82
 });
 var BASES4 = [
   "https://www.vinaxmusic.online/api/cat",
@@ -18235,7 +18326,7 @@ async function results3(query2, limit = 30) {
   return fetchFirst3(`search/albums?query=${encodeURIComponent(query2)}&limit=${limit}`);
 }
 __name(results3, "results");
-var onRequestGet81 = /* @__PURE__ */ __name(async () => {
+var onRequestGet82 = /* @__PURE__ */ __name(async () => {
   const urls = /* @__PURE__ */ new Set();
   const tasks = [];
   for (const l of LANGS4) {
@@ -18263,7 +18354,7 @@ var onRequestGet81 = /* @__PURE__ */ __name(async () => {
 // functions/sitemap-songs.xml.ts
 var sitemap_songs_xml_exports = {};
 __export(sitemap_songs_xml_exports, {
-  onRequestGet: () => onRequestGet82
+  onRequestGet: () => onRequestGet83
 });
 var BASES5 = [
   "https://www.vinaxmusic.online/api/cat",
@@ -18296,17 +18387,17 @@ function xml3(urls) {
   return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u2) => `<url><loc>${u2}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`).join("") + "</urlset>";
 }
 __name(xml3, "xml");
-function respond4(body) {
+function respond5(body) {
   return new Response(body, {
     headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=1800, s-maxage=1800" }
   });
 }
-__name(respond4, "respond");
+__name(respond5, "respond");
 async function results4(path, query2, limit = 25) {
   return fetchFirst4(`${path}?query=${encodeURIComponent(query2)}&limit=${limit}`);
 }
 __name(results4, "results");
-var onRequestGet82 = /* @__PURE__ */ __name(async () => {
+var onRequestGet83 = /* @__PURE__ */ __name(async () => {
   const urls = /* @__PURE__ */ new Set();
   const tasks = [];
   for (const l of LANGS5) {
@@ -18327,13 +18418,13 @@ var onRequestGet82 = /* @__PURE__ */ __name(async () => {
       urls.add(`${ORIGIN7}/song/${slugify5(s.name)}-${safeId}`);
     }
   }
-  return respond4(xml3([...urls].slice(0, 5e4)));
+  return respond5(xml3([...urls].slice(0, 5e4)));
 }, "onRequestGet");
 
 // functions/sitemap-static.xml.ts
 var sitemap_static_xml_exports = {};
 __export(sitemap_static_xml_exports, {
-  onRequestGet: () => onRequestGet83
+  onRequestGet: () => onRequestGet84
 });
 var ORIGIN8 = "https://www.vinaxmusic.online";
 var HUB_LANGUAGES = ["hindi", "telugu", "tamil", "english", "punjabi", "kannada", "malayalam", "bengali", "marathi", "bhojpuri", "gujarati", "urdu"];
@@ -18363,7 +18454,7 @@ var ROUTES = [
   ["/contact", "monthly", "0.3"],
   ...HUB_LANGUAGES.map((l) => [`/${l}-songs`, "daily", "0.8"])
 ];
-var onRequestGet83 = /* @__PURE__ */ __name(async () => {
+var onRequestGet84 = /* @__PURE__ */ __name(async () => {
   const body = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ROUTES.map(
     ([p, c, pr]) => `<url><loc>${ORIGIN8}${p === "/" ? "" : p}/</loc><changefreq>${c}</changefreq><priority>${pr}</priority></url>`
   ).join("") + "</urlset>";
@@ -18379,11 +18470,11 @@ var onRequestGet83 = /* @__PURE__ */ __name(async () => {
 var sitemap_xml_exports = {};
 __export(sitemap_xml_exports, {
   INDEX_MAPS: () => INDEX_MAPS,
-  onRequestGet: () => onRequestGet84
+  onRequestGet: () => onRequestGet85
 });
 var ORIGIN9 = "https://www.vinaxmusic.online";
 var INDEX_MAPS = ["sitemap-static.xml", "sitemap-hubs.xml", "entity-pages.xml"];
-var onRequestGet84 = /* @__PURE__ */ __name(async () => {
+var onRequestGet85 = /* @__PURE__ */ __name(async () => {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const body = '<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + INDEX_MAPS.map((m2) => `<sitemap><loc>${ORIGIN9}/${m2}</loc><lastmod>${today}</lastmod></sitemap>`).join("") + "</sitemapindex>";
   return new Response(body, {
@@ -18394,29 +18485,29 @@ var onRequestGet84 = /* @__PURE__ */ __name(async () => {
 // functions/song/[id].ts
 var id_exports11 = {};
 __export(id_exports11, {
-  onRequestGet: () => onRequestGet85
+  onRequestGet: () => onRequestGet86
 });
-var onRequestGet85 = /* @__PURE__ */ __name((context) => renderEntity("song", String(context.params.id), context.request, context.env), "onRequestGet");
+var onRequestGet86 = /* @__PURE__ */ __name((context) => renderEntity("song", String(context.params.id), context.request, context.env), "onRequestGet");
 
 // functions/api/recommendations/similar/[songId].ts
 var songId_exports = {};
 __export(songId_exports, {
-  onRequestGet: () => onRequestGet86,
-  onRequestOptions: () => onRequestOptions55,
+  onRequestGet: () => onRequestGet87,
+  onRequestOptions: () => onRequestOptions56,
   onRequestPost: () => onRequestPost56
 });
-var CORS19 = {
+var CORS20 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type, x-vinax-client"
 };
 function json14(body, status = 200, cache = "no-store") {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS19 } });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS20 } });
 }
 __name(json14, "json");
-var onRequestOptions55 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
+var onRequestOptions56 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS20 }), "onRequestOptions");
 var onRequestPost56 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
-var onRequestGet86 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet87 = /* @__PURE__ */ __name(async (context) => {
   const { request, env, params } = context;
   const limited = await rateLimitAsync(request, "recs-similar", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -18442,9 +18533,9 @@ var onRequestGet86 = /* @__PURE__ */ __name(async (context) => {
 // functions/[hub].ts
 var hub_exports = {};
 __export(hub_exports, {
-  onRequestGet: () => onRequestGet87
+  onRequestGet: () => onRequestGet88
 });
-var onRequestGet87 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet88 = /* @__PURE__ */ __name(async (context) => {
   const hub = matchHub(new URL(context.request.url).pathname);
   if (!hub) return context.next();
   return renderHub(hub.lang, hub.mood, context.request, context.env);
@@ -18453,10 +18544,10 @@ var onRequestGet87 = /* @__PURE__ */ __name(async (context) => {
 // functions/sitemaps/[map].ts
 var map_exports = {};
 __export(map_exports, {
-  onRequestGet: () => onRequestGet88
+  onRequestGet: () => onRequestGet89
 });
 var TYPES2 = /* @__PURE__ */ new Set(["songs", "albums", "artists", "playlists"]);
-var onRequestGet88 = /* @__PURE__ */ __name(async (context) => {
+var onRequestGet89 = /* @__PURE__ */ __name(async (context) => {
   const m2 = /^([a-z]+)-(\d{1,4})\.xml$/.exec(String(context.params.map ?? ""));
   if (!m2 || !TYPES2.has(m2[1]) || Number(m2[2]) !== 1) return new Response("not found", { status: 404 });
   return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
@@ -18498,6 +18589,7 @@ var EXACT = {
   "/api/announcements": announcements_exports,
   "/api/apk": apk_exports,
   "/api/appconfig": appconfig_exports,
+  "/api/charts/vinax": vinax_exports,
   "/api/blocklist": blocklist_exports,
   "/api/events": events_exports,
   "/api/experiments": experiments_exports2,

@@ -13,7 +13,7 @@ import { greetingName } from '../src/utils/greetingName';
 
 const ROUTES = [
   '/', '/discover', '/charts', '/top-songs', '/trending', '/most-searched',
-  '/made-for-you', '/radio', '/weekly', '/mixes', '/search',
+  '/made-for-you', '/radio', '/weekly', '/search',
   '/search/tum%20hi%20ho', '/library', '/favorites', '/history', '/queue',
   '/now-playing', '/languages', '/movies', '/moods',
   '/taste-profile', '/settings', '/cache-info', '/about',

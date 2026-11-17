@@ -147,21 +147,34 @@ export function effectiveDiscoveryMode(ctx: RecommendationContext): 'familiar' |
   return ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced');
 }
 
-export function buildScoringFrame(ctx: RecommendationContext): ScoringFrame {
+/**
+ * The lead artists this listener already knows (any play or finish in the
+ * taste profile, or a lead in the listening history), lower-cased, and the
+ * song ids they have played. What "new to you" is measured against.
+ */
+export function listenerFamiliarity(ctx: Pick<RecommendationContext, 'profile' | 'history'>): { knownArtists: Set<string>; playedSongIds: Set<string> } {
   const { profile } = ctx;
-  const confidence = profileConfidence(profile);
-  const user = ctx.userProfile;
   const knownArtists = new Set<string>();
   for (const a of Object.values(profile.artists)) if (a.plays > 0 || a.completes > 0) knownArtists.add(lower(a.name));
   const playedSongIds = new Set<string>(profile.recentSongIds);
   for (const id of Object.keys(profile.songs ?? {})) playedSongIds.add(id);
-  const recentArtistCounts = new Map<string, number>();
-  ctx.history.forEach((entry, i) => {
+  for (const entry of ctx.history) {
     playedSongIds.add(entry.song.id);
     const lead = lower(entry.song.artists[0]?.name);
-    if (!lead) return;
-    knownArtists.add(lead);
-    if (i < 10) recentArtistCounts.set(lead, (recentArtistCounts.get(lead) ?? 0) + 1);
+    if (lead) knownArtists.add(lead);
+  }
+  return { knownArtists, playedSongIds };
+}
+
+export function buildScoringFrame(ctx: RecommendationContext): ScoringFrame {
+  const { profile } = ctx;
+  const confidence = profileConfidence(profile);
+  const user = ctx.userProfile;
+  const { knownArtists, playedSongIds } = listenerFamiliarity(ctx);
+  const recentArtistCounts = new Map<string, number>();
+  ctx.history.slice(0, 10).forEach((entry) => {
+    const lead = lower(entry.song.artists[0]?.name);
+    if (lead) recentArtistCounts.set(lead, (recentArtistCounts.get(lead) ?? 0) + 1);
   });
   const intent = ctx.sessionIntent;
   const lean = Math.max(-1, Math.min(1, MODE_LEAN[effectiveDiscoveryMode(ctx)] + (intent ? intent.discoveryAppetite * 0.6 : 0)));

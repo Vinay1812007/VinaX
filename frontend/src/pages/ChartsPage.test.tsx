@@ -7,7 +7,7 @@
  * catalogue lists are always labelled as catalogue lists — nothing on the
  * page claims a song is trending anywhere without verified data.
  */
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,8 +109,13 @@ beforeEach(() => {
   getPlaylist.mockReset().mockRejectedValue(new Error('route not found'));
   for (const f of [getTrendingAlbums, getTrendingPlaylists, getNewReleases, getFeaturedPlaylists]) f.mockReset().mockRejectedValue(new Error('route not found'));
   window.sessionStorage.clear();
+  // "Most played on VinaX this week" has nothing to show unless a test says so.
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('ChartsPage', () => {
   it('while the client config has no trend source connected, never asks /api/trends', async () => {
@@ -284,5 +289,33 @@ describe('ChartsPage', () => {
     expect(screen.queryByRole('heading', { name: 'Featured playlists' })).toBeNull();
     expect(screen.getByText('Udta Teer').closest('a')?.getAttribute('href')).toBe('/album/udta-teer-82064668');
     expect(getTrendingPlaylists.mock.calls[0][1]).toBe(24);
+  });
+
+  describe('Most played on VinaX this week', () => {
+    const chart = (n: number) => new Response(JSON.stringify({ songs: Array.from({ length: n }, (_, i) => ({ id: `v${i + 1}`, title: `Chart v${i + 1}`, artist: 'A', image: null, rank: i + 1 })) }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+    it('shows the top ten of the chart, and plays the whole chart from the row tapped', async () => {
+      fetchVerifiedTrends.mockResolvedValue(null);
+      getSong.mockImplementation(async (id: string) => makeSong(id, { title: `Chart ${id}` }));
+      vi.stubGlobal('fetch', vi.fn(async () => chart(14)));
+      mount();
+      expect(await screen.findByRole('heading', { name: 'Most played on VinaX this week' })).toBeTruthy();
+      expect(screen.getByText('Chart v10')).toBeTruthy();
+      expect(screen.queryByText('Chart v11')).toBeNull();
+      expect(within(screen.getByRole('region', { name: 'Most played on VinaX this week' })).getByRole('link', { name: 'Show all' }).getAttribute('href')).toBe('/top-songs');
+      fireEvent.click(screen.getByText('Chart v2'));
+      expect(playQueue).toHaveBeenCalledWith(expect.any(Array), 1, expect.objectContaining({ from: expect.objectContaining({ label: 'Most played on VinaX' }) }));
+      expect((playQueue.mock.calls[0][0] as unknown[]).length).toBe(14);
+    });
+
+    it('is not shown while fewer than ten songs make the chart', async () => {
+      fetchVerifiedTrends.mockResolvedValue(null);
+      vi.stubGlobal('fetch', vi.fn(async () => chart(9)));
+      mount();
+      expect(await screen.findByRole('heading', { name: 'Top Charts' })).toBeTruthy();
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+      expect(screen.queryByRole('heading', { name: 'Most played on VinaX this week' })).toBeNull();
+      expect(getSong).not.toHaveBeenCalled();
+    });
   });
 });

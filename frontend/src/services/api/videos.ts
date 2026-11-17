@@ -10,8 +10,8 @@ import type { Song } from '@/types';
  *  - `previewUrl` is a real 720p MP4 clip (~30s) that always plays — the
  *    video-CDN "preview" rendition.
  *  - `streamUrl` (the full-length master) is 404 upstream for every video
- *    probed at ship time. The player still tries it FIRST, so full videos
- *    light up automatically the moment the source starts serving them.
+ *    probed at ship time, so players try the preview FIRST and keep the
+ *    stream only as the fallback; opening a video never waits on a 404.
  *  - `songIds` bridges a video to the full audio track in our catalog.
  */
 
@@ -145,13 +145,10 @@ export async function getVideo(id: string): Promise<Video | null> {
   return normalizeVideo(json?.data);
 }
 
-/** Playable sources for a video, best first: the full stream (tried first so
- *  full videos work the day the source serves them), then the preview clip. */
+/** Playable sources for a video, in the order to try them: the preview clip
+ *  that always plays, then the full stream (404 upstream so far), each once. */
 export function videoSources(v: Video): string[] {
-  const out: string[] = [];
-  if (v.streamUrl) out.push(v.streamUrl);
-  if (v.previewUrl) out.push(v.previewUrl);
-  return out;
+  return [...new Set([v.previewUrl, v.streamUrl].filter((u): u is string => !!u))];
 }
 
 

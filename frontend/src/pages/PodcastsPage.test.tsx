@@ -15,8 +15,18 @@ const getPodcasts = vi.fn<(page: number, limit: number, opts?: unknown) => Promi
 const playPodcast = vi.fn();
 vi.mock('@/services/api', () => ({ getPodcasts: (p: number, l: number, o?: unknown) => getPodcasts(p, l, o) }));
 vi.mock('@/features/podcasts/api', () => ({ playPodcast: (id: string, name: string) => playPodcast(id, name) }));
+const playSong = vi.fn();
+const togglePlay = vi.fn();
+const player = { queue: [] as Array<{ id: string }>, index: 0, isPlaying: false, playSong, togglePlay };
+vi.mock('@/store/playerStore', () => {
+  const usePlayerStore = (sel: (s: typeof player) => unknown) => sel(player);
+  usePlayerStore.getState = () => player;
+  return { usePlayerStore };
+});
 
 import PodcastsPage from './PodcastsPage';
+import { makeSong } from '@/__fixtures__/songs';
+import { noteEpisodeProgress } from '@/features/podcasts/progress';
 
 const show = (id: string, over: Partial<PodcastSummary> = {}): PodcastSummary => ({
   id,
@@ -49,6 +59,10 @@ function mount() {
 beforeEach(() => {
   getPodcasts.mockReset();
   playPodcast.mockReset();
+  playSong.mockReset();
+  togglePlay.mockReset();
+  player.queue = [];
+  localStorage.clear();
   observed = [];
   vi.stubGlobal(
     'IntersectionObserver',
@@ -118,6 +132,27 @@ describe('PodcastsPage', () => {
     getPodcasts.mockResolvedValueOnce(page(200, 2));
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.getByText('Show 201')).toBeTruthy());
+  });
+
+  it('continues the episodes you started, from where you left them', async () => {
+    getPodcasts.mockResolvedValue([show('62', { name: 'Talking Music' })]);
+    const episode = (id: string) => makeSong(id, { title: `Episode ${id}`, album: { id: '62', name: 'Talking Music' }, audio: [{ quality: 'original', url: `https://x/${id}.mp3` }] });
+    noteEpisodeProgress(episode('half'), 900, 1800, 2);
+    noteEpisodeProgress(episode('done'), 1790, 1800, 3);
+    mount();
+    expect(await screen.findByRole('heading', { name: 'Continue your shows' })).toBeTruthy();
+    const card = screen.getByRole('button', { name: 'Resume Episode half, 15 min left' });
+    expect(screen.queryByRole('button', { name: /Resume Episode done/ })).toBeNull();
+    expect(screen.getByText('Talking Music · 15 min left')).toBeTruthy();
+    fireEvent.click(card);
+    expect(playSong).toHaveBeenCalledWith(expect.objectContaining({ id: 'half' }), { startAt: 900 });
+  });
+
+  it('shows no Continue row before any episode is started', async () => {
+    getPodcasts.mockResolvedValue([show('62', { name: 'Talking Music' })]);
+    mount();
+    expect(await screen.findByText('Talking Music')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Continue your shows' })).toBeNull();
   });
 
   it('has an empty state', async () => {

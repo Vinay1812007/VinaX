@@ -6,6 +6,7 @@ import { useDiscoveryStore } from '@/store/discoveryStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import { HOME_TTL_MS, homeGeneration, tasteStamp, useHomeGeneration } from '@/features/home/homeRefresh';
+import { withYourWeek } from '@/features/weekly/useWeeklyMix';
 
 // Fresh each app load → shelves rotate between sessions instead of being identical.
 export { getRecommendationContext } from '@/services/recommendation/context';
@@ -37,7 +38,8 @@ export function useRecommendations() {
   const hour = new Date(homeGeneration().startedAt).getHours();
   return useQuery<Mix[]>({
     queryKey: ['mixes', gen, stamp, hour, pinned, muted, intensity, mode, round],
-    queryFn: () => buildRecommendations(getRecommendationContext()),
+    // "New to you this week" is Your Week once the week is built (features/weekly).
+    queryFn: () => buildRecommendations(getRecommendationContext()).then((mixes) => withYourWeek(mixes)),
     staleTime: HOME_TTL_MS,
     gcTime: 2 * HOME_TTL_MS,
     placeholderData: keepPreviousData,

@@ -1,83 +1,98 @@
 import { useEffect, useState } from 'react';
 import { Sheet, SheetHeader } from '@/components/Sheet';
 import type { LocalCollection } from '@/store/libraryStore';
-import { useLibraryStore } from '@/store/libraryStore';
 import { currentAccount } from '@/services/auth/google';
-import type { Song } from '@/types';
-import { liteSong, listSharedPlaylists, writeSharedPlaylist, deleteSharedPlaylist, SocialError, type SharedPlaylist } from '@/services/social/api';
+import { listSharedPlaylists, deleteSharedPlaylist, type SharedPlaylist } from '@/services/social/api';
 import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
-import { getLocal, setLocal } from '@/services/storage/local';
-import { KEYS } from '@/constants/storage-keys';
 import { cn } from '@/utils/cn';
+import { inviteTokenFor, loadShareMap, saveInviteToken, saveShareLink, shareLinkFor, type ShareLink } from './shareMap';
+import { extraOnCopy, mergedNote, pushSharedCopy, takeInExtras } from './sharedCopy';
 
 /**
  * 15.0 — Share a playlist: a public page anyone can open and play, and an
  * invite link that lets friends add songs (no account needed on their side).
- * The device remembers which shared copy belongs to which local playlist
- * (and the invite token, which the server returns once) in local storage;
- * "Update the shared copy" pushes the current songs, and a 409 (a friend
- * added something meanwhile) merges their additions into the local list
- * before pushing again.
+ * 1.15 — which shared copy belongs to which local playlist follows the
+ * account and the backup (./shareMap); the invite token stays on the device
+ * and the server hands it back when it is missing. The copy updates itself a
+ * few seconds after the playlist changes (./sharedCopy); "Update the shared
+ * copy" is the manual way. On a device that does not know the link yet, a
+ * copy with the same name can be linked again.
  */
-
-interface ShareLink { id: string; token?: string | null; version: number; public?: boolean }
-type ShareMap = Record<string, ShareLink>;
-
-export const loadShareMap = (): ShareMap => getLocal<ShareMap>(KEYS.sharedPlaylists, {});
-export const saveShareLink = (localId: string, link: ShareLink | null): void => {
-  const m = loadShareMap();
-  if (link) m[localId] = link; else delete m[localId];
-  setLocal(KEYS.sharedPlaylists, m);
-};
+type Link = Omit<ShareLink, 'at'>;
 
 export function SharePlaylistSheet({ collection, open, onClose }: { collection: LocalCollection; open: boolean; onClose: () => void }) {
-  const [link, setLink] = useState<ShareLink | null>(() => loadShareMap()[collection.id] ?? null);
+  const [link, setLink] = useState<Link | null>(() => shareLinkFor(collection.id));
+  const [token, setToken] = useState<string | null>(() => (link ? inviteTokenFor(link.id) : null));
   const [remote, setRemote] = useState<SharedPlaylist | null>(null);
+  const [match, setMatch] = useState<SharedPlaylist | null>(null);
   const [busy, setBusy] = useState(false);
-  const addMany = useLibraryStore((s) => s.addManyToCollection);
 
   useEffect(() => {
-    if (!open || !link || !currentAccount()) return;
-    void listSharedPlaylists().then((list) => setRemote(list.find((p) => p.id === link.id) ?? null)).catch(() => undefined);
-  }, [open, link]);
+    if (!open || !currentAccount()) return;
+    // Re-read: a sync or the auto-push may have changed the link since the sheet was made.
+    const fresh = shareLinkFor(collection.id);
+    if (fresh?.id !== link?.id || fresh?.version !== link?.version) {
+      setLink(fresh);
+      setToken(fresh ? inviteTokenFor(fresh.id) : null);
+      return;
+    }
+    let live = true;
+    void listSharedPlaylists()
+      .then((list) => {
+        if (!live) return;
+        if (link) {
+          setRemote(list.find((p) => p.id === link.id) ?? null);
+          return;
+        }
+        // Not linked on this device: offer a copy with the same name that no other playlist claims.
+        const taken = new Set(Object.values(loadShareMap()).map((l) => l.id));
+        const name = collection.name.trim().toLowerCase();
+        setMatch(list.find((p) => !taken.has(p.id) && p.name.trim().toLowerCase() === name) ?? null);
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [open, link, collection.id, collection.name]);
 
-  const push = async (opts: { public?: boolean; collab?: boolean } = {}) => {
+  const push = async (opts: { public?: boolean; collab?: boolean } = {}, done?: string) => {
     if (!currentAccount()) { toast('Sign in to share a playlist'); return; }
     setBusy(true);
     try {
-      // 1.12 — "added by" stays on songs a collaborator put in, across the owner's own writes.
-      const byOf = new Map((remote?.songs ?? []).filter((s) => s.by).map((s) => [s.id, s.by as string]));
-      const lite = (s: Song) => { const l = liteSong(s); const by = byOf.get(s.id); return by ? { ...l, by } : l; };
-      const body = { id: link?.id, name: collection.name, description: collection.description ?? null, songs: collection.songs.map(lite), version: link?.version, public: opts.public ?? remote?.public ?? link?.public ?? (link ? undefined : false), collab: opts.collab ?? remote?.collab };
-      let r = await writeSharedPlaylist(body).catch(async (e: unknown) => {
-        if (e instanceof SocialError && e.status === 409) return null;
-        throw e;
-      });
-      if (!r && link) {
-        // Someone added songs since this device last wrote: take theirs in, then write again.
-        const fresh = await listSharedPlaylists();
-        const theirs = fresh.find((p) => p.id === link.id);
-        if (theirs) {
-          const have = new Set(collection.songs.map((s) => s.id));
-          const extra = theirs.songs.filter((s) => !have.has(s.id));
-          if (extra.length) toast(`${extra.length} song${extra.length === 1 ? '' : 's'} added by collaborators came in`);
-          r = await writeSharedPlaylist({ ...body, version: theirs.version, songs: [...collection.songs.map(lite), ...extra] });
-          if (extra.length) {
-            const { resolveSongs } = await import('@/features/social/resolve');
-            const full = await resolveSongs(extra, 100);
-            if (full.length) addMany(collection.id, full);
-          }
-        }
+      const r = await pushSharedCopy(collection, { ...opts, remote });
+      if (!r.ok) {
+        if (r.reason === 'gone') {
+          setLink(null);
+          setRemote(null);
+          setToken(null);
+          toast('This playlist is no longer shared. Share it again to make a new link.');
+        } else toast(r.reason === 'signed_out' ? 'Sign in to share a playlist' : 'Could not share right now');
+        return;
       }
-      if (!r) throw new Error('conflict');
-      const next: ShareLink = { id: r.playlist.id, token: r.collabToken ?? (opts.collab === false ? null : link?.token ?? null), version: r.playlist.version, public: r.playlist.public };
-      setLink(next);
-      saveShareLink(collection.id, next);
+      if (r.merged) toast(mergedNote(r.merged));
+      setLink(r.link);
       setRemote(r.playlist);
-      toast(link ? 'Shared copy updated' : 'Playlist shared');
-    } catch (e) {
-      toast(e instanceof SocialError && e.code === 'signed_out' ? 'Sign in to share a playlist' : 'Could not share right now');
+      setToken(r.playlist.collab ? r.token ?? inviteTokenFor(r.link.id) : null);
+      toast(done ?? (link ? 'Shared copy updated' : 'Playlist shared'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const relink = async (p: SharedPlaylist) => {
+    setBusy(true);
+    try {
+      const next = { id: p.id, version: p.version, public: p.public };
+      saveShareLink(collection.id, next);
+      setMatch(null);
+      setRemote(p);
+      setLink(next);
+      setToken(inviteTokenFor(p.id));
+      // Songs friends added there come into this playlist, so the next write keeps them.
+      const extra = extraOnCopy(collection, p);
+      if (extra.length) {
+        toast(mergedNote(extra.length));
+        await takeInExtras(collection.id, extra).catch(() => undefined);
+      } else toast('Linked to your shared copy');
     } finally {
       setBusy(false);
     }
@@ -89,8 +104,10 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
     try {
       await deleteSharedPlaylist(link.id);
       saveShareLink(collection.id, null);
+      saveInviteToken(link.id, null);
       setLink(null);
       setRemote(null);
+      setToken(null);
       toast('Sharing stopped — the link no longer works');
     } catch {
       toast('Could not stop sharing right now');
@@ -100,20 +117,31 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
   };
 
   const pagePath = link ? `/p/${link.id}` : null;
-  const invitePath = link?.token ? `/p/${link.id}?token=${link.token}` : null;
+  const invitePath = link && token ? `/p/${link.id}?token=${token}` : null;
 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="vx-share-pl-title" size="md" className="vx-np-opts">
       <SheetHeader id="vx-share-pl-title" title="Share this playlist" subtitle={link ? `Shared · ${remote?.songs.length ?? collection.songs.length} songs on the page` : 'Nobody can see it yet'} onClose={onClose} />
       {!link ? (
-        <div className="vx-np-opt">
-          <span className="vx-np-opt-label">Make a page</span>
-          <div className="vx-np-opt-controls">
-            <button type="button" className="vx-np-pill is-on" disabled={busy || !collection.songs.length} onClick={() => void push({ public: true })}>Share as a public page</button>
-            <button type="button" className="vx-np-pill" disabled={busy || !collection.songs.length} onClick={() => void push({ public: false, collab: true })}>Invite friends to add songs</button>
+        <>
+          {match && (
+            <div className="vx-np-opt">
+              <span className="vx-np-opt-label">Shared before</span>
+              <div className="vx-np-opt-controls">
+                <button type="button" className="vx-np-pill is-on" disabled={busy} onClick={() => void relink(match)}>Use the link you made before</button>
+              </div>
+              <p className="mt-2 text-[13px] text-ink-400">You already have a shared copy called “{match.name}” with {match.songs.length} songs. Using it keeps its link working.</p>
+            </div>
+          )}
+          <div className="vx-np-opt">
+            <span className="vx-np-opt-label">Make a page</span>
+            <div className="vx-np-opt-controls">
+              <button type="button" className={cn('vx-np-pill', !match && 'is-on')} disabled={busy || !collection.songs.length} onClick={() => void push({ public: true })}>Share as a public page</button>
+              <button type="button" className="vx-np-pill" disabled={busy || !collection.songs.length} onClick={() => void push({ public: false, collab: true })}>Invite friends to add songs</button>
+            </div>
+            <p className="mt-2 text-[13px] text-ink-400">A page carries the songs' names and artwork. A public page is open to anyone with the link; an invite link lets friends add songs without an account.</p>
           </div>
-          <p className="mt-2 text-[13px] text-ink-400">A page carries the songs' names and artwork. A public page is open to anyone with the link; an invite link lets friends add songs without an account.</p>
-        </div>
+        </>
       ) : (
         <>
           <div className="vx-np-opt">
@@ -128,8 +156,8 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
             <div className="vx-np-opt-controls">
               <button type="button" className={cn('vx-np-pill', remote?.collab && 'is-on')} aria-pressed={!!remote?.collab} disabled={busy} onClick={() => void push({ collab: !remote?.collab })}>{remote?.collab ? 'Invites on' : 'Invites off'}</button>
               {invitePath && <button type="button" className="vx-np-pill" onClick={() => void shareLink(invitePath, `Add songs to ${collection.name}`).then((r) => r === 'copied' && toast('Invite link copied'))}>Copy the invite link</button>}
+              {remote?.collab && !invitePath && <button type="button" className="vx-np-pill" disabled={busy} onClick={() => void push({ collab: true }, 'Invite link ready')}>Get the invite link</button>}
             </div>
-            {remote?.collab && !invitePath && <p className="mt-2 text-[13px] text-ink-400">The invite link was made on another device. Switch invites off and on to make a new one.</p>}
           </div>
           <div className="vx-np-opt">
             <span className="vx-np-opt-label">Keep in step</span>
@@ -137,6 +165,7 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
               <button type="button" className="vx-np-pill" disabled={busy} onClick={() => void push()}>Update the shared copy</button>
               <button type="button" className="vx-np-pill is-quiet" disabled={busy} onClick={() => void stop()}>Stop sharing</button>
             </div>
+            <p className="mt-2 text-[13px] text-ink-400">Changes to this playlist reach the shared copy by themselves a few seconds later.</p>
           </div>
         </>
       )}

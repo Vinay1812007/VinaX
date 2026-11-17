@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLibraryStore, type SavedEntity } from '@/store/libraryStore';
@@ -18,6 +18,9 @@ import { artistPath } from '@/utils/slug';
 import { letterAvatar } from '@/utils/avatar';
 import { relativeTime } from '@/utils/format';
 import { toast } from '@/store/toastStore';
+import { Tabs } from '@/components/ui/Tabs';
+import { useSocialStore } from '@/features/social/store';
+import { PeopleYouFollow } from '@/features/social/PeopleYouFollow';
 import type { Song } from '@/types';
 import '@/styles/pages/secondary.css';
 
@@ -25,15 +28,40 @@ import '@/styles/pages/secondary.css';
 const LATEST_ARTISTS = 8;
 const LATEST_SONGS = 5;
 
+type FollowingTab = 'artists' | 'people';
+
 /**
- * 1.12 — /following: the artists you follow (Follow on an artist page), in
+ * /following: Artists and People. `?tab=people` opens People (Settings →
+ * Profile links there): the listeners you follow, features/social/PeopleYouFollow.
+ */
+export default function FollowingPage() {
+  const [params, setParams] = useSearchParams();
+  const tab: FollowingTab = params.get('tab') === 'people' ? 'people' : 'artists';
+  usePageTitle(tab === 'people' ? 'People you follow' : 'Following');
+  const artistCount = useLibraryStore((s) => s.saved.filter((e) => e.kind === 'artist').length);
+  const peopleCount = useSocialStore((s) => (Array.isArray(s.following) ? s.following.length : 0));
+  const items = [
+    { id: 'artists' as const, label: 'Artists', count: artistCount || undefined },
+    { id: 'people' as const, label: 'People', count: peopleCount || undefined },
+  ];
+  return (
+    <div>
+      <Tabs items={items} value={tab} onChange={(t) => setParams(t === 'people' ? { tab: 'people' } : {}, { replace: true })} label="Following" idPrefix="following" className="mt-2 mb-4" />
+      <div role="tabpanel" id={`following-panel-${tab}`} aria-labelledby={`following-tab-${tab}`}>
+        {tab === 'people' ? <PeopleYouFollow /> : <ArtistsYouFollow />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 1.12 — /following → Artists: the artists you follow (Follow on an artist page), in
  * one place. Newest songs from them first — the release alerts the app
  * already keeps (features/releases) — then the current top songs of each
  * artist, so there is always something to play even before a release lands.
  * Everything is worked out on the device from the saved artists; no server.
  */
-export default function FollowingPage() {
-  usePageTitle('Following');
+function ArtistsYouFollow() {
   const saved = useLibraryStore((s) => s.saved);
   const artists = useMemo(() => saved.filter((e) => e.kind === 'artist').sort((a, b) => b.savedAt - a.savedAt), [saved]);
   const fresh = useReleaseStore((s) => s.fresh);

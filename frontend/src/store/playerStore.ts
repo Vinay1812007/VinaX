@@ -29,6 +29,7 @@ import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
 import { setNowPlayingProbe } from '@/store/libraryStore';
+import { EPISODE_PROGRESS_KEY, isEpisode, resumeEvictee } from '@/features/podcasts/episode';
 import { contextFromPage, isQueueContext, queueInsertAt, shuffledStart, shuffleSongs, shuffleUpcoming, unshuffleUpcoming, type QueueContext, type QueueRun } from './queueOrder';
 import {
   creditTick,
@@ -235,15 +236,19 @@ const RESUME_KEY = 'vinax.resume.v1';
 function loadResume(): Record<string, number> {
   try { return JSON.parse(window.localStorage.getItem(RESUME_KEY) || '{}'); } catch { return {}; }
 }
-function saveResume(id: string, sec: number, duration: number): void {
+function saveResume(song: Song, sec: number, duration: number): void {
   try {
     const map = loadResume();
+    const id = song.id;
     // Only remember meaningful mid-track positions on longer tracks.
     if (duration > 60 && sec > 20 && sec < duration - 20) map[id] = Math.floor(sec);
     else delete map[id];
     const ids = Object.keys(map);
-    if (ids.length > 80) delete map[ids[0]];
+    // A podcast episode's place is never the one pushed out by music.
+    if (ids.length > 80) delete map[resumeEvictee(ids, window.localStorage.getItem(EPISODE_PROGRESS_KEY) ?? '')];
     window.localStorage.setItem(RESUME_KEY, JSON.stringify(map));
+    // Episodes: progress, "played" at 95% and Continue your shows live in the podcast chunk.
+    if (isEpisode(song)) void import('@/features/podcasts/progress').then((m) => m.noteEpisodeProgress(song, sec, duration)).catch(() => undefined);
   } catch { /* ignore */ }
 }
 let crossfadeArmed = false;
@@ -597,7 +602,8 @@ export const usePlayerStore = create<PlayerState>()(
           // Left before it really played: a sign of a restless sitting,
           // but not a verdict on the song, so the long-term profile is left alone.
           useHistoryStore.getState().markSkipped(song.id);
-          noteSessionEvent('skip', song);
+          // An episode says nothing about this sitting's music (personalization/updater).
+          if (!isEpisode(song)) noteSessionEvent('skip', song);
           return;
         }
         if (isEarlyLeave(inst.heardSec, inst.durationSec || duration)) {
@@ -779,7 +785,7 @@ export const usePlayerStore = create<PlayerState>()(
               }
               updatePositionState(duration, currentTime, get().rate);
               const playing = get().queue[get().index];
-              const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
+              const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing, currentTime, duration); }
               // 1.16 — crossfade: the last seconds overlap the next song, which
               // starts now on the preloaded element and rises while this one
               // falls. Where the engine cannot overlap (iPhone Safari, the sound

@@ -10,6 +10,7 @@ import { MicIcon } from '@/components/Icons';
 import { Button } from '@/components/Button';
 import { podcastPath } from '@/features/podcasts/paths';
 import { playPodcast } from '@/features/podcasts/api';
+import { ContinueShows } from '@/features/podcasts/ContinueShows';
 import { bestImage } from '@/utils/images';
 import '@/styles/pages/browse.css';
 
@@ -23,6 +24,7 @@ function subtitle(p: PodcastSummary): string {
 /**
  * 1.3 — Podcasts: the catalogue's top shows, a page at a time. Each card
  * opens the show at /podcast/:id; its play button starts the latest season.
+ * Above them, the episodes you started and did not finish (Continue your shows).
  */
 export default function PodcastsPage() {
   usePageTitle('Podcasts');
@@ -41,6 +43,7 @@ export default function PodcastsPage() {
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
       <PageHeader title="Podcasts" subtitle="Conversations, stories and shows, every episode a tap away." />
+      <ContinueShows />
 
       {q.isLoading ? (
         <CardGridSkeleton />

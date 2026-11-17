@@ -210,7 +210,8 @@ describe('vocal stage wiring', () => {
     const next = s.output.edges[0].to;
     expect(next.kind).toBe('biquad');
     expect(next.type).toBe('lowshelf');
-    expect(nodes.filter((n) => n.kind === 'biquad')).toHaveLength(EQ_BANDS.length + 1);
+    // The EQ bands, the bass copy and the loudness meter's two K-weighting filters.
+    expect(nodes.filter((n) => n.kind === 'biquad')).toHaveLength(EQ_BANDS.length + 1 + 2);
   });
 
   it('attaches at Full: the stage is transparent', () => {
