@@ -43,7 +43,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { resetSessionIntent } from '@/services/personalization/sessionIntent';
 import { KEYS } from '@/constants/storage-keys';
-import { applyUsageSharingDefault, consented, disposeTelemetry, initTelemetry, META_MAX_BYTES, trackStructured } from './telemetry';
+import { applyUsageSharingDefault, consented, disposeTelemetry, initTelemetry, META_MAX_BYTES, reportError, trackStructured } from './telemetry';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: id, subtitle: 'Artist', artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
 const tick = (t: number, d = 200) => engine.handlers?.onTime(t, d);
@@ -132,6 +132,22 @@ describe('structured events', () => {
     consent(false);
     await trackStructured('rec_served', { n: 1 });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('playback errors carry their song (Songs With Problems)', () => {
+  it('sends the song in the song fields, keeps the message as is, and reports the same message once per song', async () => {
+    consent(true);
+    const msg = 'audio element error: network; no sources left';
+    reportError('playback', msg, song('err-a'));
+    reportError('playback', msg, song('err-a'));
+    reportError('playback', msg, song('err-b'));
+    reportError('playback', msg, { ...song('gen-x'), id: 'gen-x' });
+    await vi.runAllTimersAsync();
+    const errs = posted().filter((b) => b.type === 'error');
+    expect(errs.map((b) => (b.song as { id: string } | undefined)?.id ?? null)).toEqual(['err-a', 'err-b', null]);
+    expect(errs.every((b) => b.message === msg && b.errorKind === 'playback')).toBe(true);
+    expect(errs[0].song).toMatchObject({ id: 'err-a', title: 'err-a', artist: 'Artist err-a', language: 'telugu' });
   });
 });
 

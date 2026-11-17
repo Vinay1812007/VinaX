@@ -214,7 +214,6 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
                           <span className="block text-sm font-semibold">{c.label}</span>
                           <span className="block text-[12px] text-ink-400">In file: <span className="text-ink-200">{c.summary}</span></span>
                           <span className="block text-[12px] text-ink-400">On this device: <span className="text-ink-200">{cur?.summary ?? 'Nothing stored yet'}</span></span>
-                          {c.id === 'identity' && <span className="block text-[12px] font-semibold text-ink-200">The username in the file is re-confirmed with the service after restore; it may already be taken.</span>}
                         </span>
                       </li>
                     );

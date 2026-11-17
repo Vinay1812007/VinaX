@@ -26,6 +26,14 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
 export const ON_DEMAND_PAGES = /\/src\/pages\/(VinaXAI(Share|Artifacts)?|Design)Page\.tsx$/;
 /** The maths engine's fonts (loaded by its on-demand stylesheet), the PDF reader's worker (loaded when a PDF is added) and Live voice's mic tap (loaded when Live voice opens). */
 export const ON_DEMAND_ASSETS = /^assets\/(KaTeX_[\w-]+\.(woff2?|ttf)|pdf\.worker[\w.-]*\.m?js|micTap\.worklet[\w.-]*\.js)$/;
+/** The light precache (Data saver on a metered connection): the entry graph
+ *  without the route pages, plus these pages, so an offline launch still opens
+ *  /offline, the Library and Now Playing. The layout's own lazy pieces (sheets,
+ *  bridges, the Now Playing rail) stay in: they render on boot, and a missing
+ *  one would take the whole layout down offline. Other pages are fetched and
+ *  cached on first use. */
+export const LIGHT_PAGES = /\/src\/pages\/(Offline|Library|NowPlaying)Page\.tsx$/;
+const PAGE = /\/src\/pages\//;
 
 type BundleItem = {
   type: 'chunk' | 'asset';
@@ -35,11 +43,11 @@ type BundleItem = {
   facadeModuleId?: string | null;
   imports?: string[];
   dynamicImports?: string[];
-  viteMetadata?: { importedCss?: Set<string> };
+  viteMetadata?: { importedCss?: Set<string>; importedAssets?: Set<string> };
 };
 
 /** Split the build's assets into what the service worker precaches and what it fetches on demand. */
-export function splitPrecache(bundle: Record<string, BundleItem>): { precache: string[]; onDemand: string[] } {
+export function splitPrecache(bundle: Record<string, BundleItem>): { precache: string[]; onDemand: string[]; light: string[] } {
   const all = Object.keys(bundle).filter((f) => f.startsWith('assets/')).sort();
   const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
   const byFile = new Map(chunks.map((c) => [c.fileName, c]));
@@ -69,7 +77,34 @@ export function splitPrecache(bundle: Record<string, BundleItem>): { precache: s
   for (const c of chunks) if (skip.has(c.fileName)) for (const css of cssOf(c)) if (!reachedCss.has(css)) skip.add(css);
   for (const f of all) if (ON_DEMAND_ASSETS.test(f)) skip.add(f);
   const onDemand = all.filter((f) => skip.has(f));
-  return { precache: all.filter((f) => !skip.has(f)).map((f) => `/${f}`), onDemand: onDemand.map((f) => `/${f}`) };
+  // Light: the entry graph, stopping at every route page except LIGHT_PAGES.
+  const lightJs = new Set<string>();
+  const walk = chunks.filter((c) => c.isEntry).map((c) => c.fileName);
+  while (walk.length) {
+    const f = walk.pop() as string;
+    if (lightJs.has(f) || skip.has(f)) continue;
+    lightJs.add(f);
+    const c = byFile.get(f);
+    walk.push(...(c?.imports ?? []));
+    for (const d of c?.dynamicImports ?? []) {
+      const page = byFile.get(d)?.facadeModuleId ?? '';
+      if (!PAGE.test(page) || LIGHT_PAGES.test(page)) walk.push(d);
+    }
+  }
+  const lightSet = new Set<string>();
+  for (const f of lightJs) {
+    const c = byFile.get(f);
+    if (!c) continue;
+    lightSet.add(f);
+    for (const css of cssOf(c)) lightSet.add(css);
+    for (const a of c.viteMetadata?.importedAssets ?? []) lightSet.add(a);
+  }
+  const precache = all.filter((f) => !skip.has(f));
+  return {
+    precache: precache.map((f) => `/${f}`),
+    onDemand: onDemand.map((f) => `/${f}`),
+    light: precache.filter((f) => lightSet.has(f)).map((f) => `/${f}`),
+  };
 }
 
 const precacheManifest = (): Plugin => ({
@@ -81,11 +116,11 @@ const precacheManifest = (): Plugin => ({
   generateBundle: {
     order: 'post',
     handler(_options, bundle) {
-      const { precache, onDemand } = splitPrecache(bundle as unknown as Parameters<typeof splitPrecache>[0]);
+      const { precache, onDemand, light } = splitPrecache(bundle as unknown as Parameters<typeof splitPrecache>[0]);
       this.emitFile({
         type: 'asset',
         fileName: 'precache-manifest.json',
-        source: JSON.stringify({ v: 2, precache, onDemand }),
+        source: JSON.stringify({ v: 2, precache, onDemand, light }),
       });
     },
   },

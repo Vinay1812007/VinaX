@@ -3,6 +3,14 @@
  *        Every A/B test with its versions, who is included, its lifecycle and
  *        winner, plus how many people used the app in the last 7 days (the
  *        console estimates "about N users per version" from it).
+ * GET  /api/admin/experiments?view=results&key=&days=1..90 (default 30)
+ *        → { configured, view, key, days, data }   (schema 24: stats_experiment)
+ *        Results per version, from the recommendation events' exposure maps:
+ *        data = { key, days, minPeople, minOutcomes, enough, variants: [{ variant,
+ *        people, served, outcomes, complete, skip, earlySkip, partial, liked,
+ *        completeRate, skipRate, earlySkipRate, likedRate, playsPerPerson,
+ *        returnOf, returned, returnRate, enough }] }. Only tests the app logs
+ *        exposure for (rec-next-songs) have versions here.
  * POST /api/admin/experiments
  *        { action: 'save', key, name, description?, variants, audience?, status? | active? }
  *        { action: 'status', key, status: 'running' | 'paused' | 'finished' | 'draft', winner? }
@@ -17,7 +25,7 @@
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost, camel } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
-import { clip } from '../../_lib/edge';
+import { clip, daysParam } from '../../_lib/edge';
 import { sanitizeAudience, sanitizeVariants } from '../../_lib/experiments';
 
 const KEY_RE = /^[a-z0-9-]{1,40}$/;
@@ -25,7 +33,16 @@ const STATUSES = ['draft', 'running', 'paused', 'finished'] as const;
 type Status = (typeof STATUSES)[number];
 const isStatus = (v: unknown): v is Status => typeof v === 'string' && (STATUSES as readonly string[]).includes(v);
 
-export const onRequestGet = adminGet(async ({ env }) => {
+export const onRequestGet = adminGet(async ({ env, url }) => {
+  if (url.searchParams.get('view') === 'results') {
+    const key = (url.searchParams.get('key') ?? '').trim().toLowerCase();
+    if (!KEY_RE.test(key)) return badRequest('bad_key');
+    const days = daysParam(url, 30, 90);
+    const res = await db.rpc<Record<string, unknown>>(env, 'stats_experiment', { p_key: key, p_days: days });
+    if (!res.ok) return dbFailure(res);
+    const data = res.value && typeof res.value === 'object' && !Array.isArray(res.value) ? res.value : {};
+    return adminJson({ configured: true, view: 'results', key, days, data: { ...data, variants: Array.isArray(data.variants) ? data.variants : [] } });
+  }
   const [r, active] = await Promise.all([
     db.select<Record<string, unknown>>(env, 'experiments', q().select('*').order('updated_at', 'desc').limit(200)),
     db.count(env, 'accounts', q().gte('last_seen', new Date(Date.now() - 7 * 86_400_000).toISOString())),

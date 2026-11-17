@@ -32,6 +32,17 @@ const EXPERIMENTS = [
   { key: 'rec-next-songs', name: 'Taste weight', description: 'How closely next songs follow taste.', variants: [{ name: 'control', pct: 34 }, { name: 'taste-0.15', pct: 33 }, { name: 'taste-0.18', pct: 33 }], audience: { platform: 'android', minVersion: '1.8.0', percent: 100 }, status: 'finished', active: false, startedAt: iso(now - 30 * 86400e3), endedAt: iso(now - 9 * 86400e3), winner: 'taste-0.18', createdAt: iso(now - 31 * 86400e3), updatedAt: iso(now - 9 * 86400e3) },
 ];
 
+// Schema 24 — A/B test results per version (GET /api/admin/experiments?view=results&key=&days=).
+const arm = (variant, people, outcomes, complete, skip, early, returnOf, returned) => ({
+  variant, people, served: Math.round(outcomes / 4), outcomes, complete: Math.round(outcomes * complete / 100), skip: Math.round(outcomes * skip / 100), earlySkip: Math.round(outcomes * early / 100), partial: 0, liked: Math.round(outcomes / 20),
+  completeRate: complete, skipRate: skip, earlySkipRate: early, likedRate: 5, playsPerPerson: Math.round(outcomes / people * 10) / 10,
+  returnOf, returned, returnRate: returnOf ? Math.round(returned / returnOf * 1000) / 10 : null, enough: people >= 30 && outcomes >= 100,
+});
+const RESULTS = {
+  key: 'rec-next-songs', days: 30, minPeople: 30, minOutcomes: 100, enough: true,
+  variants: [arm('control', 52, 640, 58.1, 21.4, 9.2, 40, 27), arm('taste-0.15', 47, 560, 55.4, 23.9, 10.1, 36, 23), arm('taste-0.18', 49, 610, 61.6, 18.7, 8.4, 38, 28)],
+};
+
 function dry(body) {
   const users = Array.isArray(body?.users) ? body.users.length : 0;
   const f = body?.filter || {};
@@ -59,7 +70,9 @@ export default {
     return { configured: true, rows: s && s !== 'all' ? ROWS.filter((r) => r.status === s) : ROWS, counts: { sent: 1, scheduled: 1, draft: 1 } };
   },
   'POST /api/admin/notifications': (url, body) => (body?.action === 'cancel' ? { ok: true, id: body.id, status: 'cancelled' } : { ok: true, id: body?.id, deleted: 1, announcementCleared: false }),
-  'GET /api/admin/experiments': () => ({ configured: true, activeUsers: 120, rows: EXPERIMENTS }),
+  'GET /api/admin/experiments': (url) => (url.searchParams.get('view') === 'results'
+    ? { configured: true, view: 'results', key: url.searchParams.get('key'), days: Number(url.searchParams.get('days') || 30), data: url.searchParams.get('key') === 'rec-next-songs' ? RESULTS : { variants: [] } }
+    : { configured: true, activeUsers: 120, rows: EXPERIMENTS }),
   'POST /api/admin/experiments': (url, body) => ({ ok: true, row: { ...body } }),
   'GET /api/admin/fcmcheck': () => ({ configured: true, project: 'vinax', token: true, fcm: 'ok', detail: null }),
 };

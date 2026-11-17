@@ -173,7 +173,7 @@ export async function downloadProfileExport(): Promise<void> {
 }
 
 export type ImportOutcome =
-  | { ok: true; applied: BackupCategoryId[]; pendingHandle: string | null; warnings: string[] }
+  | { ok: true; applied: BackupCategoryId[]; warnings: string[] }
   | { ok: false; error: string; rejected?: Array<{ label: string; error: string }> };
 
 /**
@@ -199,5 +199,5 @@ export function importProfileJson(json: string, opts: { reload?: boolean } = {})
     freezeLocalWrites();
     window.location.reload();
   }
-  return { ok: true, applied: res.applied, pendingHandle: res.pendingHandle, warnings: parsed.warnings };
+  return { ok: true, applied: res.applied, warnings: parsed.warnings };
 }

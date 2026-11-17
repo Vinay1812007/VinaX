@@ -124,12 +124,12 @@
   }
 
   VX.page({
-    id: 'top-listeners', title: 'Top Listeners', group: 'Users', icon: 'play', order: 2, render: topListeners,
+    id: 'top-listeners', title: 'Top Listeners', group: 'People', icon: 'play', order: 2, render: topListeners,
     desc: 'The people who listened the longest today, this week or this month.',
     keywords: 'leaderboard most listening time spent heavy users fans ranking'
   });
   VX.page({
-    id: 'at-risk', title: 'At Risk', group: 'Users', icon: 'alert', order: 3, render: atRisk,
+    id: 'at-risk', title: 'At Risk', group: 'People', icon: 'alert', order: 3, render: atRisk,
     desc: 'Regular listeners who have not opened VinaX for a week or more.',
     keywords: 'churn quiet inactive lapsed away win back dormant'
   });

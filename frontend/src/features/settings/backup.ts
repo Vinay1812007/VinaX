@@ -4,7 +4,6 @@ import { getLocal, setLocal, writeLocalBatch, type StorageFailure } from '@/serv
 import { HOME_DESIGN_KEY, validateHomeDesign } from '@/services/recommendation/homeDesign';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
-import { USERNAME_RE } from '@/features/identity/username';
 import { SMART_COLLECTIONS_KEY, sanitizeSmartCollections } from '@/features/library/smartCollections';
 import { normalizeProfile } from '@/services/personalization/profile';
 import { mergeShareMaps, migrateShareTokens, sanitizeShareMap, type ShareMap } from '@/features/social/shareMap';
@@ -650,9 +649,11 @@ const homeLayoutCategory: BackupCategory = {
 
 const identityCategory: BackupCategory = {
   id: 'identity',
-  label: 'Name & username',
-  description: 'Your display name, the username you chose (re-confirmed with the service after restore) and the welcome-done flag.',
-  keys: [{ key: KEYS.userName }, { key: KEYS.userHandle }, { key: KEYS.onboarded }],
+  label: 'Your name',
+  description: 'Your display name and the welcome-done flag. Your username belongs to your account and comes back when you sign in.',
+  // Older backups also carry a username (`KEYS.userHandle`). It is not in
+  // `keys`, so sanitize drops it: the account is the only source of a username.
+  keys: [{ key: KEYS.userName }, { key: KEYS.onboarded }],
   sanitize: (values) => {
     const out: CategoryValues = {};
     const name = values[KEYS.userName];
@@ -660,21 +661,10 @@ const identityCategory: BackupCategory = {
       if (typeof name !== 'string') return { error: 'Display name is not text.' };
       out[KEYS.userName] = name.trim().slice(0, 80);
     }
-    const handle = values[KEYS.userHandle];
-    if (handle !== undefined && handle !== null) {
-      if (typeof handle !== 'string') return { error: 'Username is not text.' };
-      const h = handle.trim().toLowerCase();
-      if (h && !USERNAME_RE.test(h)) return { error: 'Username has an invalid format.' };
-      if (h) out[KEYS.userHandle] = h;
-    }
     if (values[KEYS.onboarded] !== undefined) out[KEYS.onboarded] = values[KEYS.onboarded] === true;
     return { values: out };
   },
-  summarize: (values) => {
-    const name = str(values[KEYS.userName]);
-    const handle = str(values[KEYS.userHandle]);
-    return [name, handle ? `@${handle}` : null].filter(Boolean).join(' · ') || 'No name saved';
-  },
+  summarize: (values) => str(values[KEYS.userName]) || 'No name saved',
 };
 
 const LIST_CAPS = { karaoke: 12, prefs: 50, heard: 200_000 } as const;
@@ -985,7 +975,7 @@ export interface ApplyOptions {
 }
 
 export type ApplyResult =
-  | { ok: true; applied: BackupCategoryId[]; keysWritten: number; pendingHandle: string | null }
+  | { ok: true; applied: BackupCategoryId[]; keysWritten: number }
   | (StorageFailure & { applied: [] });
 
 /**
@@ -1012,7 +1002,6 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
   const wanted = new Set(opts.categories ?? parsed.categories.map((c) => c.id));
   const entries: Array<readonly [string, string | null]> = [];
   const applied: BackupCategoryId[] = [];
-  let pendingHandle: string | null = null;
   // 1.15 — an older build kept invite tokens inside the share-link map; move
   // them to their device-only key before the library is rewritten without them.
   if (wanted.has('library')) migrateShareTokens();
@@ -1022,21 +1011,6 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
     if (!cat) continue;
     let values = report.values;
     if (opts.mode === 'merge' && cat.merge) values = cat.merge(currentCategoryValues(cat, { uncapped: true }), values);
-    if (cat.id === 'identity') {
-      // The username is a CLAIM, not a fact: it is re-confirmed with the
-      // service (features/identity) unless this device already holds it.
-      const handle = str(values[KEYS.userHandle]);
-      const confirmed = getLocal<string>(KEYS.userHandle, '');
-      values = { ...values };
-      delete values[KEYS.userHandle];
-      if (handle && handle !== confirmed) {
-        pendingHandle = handle;
-        entries.push([
-          KEYS.userHandlePending,
-          JSON.stringify({ username: handle, name: str(values[KEYS.userName]) ?? '', since: Date.now(), status: 'pending' }),
-        ]);
-      }
-    }
     for (const spec of cat.keys) {
       const v = values[spec.key];
       if (v === undefined) {
@@ -1054,7 +1028,7 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
   const res = writeLocalBatch(entries);
   if (!res.ok) return { ...res, applied: [] };
   recordBackupEvent({ lastImportAt: Date.now(), lastImportMode: opts.mode, lastImportCategories: applied });
-  return { ok: true, applied, keysWritten: res.written, pendingHandle };
+  return { ok: true, applied, keysWritten: res.written };
 }
 
 // ------------------------------------------------------------------- undo --
@@ -1088,8 +1062,7 @@ export function clearUndo(): void {
  * Snapshot the raw keys a restore of `ids` will touch; false when the browser
  * cannot keep it. A failed attempt also REMOVES any older snapshot: left in
  * place, "Undo" after this restore would silently roll back to the state
- * before an EARLIER one. Restoring identity also writes the pending-username
- * key, which belongs to no category — it is captured too.
+ * before an EARLIER one.
  */
 export function keepUndo(ids: readonly BackupCategoryId[]): boolean {
   const entries: Array<[string, string | null]> = [];
@@ -1103,7 +1076,6 @@ export function keepUndo(ids: readonly BackupCategoryId[]): boolean {
   for (const cat of BACKUP_CATEGORIES) {
     if (!ids.includes(cat.id)) continue;
     for (const spec of cat.keys) grab(spec.key);
-    if (cat.id === 'identity') grab(KEYS.userHandlePending);
   }
   try {
     sessionStorage.setItem(RESTORE_UNDO_KEY, JSON.stringify({ at: Date.now(), entries } satisfies UndoSnapshot));

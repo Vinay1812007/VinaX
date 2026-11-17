@@ -1023,23 +1023,22 @@ html:not(.light) .theme-ico-moon { transform: translateY(0) rotate(0deg); opacit
 }
 .animate-marquee { will-change: transform; }
 
-/* Cosmetic deterrence (production only — set by JS). Inputs stay editable
-   so search and forms are never impaired. Not security. */
-.deter {
+/* Tap-and-hold surfaces: song rows, cards and artwork (data-deter-context),
+   the player and tab bar (.vx-bottom-chrome) and the side nav. No text
+   selection, iOS callout or image drag there, so a long-press or swipe is not
+   taken over by the browser (ContextMenu.tsx swallows the touch menu on them).
+   Everything else, lyrics and the Privacy, Terms and Help pages included,
+   can be selected and copied. */
+:is([data-deter-context], .vx-bottom-chrome, .vx-sidebar) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
-.deter input,
-.deter textarea,
-.deter [contenteditable='true'] {
+:is([data-deter-context], .vx-bottom-chrome, .vx-sidebar) :is(input, textarea, [contenteditable='true']) {
   -webkit-user-select: text;
   user-select: text;
 }
-.deter img { -webkit-user-drag: none; }
-/* VinaX AI: replies, code and links can be selected and copied (utils/nativeMenuZone.ts). */
-.deter .vx-ai { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
-.deter .vx-ai img { -webkit-user-drag: auto; }
+:is([data-deter-context], .vx-bottom-chrome, .vx-sidebar) img { -webkit-user-drag: none; }
 
 /* ============================================================================
    Device + capability layers.

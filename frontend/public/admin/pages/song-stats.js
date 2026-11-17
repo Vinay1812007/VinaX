@@ -417,25 +417,25 @@
   }
 
   [
-    { id: 'top-songs', title: 'Top Songs', group: 'Music Stats', icon: 'music', order: 1, render: topSongs,
+    { id: 'top-songs', title: 'Top Songs', group: 'Music', icon: 'music', order: 1, render: topSongs,
       desc: 'The songs signed-in users played the most in the chosen dates.', keywords: 'song stats analytics most played popular' },
-    { id: 'rising-songs', title: 'Rising Songs', group: 'Music Stats', icon: 'up', order: 2, render: rising,
+    { id: 'rising-songs', title: 'Rising Songs', group: 'Music', icon: 'up', order: 2, render: rising,
       desc: 'Songs getting clearly more plays than in the period before.', keywords: 'rising climbing new growing' },
-    { id: 'top-artists', title: 'Top Artists', group: 'Music Stats', icon: 'user', order: 3, render: artists,
+    { id: 'top-artists', title: 'Top Artists', group: 'Music', icon: 'user', order: 3, render: artists,
       desc: 'The artists signed-in users played the most.', keywords: 'artists singers most played' },
-    { id: 'languages', title: 'Languages', group: 'Music Stats', icon: 'globe', order: 4, render: languages,
+    { id: 'languages', title: 'Languages', group: 'Music', icon: 'globe', order: 4, render: languages,
       desc: 'Which languages people listen to, by share of plays.', keywords: 'languages telugu hindi tamil english share' },
-    { id: 'skipped-songs', title: 'Songs People Skip', group: 'Music Stats', icon: 'down', order: 6, render: skips,
+    { id: 'skipped-songs', title: 'Songs People Skip', group: 'Music', icon: 'down', order: 6, render: skips,
       desc: 'Songs people often skip in the first few seconds.', keywords: 'skips skipped disliked' },
-    { id: 'where-users-are', title: 'Where Users Are', group: 'Audience', icon: 'globe', order: 1, render: places,
+    { id: 'where-users-are', title: 'Where Users Are', group: 'People', icon: 'globe', order: 5, render: places,
       desc: 'The countries, states and cities signed-in users listen from.', keywords: 'places map countries cities states location' },
-    { id: 'listening-time', title: 'How Much They Listen', group: 'Audience', icon: 'play', order: 2, render: engagement,
+    { id: 'listening-time', title: 'How Much They Listen', group: 'People', icon: 'play', order: 6, render: engagement,
       desc: 'How long people listen each day and how many are light, regular or heavy listeners.', keywords: 'engagement minutes time listening sessions hours spent' },
-    { id: 'listening-hours', title: 'When They Listen', group: 'Audience', icon: 'calendar', order: 3, render: listeningHours,
+    { id: 'listening-hours', title: 'When They Listen', group: 'People', icon: 'calendar', order: 7, render: listeningHours,
       desc: 'Listening time by weekday and hour, with the busiest hour of the week.', keywords: 'heat map heatmap hours time of day peak busiest night' },
-    { id: 'coming-back', title: 'Do They Come Back', group: 'Audience', icon: 'refresh', order: 4, render: retention,
+    { id: 'coming-back', title: 'Do They Come Back', group: 'People', icon: 'refresh', order: 8, render: retention,
       desc: 'Of the people who joined, how many come back in the following days and weeks.', keywords: 'retention return come back loyal' },
-    { id: 'signup-journey', title: 'Sign-up Journey', group: 'Audience', icon: 'target', order: 5, render: funnel,
+    { id: 'signup-journey', title: 'Sign-up Journey', group: 'People', icon: 'target', order: 9, render: funnel,
       desc: 'Each step from opening the app to signing in and playing songs, and where people stop.', keywords: 'funnel sign up journey steps drop off' }
   ].forEach(function (p) {
     VX.page(Object.assign({ range: true }, p));

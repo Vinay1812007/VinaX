@@ -76,9 +76,9 @@ const statusOf = (it: ReviewItem): 'matched' | 'uncertain' | 'missing' => {
   return it.match.status;
 };
 
-export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
+export function ImportPlaylistSheet({ onClose, initialText = '' }: { onClose(): void; /** Text shared to VinaX (/share), already in the box. */ initialText?: string }) {
   const qc = useQueryClient();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });

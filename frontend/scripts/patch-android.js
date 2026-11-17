@@ -69,6 +69,7 @@ if (fs.existsSync(javaRoot)) {
   const mainActivity = `package ${PKG};
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
@@ -78,8 +79,13 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
+    /** The longest shared text passed on (the page reads at most 100 lines). */
+    private static final int SHARE_MAX = 8000;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Before super.onCreate: the bridge reads the launch link from this intent.
+        shareAsLink(getIntent());
         registerPlugin(VinaxMediaPlugin.class);
         // VinaX AI Live voice: loudspeaker / earpiece (native-android/AudioRoutePlugin.java).
         registerPlugin(AudioRoutePlugin.class);
@@ -134,11 +140,44 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onNewIntent(Intent intent) {
+        // Before super: the App plugin hands the page VIEW links only.
+        shareAsLink(intent);
         super.onNewIntent(intent);
         // Warm start: the activity already exists (launchMode singleTask), so
         // a notification tap lands here instead of onCreate.
         maybeOpenPlayer(intent);
         maybeOpenPushLink(intent);
+    }
+
+    /**
+     * Share to VinaX: text another app shares here (ACTION_SEND, text/plain)
+     * becomes the in-app link /share?text=...&title=... and then goes the
+     * way a VinaX link goes. @capacitor/app passes only VIEW intents to the
+     * page (appUrlOpen, or getLaunchUrl on a cold start), never a SEND's
+     * EXTRA_TEXT, so the intent is turned into that VIEW link in place.
+     */
+    private static void shareAsLink(Intent intent) {
+        try {
+            if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+            final CharSequence extra = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if (extra == null) return;
+            String text = extra.toString().trim();
+            if (text.isEmpty()) return;
+            if (text.length() > SHARE_MAX) {
+                int end = SHARE_MAX;
+                if (Character.isHighSurrogate(text.charAt(end - 1))) end -= 1;
+                text = text.substring(0, end);
+            }
+            final StringBuilder link = new StringBuilder("https://www.vinaxmusic.online/share?text=").append(Uri.encode(text));
+            final CharSequence subject = intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
+            if (subject != null) {
+                final String title = subject.toString().trim();
+                if (!title.isEmpty() && title.length() <= 200) link.append("&title=").append(Uri.encode(title));
+            }
+            intent.setAction(Intent.ACTION_VIEW);
+            intent.setData(Uri.parse(link.toString()));
+        } catch (Exception ignored) {
+        }
     }
 
     /** A tap on a push VinaxPushService drew: open its link inside the app. */
@@ -334,31 +373,62 @@ if (fs.existsSync(manifestPath)) {
 
   // 1.13 — website → app. VinaX links (an invite's "Open in the VinaX app"
   // button, which names this package) open in the app: MainActivity takes
-  // https links to the site. Not autoVerify: that needs the release
-  // certificate's fingerprint published at /.well-known/assetlinks.json, and
-  // until it is, Android would mark the app's link handling as failed. The
-  // page reads the link through @capacitor/app (AppLayout: appUrlOpen and
-  // getLaunchUrl) and shows that page.
+  // https links to the site. The page reads the link through @capacitor/app
+  // (AppLayout: appUrlOpen and getLaunchUrl) and shows that page.
+  //
+  // Round 8 — verified App Links: the www filter is autoVerify, checked
+  // against https://www.vinaxmusic.online/.well-known/assetlinks.json (the
+  // release key's SHA-256, public/.well-known/assetlinks.json), so a shared
+  // song, playlist or invite opens straight in the app with no chooser.
+  // Only www is verified: the apex answers every path, assetlinks.json
+  // included, with a redirect to www (Cloudflare Redirect Rule "Apex to
+  // www"), and Android refuses a redirected assetlinks.json. The apex keeps a
+  // filter of its own WITHOUT autoVerify, so it can still be opened in the
+  // app by hand. (Android 12 and later verify each host on its own; Android
+  // 11 and older verify all hosts or none, so there the apex keeps the old
+  // chooser behaviour until /.well-known/ on the apex is exempted from that
+  // rule.) Only the pages people share open the app (APP_LINK_PATHS); Home,
+  // sign-in, Get the app and the rest stay in the browser.
+  //
+  // Share to VinaX (round 8): the SEND filter puts VinaX in the system share
+  // sheet for text; MainActivity.shareAsLink turns it into /share?text=.
+  const APP_LINK_PATHS = ['/song/', '/album/', '/artist/', '/playlist/', '/video/', '/podcast/', '/lyrics/', '/p/', '/u/', '/together', '/vinaxai/share/'];
+  const linkData = (host) => [
+    '                <data android:scheme="https" />',
+    `                <data android:host="${host}" />`,
+    ...APP_LINK_PATHS.map((p) => `                <data android:pathPrefix="${p}" />`),
+  ].join('\n');
   const linkFilter = `
             <!-- vinax-links -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+${linkData('www.vinaxmusic.online')}
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="www.vinaxmusic.online" />
-                <data android:host="vinaxmusic.online" />
+${linkData('vinaxmusic.online')}
             </intent-filter>
-`;
-  if (!manifest.includes('<!-- vinax-links -->')) {
-    // After the launcher filter, which only MainActivity has.
-    const launcher = /(<category android:name="android\.intent\.category\.LAUNCHER"\s*\/>\s*<\/intent-filter>)/;
-    if (launcher.test(manifest)) {
-      manifest = manifest.replace(launcher, `$1\n${linkFilter}`);
-      console.log('[manifest] MainActivity opens VinaX links (website → app)');
-    } else {
-      console.warn('[manifest] launcher intent-filter not found — VinaX links will not open in the app');
-    }
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- /vinax-links -->`;
+  // Idempotent: take out what an earlier run injected (this block, or the
+  // 1.13 single filter that had no end marker) before adding it again.
+  manifest = manifest.replace(/\n[ \t]*<!-- vinax-links -->[\s\S]*?<!-- \/vinax-links -->/g, '');
+  manifest = manifest.replace(/\n\n?[ \t]*<!-- vinax-links -->\s*<intent-filter>[\s\S]*?<\/intent-filter>\n/g, '');
+  // After the launcher filter, which only MainActivity has.
+  const launcher = /(<category android:name="android\.intent\.category\.LAUNCHER"\s*\/>\s*<\/intent-filter>)/;
+  if (launcher.test(manifest)) {
+    manifest = manifest.replace(launcher, `$1${linkFilter}`);
+    console.log('[manifest] MainActivity opens VinaX links (verified on www) and takes shared text');
+  } else {
+    console.warn('[manifest] launcher intent-filter not found — VinaX links and Share to VinaX will not open the app');
   }
 
   // WARNING (audit finding M-OPS-9): these regexes are fragile — they assume

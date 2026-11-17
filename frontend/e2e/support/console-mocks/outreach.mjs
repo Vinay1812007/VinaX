@@ -33,7 +33,7 @@ const LATEST = [
   person(2, { kind: 'release', at: iso(now - 5 * H), title: '2 new songs from Anirudh and Sid Sriram', body: '“Chuttamalle” by Anirudh, “Srivalli” by Sid Sriram. Tap to listen.', link: '/song/abc123', sent: 1, devices: 1, facts: { songIds: ['abc123', 'ghi789'] } }),
   person(3, { kind: 'winback', at: iso(now - 28 * H), title: 'New from Arijit Singh', body: '“Kesariya” and more from Arijit Singh are waiting for you on VinaX.', link: '/song/kes1', sent: 1, devices: 1, facts: { topArtist: 'Arijit Singh' } }),
   person(4, { kind: 'winback', at: iso(now - 28 * H), title: 'Kavya, your music missed you', body: 'Songs from Sid Sriram are waiting for you. Tap to pick up where you left off.', link: '/', sent: 1, devices: 1, facts: { topArtist: 'Sid Sriram' } }),
-  ...PEOPLE.map((p, i) => person(i, { kind: 'recap', at: iso(now - 2 * 24 * H), title: 'Your week in VinaX', body: `${3 - (i % 3)} h ${12 + i * 5} min of music · top artist Anirudh · most played “Vaathi Coming”. Tap for your week.`, link: '/weekly', sent: i < 4 ? 1 : 0, devices: 1, facts: { seconds: 11520 - i * 600 } })),
+  ...PEOPLE.map((p, i) => person(i, { kind: 'recap', at: iso(now - 2 * 24 * H), title: 'Your week in VinaX', body: `${3 - (i % 3)} h ${12 + i * 5} min of music · top artist Anirudh · most played “Vaathi Coming”. Tap for your weekly report.`, link: '/stats', sent: i < 4 ? 1 : 0, devices: 1, facts: { seconds: 11520 - i * 600 } })),
 ];
 
 const BY_DAY = Array.from({ length: 14 }, (_, i) => {

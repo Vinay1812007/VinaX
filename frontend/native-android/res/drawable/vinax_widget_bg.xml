@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Shared widget surface: dark, slightly translucent, rounded, with a faint
-     violet hairline so the card reads on both light and dark wallpapers. -->
+     green hairline so the card reads on both light and dark wallpapers. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="@color/vinax_widget_surface" />
     <corners android:radius="24dp" />

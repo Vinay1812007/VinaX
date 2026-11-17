@@ -49,7 +49,11 @@ async function cacheShell(c) {
   );
 }
 
-async function precacheAll() {
+/** `light` (Data saver on a metered connection, and every install): only the
+ *  manifest's `light` list (the app shell's chunks plus the /offline, Library
+ *  and Now Playing pages: vite.config LIGHT_PAGES) is downloaded; the rest is fetched on first use by the
+ *  /assets/ handler. Pruning is the same in both modes. */
+async function precacheAll(light) {
   try {
     const c0 = await caches.open(CACHE);
     await cacheShell(c0);
@@ -65,8 +69,10 @@ async function precacheAll() {
     const c = await caches.open(CACHE);
     const wanted = new Set(files);
     if (data && Array.isArray(data.onDemand)) for (const u of data.onDemand) wanted.add(u);
+    // A manifest without a light list (a build before it) gets the full one.
+    const fetchList = light && data && Array.isArray(data.light) ? data.light : files;
     await Promise.all(
-      files.map(async (u) => {
+      fetchList.map(async (u) => {
         if (typeof u !== 'string' || u.indexOf('/assets/') !== 0) return;
         if (await c.match(u)) return; // immutable — already have it
         try {
@@ -99,11 +105,13 @@ self.addEventListener('install', (event) => {
   // v14 — individual best-effort puts instead of addAll(): addAll rejects
   // wholesale when ANY member fails, which blocked the whole install (and
   // with it every future offline launch) on one missing icon or font.
+  // v17 — install takes the light precache only: the page asks for the full
+  // one right after (PRECACHE on controllerchange) unless Data saver is on.
   event.waitUntil(
     caches
       .open(CACHE)
       .then((c) => cacheShell(c))
-      .then(() => precacheAll()),
+      .then(() => precacheAll(true)),
   );
 });
 
@@ -112,7 +120,8 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   if (event.data && event.data.type === 'PRECACHE') {
-    const job = precacheAll();
+    // { mode: 'light' } from a page with Data saver on; no mode = the full graph.
+    const job = precacheAll(event.data.mode === 'light');
     if (event.waitUntil) event.waitUntil(job);
   }
 });

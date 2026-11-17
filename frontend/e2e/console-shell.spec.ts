@@ -3,7 +3,7 @@ import { mockConsole, signedIn, watchErrors } from './support/consoleMocks';
 
 /**
  * Console rebuild — the shell (/admin/, static files, not the React
- * app): sign-in, the sidebar (ten folding groups, one job per page, and
+ * app): sign-in, the sidebar (eight folding sections, one job per page, and
  * "Find a page"), the
  * router (old addresses redirect, unknown ones say "Page not found"), the top
  * bar (search, date range, theme, profile) and the phone menu. Each page's

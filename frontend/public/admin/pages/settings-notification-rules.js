@@ -197,7 +197,7 @@
         VX.clear(status);
         if (!res.ok) { status.appendChild(ui.notice('Could not check the email service: ' + res.message, 'bad')); return; }
         if (!d.configured) {
-          status.appendChild(ui.notice('Emails are off: the Worker has no RESEND_API_KEY yet. Add it on the Worker (App Health › API Keys Status shows when it is set) and these switches take effect.', 'warn'));
+          status.appendChild(ui.notice('Emails are off: the Worker has no RESEND_API_KEY yet. Add it on the Worker (Health › API Keys Status shows when it is set) and these switches take effect.', 'warn'));
           return;
         }
         status.appendChild(h('div.form-row',

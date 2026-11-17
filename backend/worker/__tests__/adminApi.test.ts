@@ -134,7 +134,7 @@ describe('every admin GET', () => {
 describe('analytics', () => {
   it('maps each view to its function and refuses an unknown view', async () => {
     stub((c) => (path(c).startsWith('rpc/') ? json(path(c) === 'rpc/stats_engagement' ? { byKind: [] } : path(c) === 'rpc/stats_platforms' ? { platforms: [], versions: [] } : [{ x: 1 }]) : undefined));
-    for (const [view, fn] of [['music', 'stats_music'], ['geo', 'stats_geo'], ['retention', 'stats_retention'], ['funnel', 'stats_funnel'], ['skips', 'stats_skips'], ['errors', 'stats_errors'], ['listening', 'stats_listening']]) {
+    for (const [view, fn] of [['music', 'stats_music'], ['geo', 'stats_geo'], ['retention', 'stats_retention'], ['funnel', 'stats_funnel'], ['skips', 'stats_skips'], ['errors', 'stats_errors'], ['listening', 'stats_listening'], ['problems', 'stats_song_problems']]) {
       calls = [];
       const { res, body } = await run(analytics.onRequestGet as Handler, `/api/admin/analytics?view=${view}&days=30`);
       expect(res.status, view).toBe(200);
@@ -340,6 +340,25 @@ describe('content and experiments', () => {
     expect((body?.row as { key: string }).key).toBe('home-v2');
     expect((await run(experiments.onRequestPost as Handler, '/api/admin/experiments', { body: { action: 'save', key: 'Bad Key!', variants: [{ name: 'a', pct: 10 }] } })).res.status).toBe(400);
     expect((await run(experiments.onRequestPost as Handler, '/api/admin/experiments', { body: { action: 'save', key: 'ok', variants: [] } })).res.status).toBe(400);
+  });
+
+  it('answers results per version from stats_experiment, and says when the database is behind', async () => {
+    const variants = [{ variant: 'control', people: 40, outcomes: 220, completeRate: 61.5, enough: true }];
+    stub((c) => (path(c) === 'rpc/stats_experiment' ? json({ key: 'rec-next-songs', days: 14, enough: false, minPeople: 30, minOutcomes: 100, variants }) : undefined));
+    const { res, body } = await run(experiments.onRequestGet as Handler, '/api/admin/experiments?view=results&key=Rec-Next-Songs&days=14');
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ configured: true, view: 'results', key: 'rec-next-songs', days: 14 });
+    expect((body?.data as { variants: unknown[] }).variants).toEqual(variants);
+    expect(calls.map(path)).toEqual(['rpc/stats_experiment']);
+    expect(calls[0].body).toEqual({ p_key: 'rec-next-songs', p_days: 14 });
+    // No answer from the function is still an empty list, never undefined.
+    stub((c) => (path(c) === 'rpc/stats_experiment' ? json(null) : undefined));
+    expect(((await run(experiments.onRequestGet as Handler, '/api/admin/experiments?view=results&key=rec-next-songs')).body?.data as { variants: unknown[] }).variants).toEqual([]);
+    expect((await run(experiments.onRequestGet as Handler, '/api/admin/experiments?view=results&key=Bad Key!')).res.status).toBe(400);
+    stub((c) => (path(c) === 'rpc/stats_experiment' ? json({ code: 'PGRST202', message: 'Could not find the function' }, 404) : undefined));
+    const behind = await run(experiments.onRequestGet as Handler, '/api/admin/experiments?view=results&key=rec-next-songs');
+    expect(behind.res.status).toBe(502);
+    expect(behind.body?.error).toBe('db_update_needed');
   });
 });
 

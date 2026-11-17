@@ -149,13 +149,13 @@
   }
 
   VX.page({
-    id: 'find-music', title: 'Find Music', group: 'Search & Library', icon: 'library', order: 4,
+    id: 'find-music', title: 'Find Music', group: 'Music', icon: 'library', order: 11,
     desc: 'Find any song, album or artist, listen to a preview, and block what should not appear in the app.',
     keywords: 'music library catalog catalogue search songs albums artists playlists preview',
     render: searchTab
   });
   VX.page({
-    id: 'blocked-music', title: 'Blocked Songs & Albums', group: 'Search & Library', icon: 'lock', order: 5,
+    id: 'blocked-music', title: 'Blocked Songs & Albums', group: 'Music', icon: 'lock', order: 12,
     desc: 'Songs and albums hidden from the app. Unblock one to show it again.',
     keywords: 'blocked hidden unblock songs albums',
     render: blockedTab

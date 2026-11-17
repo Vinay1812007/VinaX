@@ -160,16 +160,24 @@ export function reportLyricMiss(song: Song): void {
   void send('lyric-miss', song);
 }
 
-export function reportError(kind: string, message: unknown): void {
+/**
+ * `song` (optional): the song the error is about — the engine passes the
+ * song that failed to play, so the console's Songs With Problems can list it.
+ * It rides the event's song fields, never the message, so App Errors still
+ * groups by message; the same message for another song is its own report.
+ */
+export function reportError(kind: string, message: unknown, song?: Song | null): void {
   // The app is reloading itself (a missing chunk after a deploy): what breaks
   // on the way out is not a bug.
   if (pageReloading()) return;
   const msg = String(message ?? '').slice(0, 300);
-  const key = kind + '|' + msg;
+  // A generated song never reaches the statistics: report the error without it.
+  const about = song && !song.id.startsWith('gen-') ? song : null;
+  const key = kind + '|' + msg + '|' + (about?.id ?? '');
   if (errorCount >= 25 || seenErrors.has(key)) return;
   seenErrors.add(key);
   errorCount += 1;
-  void send('error', null, { errorKind: kind, message: msg });
+  void send('error', about, { errorKind: kind, message: msg });
 }
 
 function currentSong(): Song | null {

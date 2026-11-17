@@ -7488,7 +7488,7 @@ __export(analytics_exports, {
   onRequestGet: () => onRequestGet17,
   onRequestPost: () => onRequestPost9
 });
-var VIEWS = ["music", "rising", "geo", "engagement", "listening", "retention", "funnel", "skips", "errors", "devices"];
+var VIEWS = ["music", "rising", "geo", "engagement", "listening", "retention", "funnel", "skips", "errors", "devices", "problems"];
 var onRequestGet17 = adminGet(async ({ env, url }) => {
   const view = url.searchParams.get("view");
   if (!view || !VIEWS.includes(view)) return badRequest("unknown_view", { views: VIEWS });
@@ -7515,12 +7515,13 @@ var onRequestGet17 = adminGet(async ({ env, url }) => {
     funnel: ["stats_funnel", { p_days: days }],
     skips: ["stats_skips", { p_days: days, p_min: 5 }],
     errors: ["stats_errors", { p_days: days, p_limit: 100 }],
-    devices: ["device_breakdown", { p_days: days }]
+    devices: ["device_breakdown", { p_days: days }],
+    problems: ["stats_song_problems", { p_days: days, p_limit: 100 }]
   };
   const [fn, args] = call2[view];
   const r = await db.rpc(env, fn, args);
   if (!r.ok) return dbFailure(r);
-  return adminJson({ configured: true, days, view, data: r.value ?? (view === "music" || view === "rising" || view === "geo" || view === "errors" || view === "listening" || view === "devices" ? {} : []) });
+  return adminJson({ configured: true, days, view, data: r.value ?? (view === "music" || view === "rising" || view === "geo" || view === "errors" || view === "listening" || view === "devices" || view === "problems" ? {} : []) });
 });
 var onRequestPost9 = adminPost(async ({ env, body, audit: audit2 }) => {
   if (body.action !== "clear_errors") return badRequest("unknown_action");
@@ -8301,7 +8302,16 @@ __name(sanitizeVariants, "sanitizeVariants");
 var KEY_RE = /^[a-z0-9-]{1,40}$/;
 var STATUSES2 = ["draft", "running", "paused", "finished"];
 var isStatus = /* @__PURE__ */ __name((v) => typeof v === "string" && STATUSES2.includes(v), "isStatus");
-var onRequestGet21 = adminGet(async ({ env }) => {
+var onRequestGet21 = adminGet(async ({ env, url }) => {
+  if (url.searchParams.get("view") === "results") {
+    const key = (url.searchParams.get("key") ?? "").trim().toLowerCase();
+    if (!KEY_RE.test(key)) return badRequest("bad_key");
+    const days = daysParam(url, 30, 90);
+    const res = await db.rpc(env, "stats_experiment", { p_key: key, p_days: days });
+    if (!res.ok) return dbFailure(res);
+    const data = res.value && typeof res.value === "object" && !Array.isArray(res.value) ? res.value : {};
+    return adminJson({ configured: true, view: "results", key, days, data: { ...data, variants: Array.isArray(data.variants) ? data.variants : [] } });
+  }
   const [r, active] = await Promise.all([
     db.select(env, "experiments", q().select("*").order("updated_at", "desc").limit(200)),
     db.count(env, "accounts", q().gte("last_seen", new Date(Date.now() - 7 * 864e5).toISOString()))
@@ -10005,7 +10015,7 @@ function recapMessage(c) {
   const parts = [`${hoursText(c.seconds)} of music`];
   if (c.topArtist) parts.push(`top artist ${c.topArtist}`);
   if (c.topSong) parts.push(`most played ${quote(c.topSong)}`);
-  return { title: "Your week in VinaX", body: `${parts.join(" \xB7 ")}. Tap for your week.`, link: "/weekly" };
+  return { title: "Your week in VinaX", body: `${parts.join(" \xB7 ")}. Tap for your weekly report.`, link: "/stats" };
 }
 __name(recapMessage, "recapMessage");
 function winbackMessage(c, song2) {

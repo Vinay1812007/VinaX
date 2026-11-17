@@ -1,9 +1,10 @@
 /* =============================================================================
    VinaX AI (/vinaxai) — the chat page. Full screen inside the app shell (no
-   side nav, top bar or player dock; music keeps playing). Every colour,
-   radius and face comes from the active app style's tokens, so the six
-   styles and both themes apply unchanged. Loaded with the lazy page.
-   ========================================================================== */
+   side nav, top bar or player dock; music keeps playing). The first part lays
+   the page out from the app's tokens; the Claude look at the end of the file
+   gives VinaX AI its own warm palette. Loaded with the lazy pages, and by
+   Live voice's host, which keeps a call open on any page.
+   =========================================================================== */
 
 .vx-ai {
   --vx-ai-col: 760px;
@@ -1184,27 +1185,17 @@ div.vx-ai-gallery-note p { margin: 0; }
 @media (max-width: 520px) { .vx-ai-proj-chip { max-width: 46vw; } }
 
 /* =============================================================================
-   Glass and motion (VinaX AI only). Frosted surfaces built from the app's
-   material tokens (--vx-mat-*, index.css), so the Settings → Glass effect and
-   Blur dials, both themes and the six app styles apply; Harbour, Onyx,
-   AMOLED and high contrast keep their opaque, unblurred look.
-
-   Two kinds of surface:
-   - leaves (menus, the model list, tooltips, dialogs, the settings sheet, the
-     jump button) carry backdrop-filter themselves;
-   - containers (the composer, the sidebar) carry it on a ::before layer, so
-     they are never a containing block for a fixed dialog inside them (the
-     sidebar's delete dialog) and never a backdrop root for a menu that opens
-     out of them (the model list still frosts the chat behind it).
-   Each surface reads --vx-ai-fill (translucent) and keeps --vx-ai-solid
-   beside it; the fallbacks at the end swap one for the other.
+   Surfaces and motion (VinaX AI only). Every surface is solid (no glass and
+   no backdrop blur); the Claude look at the end of this file colours them.
+   The composer and the sidebar keep a ::before fill layer, but the Claude
+   look hides it (display: none, high contrast included) and colours the
+   composer and the sidebar themselves.
    Motion animates transform and opacity only, and lives inside
    prefers-reduced-motion: no-preference, so nothing here moves otherwise.
    ========================================================================== */
 :root {
   /* Design system v2 (UI rebuild Phase 8): VinaX AI reads the app's own
-     tokens (styles/tokens.css), so it follows every theme and app style
-     like the rest of VinaX. The --vx-ai-* names stay as aliases. */
+     tokens (styles/tokens.css). The --vx-ai-* names stay as aliases. */
   --vx-ai-ease: var(--ease-standard);
   --vx-ai-lift: var(--elev-3);
   --vx-ai-lift-sm: var(--elev-2);
@@ -1212,71 +1203,41 @@ div.vx-ai-gallery-note p { margin: 0; }
   --vx-ai-press: rgb(var(--ink-100) / 0.11);
   --vx-ai-skel: rgb(var(--ink-100) / 0.07);
   --vx-ai-skel-hi: rgb(255 255 255 / 0.07);
-  --vx-ai-glow-a: 0.16;
-  --vx-ai-glow-b: 0.09;
 }
 html.light {
   --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
-  --vx-ai-glow-a: 0.07;
-  --vx-ai-glow-b: 0.05;
 }
 
-/* The canvas: a soft ambient light from the active accent, so the glass has
-   colour to frost. Static on purpose: a moving backdrop would make every
-   blurred surface re-render each frame. */
-.vx-ai {
-  isolation: isolate;
-  background:
-    radial-gradient(70% 55% at 12% -8%, rgb(var(--ember-500) / var(--vx-ai-glow-a)), transparent 70%),
-    radial-gradient(55% 45% at 100% 8%, rgb(var(--tide-500) / var(--vx-ai-glow-b)), transparent 72%),
-    radial-gradient(60% 38% at 50% 108%, rgb(var(--ember-500) / var(--vx-ai-glow-a)), transparent 75%),
-    rgb(var(--ink-900));
-}
-html:is(.amoled, .hc, [data-template='vinax']) .vx-ai { background: rgb(var(--ink-900)); }
+.vx-ai { isolation: isolate; }
 .vx-ai-dock { background: transparent; }
 
-/* ------------------------------------------------------------ leaf glass */
+/* ---------------------------------------------------------- leaf surfaces */
 .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump {
-  --vx-ai-fill: var(--vx-mat-thick);
-  --vx-ai-solid: rgb(var(--ink-850));
-  background: var(--vx-ai-fill);
-  -webkit-backdrop-filter: blur(var(--vx-mat-thick-blur)) saturate(var(--vx-mat-sat));
-  backdrop-filter: blur(var(--vx-mat-thick-blur)) saturate(var(--vx-mat-sat));
+  background: rgb(var(--ink-850));
   box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), var(--vx-ai-lift);
 }
 .vx-ai-settings { box-shadow: inset 1px 0 0 var(--vx-mat-specular), var(--vx-ai-lift); }
-/* The settings sheet is tall, dense and redraws often (the mic meter): it
-   takes the thick fill over the scrim's blur and no blur of its own. */
-.vx-ai-settings { -webkit-backdrop-filter: none; backdrop-filter: none; }
-.vx-ai-picker-search { background: var(--vx-ai-fill); }
-/* Rows inside glass take a see-through hover, so the frost still shows. */
+/* Rows inside menus take a see-through hover. */
 .vx-ai-menu-item:hover, .vx-ai-menu-item:focus, .vx-ai-opt:hover, .vx-ai-opt:focus,
 .vx-ai-move-opt:hover, .vx-ai-move-opt:focus-visible { background: var(--vx-ai-hover); }
 .vx-ai-opt[aria-selected='true']:hover, .vx-ai-opt[aria-selected='true']:focus { background: rgb(var(--ember-500) / 0.2); }
 
-/* ------------------------------------------------------- container glass */
+/* ----------------------------------------------------- container surfaces */
 .vx-ai-composer {
-  --vx-ai-fill: var(--vx-mat-regular);
-  --vx-ai-blur: var(--vx-mat-regular-blur);
-  --vx-ai-solid: rgb(var(--ink-850));
   position: relative;
   z-index: 3; /* its menus stay over the jump button */
   background: transparent;
   box-shadow: var(--vx-ai-lift-sm);
 }
 .vx-ai-side {
-  --vx-ai-fill: var(--vx-mat-thin);
-  --vx-ai-blur: var(--vx-mat-thin-blur);
-  --vx-ai-solid: rgb(var(--ink-950));
   position: relative;
   background: transparent;
 }
 /* The column is no stacking context (a delete dialog inside it must rise over
-   the whole page): its frost sits under its content by paint order instead. */
+   the whole page): its fill sits under its content by paint order instead. */
 .vx-ai-side:not(.is-drawer)::before { z-index: auto; }
 .vx-ai-side > * { position: relative; }
-/* The drawer lies over the chat: a denser frost keeps its text clear. */
-.vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-mat-thick); --vx-ai-blur: var(--vx-mat-thick-blur); --vx-ai-solid: rgb(var(--ink-850)); position: absolute; z-index: 30; }
+.vx-ai-side.is-drawer { position: absolute; z-index: 30; }
 .vx-ai-composer::before, .vx-ai-side::before {
   content: '';
   position: absolute;
@@ -1284,25 +1245,25 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai { background: rgb(var(--in
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
-  background: var(--vx-ai-fill);
-  -webkit-backdrop-filter: blur(var(--vx-ai-blur)) saturate(var(--vx-mat-sat));
-  backdrop-filter: blur(var(--vx-ai-blur)) saturate(var(--vx-mat-sat));
+  background: rgb(var(--ink-850));
   box-shadow: inset 0 1px 0 var(--vx-mat-specular);
 }
+.vx-ai-side::before { background: rgb(var(--ink-950)); }
+.vx-ai-side.is-drawer::before { background: rgb(var(--ink-850)); }
 .vx-ai-composer:focus-within { border-color: rgb(var(--ember-500) / 0.55); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18), var(--vx-ai-lift-sm); }
 .vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35), var(--vx-ai-lift-sm); }
 .vx-ai-side-search { background: rgb(var(--ink-100) / 0.05); }
 .vx-ai-row:hover, .vx-ai-row:focus-within { background: var(--vx-ai-hover); }
 .vx-ai-row-link.is-active { background: var(--vx-ai-press); }
 
-/* Quieter glass: chrome that sits on the canvas, not over content. */
+/* Quieter chrome: what sits on the canvas, not over content. */
 .vx-ai-np { background: rgb(var(--ink-100) / 0.06); box-shadow: inset 0 1px 0 var(--vx-mat-specular); }
 .vx-ai-bubble { box-shadow: inset 0 1px 0 var(--vx-mat-specular); }
 .vx-ai-artifact-head { background: rgb(var(--ink-100) / 0.03); }
 .vx-ai-tabs { background: rgb(var(--ink-100) / 0.05); }
 
-/* Dialog scrims: the dim (and, on larger screens, a light blur) is a ::before
-   layer, so it can fade in on its own while the dialog settles. */
+/* Dialog scrims: the dim is a ::before layer, so it can fade in on its own
+   while the dialog settles. */
 .vx-ai-scrim { background: transparent; }
 .vx-ai-scrim::before {
   content: '';
@@ -1313,12 +1274,6 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai { background: rgb(var(--in
 }
 html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
 .vx-ai-scrim > * { position: relative; }
-@media (min-width: 641px) {
-  .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {
-    -webkit-backdrop-filter: blur(6px) saturate(120%);
-    backdrop-filter: blur(6px) saturate(120%);
-  }
-}
 
 /* Live voice: an opaque canvas lit around the orb. No full-screen blur: the
    orb and captions redraw every frame, and a blurred layer under them would
@@ -1496,36 +1451,8 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   .vx-ai-pending i { opacity: 0.85; }
 }
 
-/* ------------------------------------------------------ phones (≤640px) */
-/* Full-screen layers stay unblurred on a phone: the settings sheet is opaque
-   (the dialog scrims' blur is already larger screens only). */
-@media (max-width: 640px) {
-  .vx-ai-settings { --vx-ai-fill: var(--vx-ai-solid); }
-}
-
-/* ------------------------------------------- fallbacks: solid, unblurred */
-/* Flat app styles (Harbour, Onyx), AMOLED and high contrast: their material
-   tokens are already opaque; drop the blur and use the solid fills. */
-html:is(.amoled, .hc, [data-template='vinax']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side) { --vx-ai-fill: var(--vx-ai-solid); }
-html:is(.amoled, .hc, [data-template='vinax']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump),
-html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-composer::before,
-html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-side::before,
-html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-scrim::before {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-/* No backdrop-filter (older Android WebViews): solid surfaces. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
-}
-/* The listener asked for less transparency: solid surfaces, no blur. */
+/* The listener asked for less transparency: the see-through chrome turns solid. */
 @media (prefers-reduced-transparency: reduce) {
-  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
-  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump,
-  .vx-ai-composer::before, .vx-ai-side::before, .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
   .vx-ai-np, .vx-ai-side-search, .vx-ai-tabs, .vx-ai-live-btn { background: rgb(var(--ink-800)); }
   .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
   .vx-ai-live-btn.is-end { background: var(--vx-danger); }
@@ -1611,3 +1538,531 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-scrim::before {
 .vx-ai-playlist-list li.is-missing .vx-ai-playlist-artist { font-style: italic; }
 .vx-ai-playlist-more { width: 100%; min-height: 44px; border-top: 1px solid var(--line-1); color: var(--accent-text); font-weight: 700; font-size: var(--type-meta); }
 .vx-ai-playlist-more:hover { background: var(--surface-3); }
+
+/* =============================================================================
+   VinaX AI — the Claude-style look (2026-11-16, the owner's pick: "Claude's
+   warm palette"). Last in this file, so it wins at equal specificity.
+
+   VinaX AI gets its own calm, warm look, apart from the music app's styles:
+   warm charcoal in dark mode, soft cream in light mode, a clay accent, a
+   serif face for replies and the greeting, and solid surfaces (no glass).
+   The music app, its six styles and festival skins are untouched: every
+   value here is scoped to .vx-ai, the root of each VinaX AI page.
+
+   How it works: the rules above read palette channels ("r g b" triplets:
+   --ink-*, --ember-*, --tide-*) where it uses them, so redefining them on
+   .vx-ai re-colours the page. The semantic tokens (tokens.css: --surface-*,
+   --text-*, --accent-*, --line-*) are computed on :root, so they are
+   redefined here too. High contrast (html.hc) keeps the app's own palette.
+
+   Tokens only: no raw hex colours and no raw ms durations from here on (the
+   style guard, styleGuard.test.ts, counts the whole file).
+   ========================================================================== */
+
+html:not(.hc) .vx-ai {
+  /* ---- palette: dark ------------------------------------------------- */
+  --ink-50: 255 255 255;
+  --ink-100: 250 249 245;  /* primary text */
+  --ink-200: 229 227 219;
+  --ink-300: 200 198 189;  /* body, secondary */
+  --ink-400: 176 174 165;  /* meta */
+  --ink-500: 156 154 146;  /* hints */
+  --ink-600: 110 108 102;
+  --ink-700: 74 73 69;     /* pressed */
+  --ink-800: 58 58 55;     /* hover */
+  --ink-850: 48 48 46;     /* cards, menus */
+  --ink-900: 38 38 36;     /* the canvas */
+  --ink-950: 31 30 29;     /* sidebar */
+  --ember-600: 198 97 63;  /* clay */
+  --ember-500: 217 119 87;
+  --ember-400: 229 145 117;
+  --ember-300: 238 178 157;
+  --tide-500: 106 155 204;
+  --tide-400: 140 178 216;
+  --vx-ai-composer: 48 48 46;
+  --vx-ai-bubble: 20 20 19;
+  --vx-ai-code-bg: 26 26 25;
+  --vx-ai-shadow: 0 0 0;
+  --vx-on-accent: rgb(20 20 19);
+  --glass-border: rgb(222 220 209 / 0.12);
+
+  /* ---- faces and shapes ---------------------------------------------- */
+  --vx-ai-serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, 'Times New Roman', serif;
+  --vx-ai-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vx-font-display: var(--vx-ai-serif);
+  --font-display: var(--vx-ai-serif);
+  --vx-radius-control: 8px;
+  --vx-radius-card: 12px;
+  --vx-radius-panel: 16px;
+
+  /* ---- the semantic tokens, re-read from the palette above ----------- */
+  --surface-0: rgb(var(--ink-950));
+  --surface-1: rgb(var(--ink-900));
+  --surface-2: rgb(var(--ink-850));
+  --surface-3: rgb(var(--ink-800));
+  --surface-4: rgb(var(--ink-700));
+  --text-1: rgb(var(--ink-100));
+  --text-2: rgb(var(--ink-300));
+  --text-3: rgb(var(--ink-400));
+  --text-4: rgb(var(--ink-500));
+  --text-on-accent: var(--vx-on-accent);
+  --accent: rgb(var(--ember-500));
+  --accent-hover: rgb(var(--ember-400));
+  --accent-strong: rgb(var(--ember-600));
+  --accent-text: rgb(var(--ember-400));
+  --accent-soft: rgb(var(--ember-500) / 0.14);
+  --accent-soft-hover: rgb(var(--ember-500) / 0.22);
+  --accent-line: rgb(var(--ember-500) / 0.35);
+  --accent-gradient: linear-gradient(135deg, rgb(var(--ember-500)), rgb(var(--ember-600)));
+  --line-1: rgb(var(--ink-100) / 0.06);
+  --line-2: rgb(var(--ink-100) / 0.11);
+  --line-3: rgb(var(--ink-100) / 0.2);
+  --focus-ring: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ember-400));
+
+  /* ---- no glass: solid, quiet surfaces ------------------------------- */
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-regular: rgb(var(--vx-ai-composer));
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-thick-blur: 0px;
+  --vx-mat-regular-blur: 0px;
+  --vx-mat-thin-blur: 0px;
+  --vx-mat-specular: transparent;
+  --vx-mat-hairline: var(--glass-border);
+  --vx-ai-hover: rgb(var(--ink-100) / 0.06);
+  --vx-ai-press: rgb(var(--ink-100) / 0.09);
+  --vx-ai-lift: 0 16px 48px -12px rgb(var(--vx-ai-shadow) / 0.45), 0 2px 6px rgb(var(--vx-ai-shadow) / 0.2);
+  --vx-ai-lift-sm: 0 4px 20px rgb(var(--vx-ai-shadow) / 0.12);
+  --vx-shadow-overlay: var(--vx-ai-lift);
+
+  background: rgb(var(--ink-900));
+  color: rgb(var(--ink-100));
+  font-family: var(--vx-ai-sans);
+}
+
+/* ---- palette: light (soft cream) ------------------------------------- */
+html.light:not(.hc) .vx-ai {
+  --ink-50: 0 0 0;
+  --ink-100: 20 20 19;
+  --ink-200: 41 41 39;
+  --ink-300: 61 61 58;
+  --ink-400: 94 93 89;
+  --ink-500: 107 106 100;
+  --ink-600: 150 148 140;
+  --ink-700: 222 220 209;
+  --ink-800: 232 230 220;
+  --ink-850: 240 238 230;
+  --ink-900: 250 249 245;
+  --ink-950: 245 244 237;
+  --ember-600: 150 72 38;
+  --ember-500: 174 86 48;
+  --ember-400: 158 77 42;
+  --ember-300: 150 72 38;
+  --tide-500: 46 98 156;
+  --tide-400: 36 84 138;
+  --vx-ai-composer: 255 255 255;
+  --vx-ai-bubble: 240 238 230;
+  --vx-ai-code-bg: 245 244 237;
+  --vx-ai-shadow: 60 50 30;
+  --vx-on-accent: rgb(255 255 255);
+  --glass-border: rgb(31 30 29 / 0.13);
+  --vx-ai-hover: rgb(31 30 29 / 0.05);
+  --vx-ai-press: rgb(31 30 29 / 0.08);
+  --vx-ai-lift: 0 16px 48px -16px rgb(var(--vx-ai-shadow) / 0.22), 0 2px 6px rgb(var(--vx-ai-shadow) / 0.06);
+  --vx-ai-lift-sm: 0 4px 20px rgb(var(--vx-ai-shadow) / 0.07);
+  --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
+}
+
+/* The canvas is one calm colour: no ambient glow. */
+html:not(.hc) .vx-ai,
+html:not(.hc) .vx-ai.vx-ai-gallery-page { background: rgb(var(--ink-900)); }
+
+/* ------------------------------------------------------------- header */
+.vx-ai .vx-ai-header { border-bottom-color: transparent; min-height: 52px; padding-inline: 12px 14px; }
+.vx-ai .vx-ai-title { color: rgb(var(--ink-200)); font-size: 0.9375rem; font-weight: 500; }
+.vx-ai .vx-ai-wordmark { font-family: var(--vx-ai-serif); font-weight: 600; letter-spacing: -0.01em; font-size: 1.15rem; }
+.vx-ai .vx-ai-icon-btn { border-radius: var(--vx-radius-control); color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-icon-btn:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai-share-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+  border-radius: var(--vx-radius-control); border: 1px solid var(--glass-border);
+  font-size: 0.875rem; font-weight: 500; color: rgb(var(--ink-100)); background: transparent;
+  transition: background var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-share-btn:hover:not(:disabled) { background: var(--vx-ai-hover); }
+.vx-ai-share-btn:disabled { opacity: 0.5; }
+.vx-ai-share-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (max-width: 520px) { .vx-ai-share-btn { padding: 0 9px; } .vx-ai-share-btn span { display: none; } }
+
+/* ------------------------------------------------------------ sidebar */
+html:not(.hc) .vx-ai .vx-ai-side { background: rgb(var(--ink-950)); border-right: 1px solid var(--glass-border); width: 272px; }
+.vx-ai .vx-ai-side::before { display: none; }
+.vx-ai .vx-ai-side-inner { gap: 2px; padding: 8px 8px max(10px, var(--safe-bottom)); }
+.vx-ai .vx-ai-side-head { padding: 0 2px 6px 8px; }
+.vx-ai .vx-ai-side-mark { font-family: var(--vx-ai-serif); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; gap: 10px; }
+.vx-ai .vx-ai-side-mark img { width: 24px; height: 24px; }
+.vx-ai .vx-ai-side-new {
+  min-height: 36px; padding: 0 8px; gap: 10px; font-weight: 500; font-size: 0.875rem;
+  color: rgb(var(--ink-200)); background: transparent;
+}
+.vx-ai .vx-ai-side-new svg { color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-side-new:hover, .vx-ai .vx-ai-side-new.is-active { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-side-new.is-active { background: var(--vx-ai-press); }
+/* The 2.0 look above gave the first link row (Projects) an accent fill; rows are quiet here. */
+.vx-ai .vx-ai-side-inner > .vx-ai-side-new:first-of-type:not(.vx-ai-side-start) { background: transparent; color: rgb(var(--ink-200)); font-weight: 500; }
+.vx-ai .vx-ai-side-inner > .vx-ai-side-new:first-of-type:not(.vx-ai-side-start):hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-side-inner > .vx-ai-side-new.is-active:first-of-type:not(.vx-ai-side-start) { background: var(--vx-ai-press); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-side-inner > .vx-ai-side-new:first-of-type:not(.vx-ai-side-start) svg { color: rgb(var(--ink-400)); }
+/* New chat: the one accent touch, a clay "+" in a circle. */
+.vx-ai .vx-ai-side-inner > .vx-ai-side-start { background: transparent; color: rgb(var(--ink-100)); font-weight: 600; margin-bottom: 4px; }
+.vx-ai .vx-ai-side-inner > .vx-ai-side-start:hover { background: var(--vx-ai-hover); }
+.vx-ai-plus-dot {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: rgb(var(--ember-500)); color: var(--vx-on-accent);
+  transition: transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai .vx-ai-plus-dot svg { color: inherit; }
+.vx-ai-side-start:hover .vx-ai-plus-dot, .vx-ai-rail-new:hover .vx-ai-plus-dot { transform: rotate(90deg) scale(1.06); }
+.vx-ai .vx-ai-side-search { margin: 8px 0 6px; background: transparent; border-color: var(--glass-border); border-radius: var(--vx-radius-control); min-height: 34px; }
+.vx-ai .vx-ai-side-search:focus-within { border-color: rgb(var(--ink-100) / 0.3); }
+.vx-ai .vx-ai-side-h { margin: 16px 8px 4px; text-transform: none; letter-spacing: 0; font-size: 0.75rem; font-weight: 500; color: rgb(var(--ink-500)); }
+.vx-ai .vx-ai-row { border-radius: var(--vx-radius-control); }
+.vx-ai .vx-ai-row-link { min-height: 32px; font-size: 0.875rem; color: rgb(var(--ink-300)); }
+.vx-ai .vx-ai-row:hover, .vx-ai .vx-ai-row:focus-within { background: var(--vx-ai-hover); }
+.vx-ai .vx-ai-row-link.is-active { background: var(--vx-ai-press); color: rgb(var(--ink-100)); font-weight: 500; }
+.vx-ai .vx-ai-side-foot { border-top: 0; padding: 8px 6px 0; }
+.vx-ai .vx-ai-me { padding: 6px; border-radius: var(--vx-radius-card); }
+.vx-ai .vx-ai-me-initial, .vx-ai-rail-me .vx-ai-me-initial { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-family: var(--vx-ai-serif); }
+.vx-ai .vx-ai-side-links { padding: 0 6px; }
+
+/* The collapsed sidebar: a slim rail of icons. */
+.vx-ai-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; flex-shrink: 0;
+  padding: max(8px, var(--safe-top)) 0 max(10px, var(--safe-bottom));
+  background: rgb(var(--ink-950)); border-right: 1px solid var(--glass-border);
+}
+.vx-ai-rail .vx-ai-icon-btn.is-on { color: rgb(var(--ink-100)); background: var(--vx-ai-press); }
+.vx-ai-rail-new { display: grid; place-items: center; width: 40px; height: 40px; margin: 4px 0; border-radius: 50%; }
+.vx-ai-rail-new .vx-ai-plus-dot { width: 30px; height: 30px; }
+.vx-ai-rail-gap { flex: 1; }
+.vx-ai-rail-me { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; }
+.vx-ai-rail-me img, .vx-ai-rail-me .vx-ai-me-initial { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font-weight: 700; font-size: 0.8125rem; }
+.vx-ai-rail :is(button, a):focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ------------------------------------------------------- empty state */
+.vx-ai .vx-ai-welcome { gap: 18px; max-width: 720px; }
+.vx-ai .vx-ai-welcome .vx-ai-empty { padding: 0 0 6px; }
+.vx-ai-hello { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.vx-ai .vx-ai-empty h2.vx-ai-hello {
+  font-family: var(--vx-ai-serif); font-weight: 400; letter-spacing: -0.02em; line-height: 1.15;
+  font-size: clamp(1.9rem, 4.2vw, 2.6rem); color: rgb(var(--ink-200));
+}
+.vx-ai-hello-mark { width: 36px; height: 36px; flex: none; color: rgb(var(--ember-500)); }
+.vx-ai .vx-ai-starters { gap: 8px; }
+.vx-ai .vx-ai-starter {
+  min-height: 36px; padding: 0 12px; gap: 7px; font-weight: 500; font-size: 0.875rem;
+  border-radius: var(--vx-radius-control); background: transparent; border: 1px solid var(--glass-border); color: rgb(var(--ink-300));
+  transition: background var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
+}
+.vx-ai .vx-ai-starter svg { color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-starter:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-starter:hover svg { color: rgb(var(--ember-500)); }
+
+/* ----------------------------------------------------------- composer */
+html:not(.hc) .vx-ai .vx-ai-composer {
+  background: rgb(var(--vx-ai-composer));
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 14px 12px 10px 16px;
+  box-shadow: var(--vx-ai-lift-sm);
+  transition: border-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
+}
+.vx-ai .vx-ai-composer::before { display: none; }
+html:not(.hc) .vx-ai .vx-ai-composer:focus-within { border-color: rgb(var(--ink-100) / 0.24); box-shadow: var(--vx-ai-lift-sm), 0 0 0 1px rgb(var(--ink-100) / 0.05); }
+.vx-ai .vx-ai-composer textarea { font-size: 1rem; line-height: 1.55; }
+.vx-ai .vx-ai-composer textarea::placeholder { color: rgb(var(--ink-500)); }
+.vx-ai .vx-ai-composer-tools .vx-ai-icon-btn { border: 1px solid var(--glass-border); width: 32px; height: 32px; }
+.vx-ai .vx-ai-thinkpick-btn, .vx-ai .vx-ai-picker-btn { color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-picker-btn { font-size: 0.8125rem; font-weight: 500; }
+.vx-ai .vx-ai-send { width: 32px; height: 32px; border-radius: var(--vx-radius-control); background: rgb(var(--ember-500)); color: var(--vx-on-accent); transition: background var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard); }
+.vx-ai .vx-ai-send:hover:not(:disabled) { background: rgb(var(--ember-600)); }
+html.light .vx-ai .vx-ai-send:hover:not(:disabled) { background: rgb(var(--ember-400)); }
+.vx-ai .vx-ai-send:disabled { opacity: 0.35; }
+.vx-ai .vx-ai-send.is-stop { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); }
+.vx-ai .vx-ai-footer { color: rgb(var(--ink-500)); font-size: 0.75rem; }
+.vx-ai .vx-ai-pill { background: rgb(var(--ember-500) / 0.12); color: rgb(var(--ember-400)); }
+
+/* ----------------------------------------------------------- messages */
+.vx-ai .vx-ai-thread { gap: 30px; padding-top: 32px; }
+html:not(.hc) .vx-ai .vx-ai-bubble {
+  background: rgb(var(--vx-ai-bubble));
+  border-radius: var(--vx-radius-panel);
+  padding: 10px 16px;
+  box-shadow: none;
+  font-size: 0.9875rem;
+  line-height: 1.6;
+}
+/* Replies read like Claude's: a serif face, generous lines. */
+.vx-ai .vx-ai-turn-reply > .vx-ai-md,
+.vx-ai .vx-ai-turn-reply > .vx-ai-artifact-slot ~ .vx-ai-md,
+.vx-ai .vx-ai-shared .vx-ai-turn-reply .vx-ai-md {
+  font-family: var(--vx-ai-serif);
+  font-size: 1.0625rem;
+  line-height: 1.72;
+  color: rgb(var(--ink-100));
+}
+.vx-ai .vx-ai-md :is(h1, h2, h3, h4) { font-family: var(--vx-ai-serif); font-weight: 600; letter-spacing: -0.01em; }
+.vx-ai .vx-ai-md :is(table, .vx-ai-code, code) { font-family: var(--vx-ai-sans); }
+.vx-ai .vx-ai-md :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ember-300)); }
+html.light .vx-ai .vx-ai-md :not(pre) > code { color: rgb(var(--ember-600)); }
+.vx-ai .vx-ai-md a { color: rgb(var(--ink-100)); text-decoration-color: rgb(var(--ink-100) / 0.35); }
+.vx-ai .vx-ai-md a:hover { text-decoration-color: currentColor; }
+.vx-ai .vx-ai-md blockquote { border-left-color: rgb(var(--ember-500) / 0.6); }
+.vx-ai .vx-ai-cursor { background: rgb(var(--ember-500)); }
+.vx-ai .vx-ai-actions { color: rgb(var(--ink-500)); gap: 0; margin-top: 8px; }
+.vx-ai .vx-ai-act { width: 32px; height: 32px; border-radius: var(--vx-radius-control); }
+.vx-ai .vx-ai-act:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-model, .vx-ai .vx-ai-time { color: rgb(var(--ink-500)); }
+html:not(.hc) .vx-ai .vx-ai-think { background: transparent; border-color: var(--glass-border); border-radius: var(--vx-radius-card); }
+.vx-ai .vx-ai-think-toggle { color: rgb(var(--ink-400)); font-size: 0.875rem; }
+.vx-ai .vx-ai-think.is-live .vx-ai-think-icon { color: rgb(var(--ember-500)); }
+.vx-ai .vx-ai-chip { border-radius: var(--vx-radius-control); font-weight: 500; background: transparent; border-color: var(--glass-border); }
+.vx-ai .vx-ai-chip:hover { background: var(--vx-ai-hover); }
+.vx-ai .vx-ai-chip.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); border-color: transparent; font-weight: 600; }
+.vx-ai .vx-ai-chip.is-primary:hover:not(:disabled) { background: rgb(var(--ember-600)); }
+html.light .vx-ai .vx-ai-chip.is-primary:hover:not(:disabled) { background: rgb(var(--ember-400)); }
+.vx-ai .vx-ai-chip:disabled { opacity: 0.5; }
+html:not(.hc) .vx-ai .vx-ai-error, html:not(.hc) .vx-ai .vx-ai-notice { background: rgb(var(--ink-850)); border: 1px solid var(--glass-border); }
+/* --vx-ai-composer exists only outside high contrast; there the leaf fill above applies. */
+html:not(.hc) .vx-ai .vx-ai-jump { background: rgb(var(--vx-ai-composer)); }
+
+/* ------------------------------------------------- code blocks */
+html:not(.hc) .vx-ai .vx-ai-code { background: rgb(var(--vx-ai-code-bg)); border-color: var(--glass-border); border-radius: var(--vx-radius-card); }
+html:not(.hc) .vx-ai .vx-ai-code-bar { background: transparent; border-bottom: 1px solid var(--glass-border); color: rgb(var(--ink-400)); font-family: var(--vx-ai-sans); }
+.vx-ai .vx-ai-code-copy:hover { background: var(--vx-ai-hover); }
+.vx-ai .vx-ai-artifact-body > .vx-ai-code .vx-ai-code-gutter { background: rgb(var(--vx-ai-code-bg)); }
+.vx-ai .vx-ai-code .hljs-keyword, .vx-ai .vx-ai-code .hljs-selector-tag, .vx-ai .vx-ai-code .hljs-literal, .vx-ai .vx-ai-code .hljs-built_in { color: rgb(var(--ember-400)); }
+.vx-ai .vx-ai-code .hljs-string, .vx-ai .vx-ai-code .hljs-regexp, .vx-ai .vx-ai-code .hljs-addition, .vx-ai .vx-ai-code .hljs-attr { color: rgb(var(--tide-400)); }
+
+/* ------------------------------------------------- menus, dialogs */
+html:not(.hc) .vx-ai :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog) {
+  background: rgb(var(--ink-850));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--vx-radius-card);
+  box-shadow: var(--vx-ai-lift);
+}
+html.light:not(.hc) .vx-ai :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog) { background: rgb(var(--vx-ai-composer)); }
+html:not(.hc) .vx-ai .vx-ai-settings { background: rgb(var(--ink-900)); }
+.vx-ai .vx-ai-opt[aria-selected='true'] { background: rgb(var(--ember-500) / 0.12); }
+.vx-ai .vx-ai-switch.is-on { background: rgb(var(--ember-500)); }
+
+/* ------------------------------------------------- artifacts */
+html:not(.hc) .vx-ai .vx-ai-artifact-card {
+  max-width: 460px; gap: 14px; padding: 10px 16px 10px 10px;
+  background: rgb(var(--vx-ai-composer)); border: 1px solid var(--glass-border); border-radius: var(--vx-radius-card);
+  box-shadow: var(--vx-ai-lift-sm);
+  font-family: var(--vx-ai-sans);
+}
+html:not(.hc) .vx-ai .vx-ai-artifact-card:hover { background: rgb(var(--ink-800)); }
+html.light:not(.hc) .vx-ai .vx-ai-artifact-card:hover { background: rgb(var(--ink-950)); }
+html:not(.hc) .vx-ai .vx-ai-artifact-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: var(--vx-radius-control);
+  background: rgb(var(--ink-800)); color: rgb(var(--ink-300)); border: 1px solid var(--glass-border);
+}
+html.light:not(.hc) .vx-ai .vx-ai-artifact-icon { background: rgb(var(--ink-950)); }
+.vx-ai .vx-ai-artifact-card .vx-ai-file-name { font-weight: 600; }
+.vx-ai .vx-ai-artifact-card .vx-ai-file-meta { color: rgb(var(--ink-500)); }
+
+/* The live preview in a reply: a card with Full screen and Open in its corner. */
+html:not(.hc) .vx-ai .vx-ai-inline-preview {
+  position: relative; height: 440px; max-width: 760px;
+  border: 1px solid var(--glass-border); border-radius: var(--vx-radius-card); background: rgb(var(--ink-950));
+  box-shadow: var(--vx-ai-lift-sm);
+}
+.vx-ai .vx-ai-inline-preview[data-kind='mermaid'], .vx-ai .vx-ai-inline-preview[data-kind='svg'] { height: 360px; }
+@media (max-width: 480px) { html:not(.hc) .vx-ai .vx-ai-inline-preview { height: 320px; } }
+.vx-ai-inline-tools {
+  position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 4px;
+  opacity: 0; transform: translateY(-2px);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-inline-preview:hover .vx-ai-inline-tools, .vx-ai-inline-tools:focus-within, .vx-ai-inline-preview.is-full .vx-ai-inline-tools { opacity: 1; transform: none; }
+@media (hover: none) { .vx-ai-inline-tools { opacity: 1; transform: none; } }
+.vx-ai-inline-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--vx-radius-control);
+  background: rgb(var(--ink-900) / 0.85); color: rgb(var(--ink-100)); border: 1px solid var(--glass-border);
+  box-shadow: var(--vx-ai-lift-sm);
+}
+.vx-ai-inline-btn:hover { background: rgb(var(--ink-800)); }
+.vx-ai-inline-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ai-inline-preview.is-full { height: 100% !important; max-width: none; border-radius: 0; border: 0; }
+
+/* The side panel: a clean sheet beside the chat. */
+html:not(.hc) .vx-ai .vx-ai-artifact { background: rgb(var(--ink-900)); border-left: 1px solid var(--glass-border); }
+html:not(.hc) .vx-ai .vx-ai-artifact-head { background: transparent; border-bottom-color: var(--glass-border); }
+.vx-ai .vx-ai-artifact-title h2 { font-family: var(--vx-ai-sans); font-weight: 600; font-size: 0.9375rem; }
+html:not(.hc) .vx-ai .vx-ai-tabs { background: rgb(var(--ink-850)); border-color: var(--glass-border); border-radius: var(--vx-radius-control); }
+html:not(.hc) .vx-ai .vx-ai-tabs button[aria-selected='true'] { background: rgb(var(--vx-ai-composer)); box-shadow: var(--vx-ai-lift-sm); }
+.vx-ai .vx-ai-artifact-resize { border-left: 0; }
+
+/* ------------------------------------------- questions and quiz cards */
+.vx-ai-card-block {
+  margin: 4px 0 14px; max-width: 640px; padding: 16px;
+  border-radius: var(--vx-radius-panel); border: 1px solid var(--glass-border);
+  background: rgb(var(--vx-ai-composer)); box-shadow: var(--vx-ai-lift-sm);
+  font-family: var(--vx-ai-sans); font-size: 0.9375rem; line-height: 1.5;
+}
+.vx-ai-card-block.is-writing { padding: 14px 16px; color: rgb(var(--ink-400)); }
+.vx-ai-q { min-width: 0; }
+.vx-ai-q + .vx-ai-q { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--glass-border); }
+.vx-ai-q-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-weight: 600; color: rgb(var(--ink-100)); }
+.vx-ai-q-n {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 50%;
+  font-size: 0.6875rem; font-weight: 700; background: rgb(var(--ember-500) / 0.15); color: rgb(var(--ember-400));
+}
+.vx-ai-q-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-ai-q-opt {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px; text-align: left;
+  border-radius: var(--vx-radius-control); border: 1px solid var(--glass-border); color: rgb(var(--ink-200));
+  background: transparent;
+  transition: background var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-q-opt:hover:not(:disabled) { background: var(--vx-ai-hover); border-color: rgb(var(--ink-100) / 0.25); }
+.vx-ai-q-opt[aria-pressed='true'] { background: rgb(var(--ember-500) / 0.14); border-color: rgb(var(--ember-500) / 0.7); color: rgb(var(--ink-100)); }
+.vx-ai-q-opt[aria-pressed='true'] svg { color: rgb(var(--ember-400)); }
+.vx-ai-q-opt:disabled { cursor: default; }
+.vx-ai-q.is-locked .vx-ai-q-opt:not([aria-pressed='true']) { opacity: 0.6; }
+.vx-ai-q-opt:focus-visible, .vx-ai-q-other:focus-visible, .vx-ai-quiz-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ai-q-other {
+  width: 100%; margin-top: 8px; min-height: 36px; padding: 6px 12px; font: inherit; font-size: 0.875rem;
+  border-radius: var(--vx-radius-control); border: 1px solid var(--glass-border); background: transparent; color: rgb(var(--ink-100));
+}
+.vx-ai-q-other::placeholder { color: rgb(var(--ink-500)); }
+.vx-ai-q-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.vx-ai-q-count { font-size: 0.8125rem; color: rgb(var(--ink-400)); }
+.vx-ai-q-sent { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
+.vx-ai-q-sent svg { color: var(--vx-success); }
+
+.vx-ai-quiz-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 0.75rem; font-weight: 600; color: rgb(var(--ink-400)); text-transform: uppercase; letter-spacing: 0.04em; }
+.vx-ai-quiz-progress { flex: 1; height: 4px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.08); overflow: hidden; }
+.vx-ai-quiz-progress span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); transition: width var(--dur-slow) var(--ease-standard); }
+.vx-ai-quiz-q { margin: 0 0 14px; font-family: var(--vx-ai-serif); font-size: 1.15rem; line-height: 1.45; color: rgb(var(--ink-100)); }
+.vx-ai-quiz-options { display: grid; gap: 8px; }
+.vx-ai-quiz-opt {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 12px; text-align: left;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: transparent; color: rgb(var(--ink-200));
+  transition: background var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard), opacity var(--dur-base) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-quiz-opt:hover:not(:disabled) { background: var(--vx-ai-hover); border-color: rgb(var(--ink-100) / 0.25); transform: translateX(2px); }
+.vx-ai-quiz-opt:disabled { cursor: default; }
+.vx-ai-quiz-letter {
+  display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--vx-radius-control);
+  font-size: 0.8125rem; font-weight: 700; background: rgb(var(--ink-100) / 0.07); color: rgb(var(--ink-300));
+}
+.vx-ai-quiz-opt.is-right { border-color: var(--vx-success); background: color-mix(in srgb, var(--vx-success) 12%, transparent); color: rgb(var(--ink-100)); }
+.vx-ai-quiz-opt.is-right .vx-ai-quiz-letter { background: var(--vx-success); color: rgb(var(--ink-900)); }
+.vx-ai-quiz-opt.is-wrong { border-color: var(--vx-danger); background: color-mix(in srgb, var(--vx-danger) 12%, transparent); color: rgb(var(--ink-100)); }
+.vx-ai-quiz-opt.is-wrong .vx-ai-quiz-letter { background: var(--vx-danger); color: rgb(var(--ink-900)); }
+.vx-ai-quiz-opt.is-dim { opacity: 0.55; }
+.vx-ai-quiz-why {
+  margin-top: 12px; padding: 10px 14px; border-radius: var(--vx-radius-card); font-size: 0.9375rem; line-height: 1.55;
+  background: rgb(var(--ink-100) / 0.05); border-left: 3px solid var(--vx-success); color: rgb(var(--ink-200));
+}
+.vx-ai-quiz-why.is-wrong { border-left-color: var(--vx-danger); }
+.vx-ai-quiz-why strong { color: rgb(var(--ink-100)); }
+.vx-ai-quiz-foot { display: flex; justify-content: flex-end; margin-top: 12px; min-height: 36px; }
+.vx-ai-quiz.is-done { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.vx-ai-quiz-score { position: relative; width: 120px; height: 120px; }
+.vx-ai-quiz-score svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.vx-ai-quiz-score circle { fill: none; stroke-width: 10; stroke-linecap: round; }
+.vx-ai-quiz-track { stroke: rgb(var(--ink-100) / 0.08); }
+.vx-ai-quiz-arc { stroke: rgb(var(--ember-500)); }
+.vx-ai-quiz-score > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 1rem; color: rgb(var(--ink-400)); }
+.vx-ai-quiz-score strong { font-family: var(--vx-ai-serif); font-size: 2rem; font-weight: 600; color: rgb(var(--ink-100)); }
+.vx-ai-quiz-note { margin: 0; font-family: var(--vx-ai-serif); font-size: 1.15rem; color: rgb(var(--ink-100)); }
+.vx-ai-quiz-review { list-style: none; margin: 4px 0 6px; padding: 0; width: 100%; text-align: left; display: grid; gap: 6px; }
+.vx-ai-quiz-review li { display: flex; gap: 8px; align-items: flex-start; font-size: 0.875rem; color: rgb(var(--ink-300)); }
+.vx-ai-quiz-review li svg { flex: none; margin-top: 2px; }
+.vx-ai-quiz-review li.is-right svg { color: var(--vx-success); }
+.vx-ai-quiz-review li.is-wrong svg { color: var(--vx-danger); }
+.vx-ai-quiz-review em { font-style: normal; color: rgb(var(--ink-400)); }
+
+/* ---------------------------------------------------------------- motion */
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .vx-ai-card-block:not(.is-writing) { animation: vx-ai-rise var(--dur-base) var(--ease-standard) backwards; }
+  html:not(.reduce-motion) .vx-ai-quiz-q { animation: vx-ai-claude-in var(--dur-base) var(--ease-standard) backwards; }
+  html:not(.reduce-motion) .vx-ai-quiz-opt { animation: vx-ai-claude-in var(--dur-base) var(--ease-standard) backwards; animation-delay: calc(var(--i, 0) * var(--dur-instant) / 2); }
+  html:not(.reduce-motion) .vx-ai-quiz-why { animation: vx-ai-claude-in var(--dur-base) var(--ease-standard) backwards; }
+  html:not(.reduce-motion) .vx-ai-quiz-arc { animation: vx-ai-claude-arc var(--dur-page) var(--ease-standard) backwards; }
+  /* The welcome slides up but never fades: quiet text stays readable (and
+     passes a contrast check) at every moment of the entrance. */
+  html:not(.reduce-motion) .vx-ai .vx-ai-welcome :is(.vx-ai-empty, .vx-ai-starters, .vx-ai-footer) { animation-name: vx-ai-claude-lift; }
+}
+@keyframes vx-ai-claude-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes vx-ai-claude-arc { from { stroke-dasharray: 0 100; } }
+@keyframes vx-ai-claude-lift { from { transform: translateY(8px); } to { transform: none; } }
+
+/* A new chat's message box opens a little taller, the way Claude's does. */
+.vx-ai .vx-ai-welcome .vx-ai-composer textarea { min-height: 48px; }
+
+/* A failed preview shows its error bar with Fix it: the corner buttons step aside. */
+.vx-ai-inline-preview:has(.vx-ai-runner.has-error) .vx-ai-inline-tools { display: none; }
+
+/* ======================================================= the other screens
+   Settings, Projects, the Artifacts gallery, the shared page and dialogs:
+   sentence-case labels, outlined fields, quiet tabs, neutral thumbnails. */
+
+/* Labels in sentence case, never shouting. */
+.vx-ai :is(.vx-ai-settings-body h3, .vx-ai-proj-box h3, .vx-ai-proj-h, .vx-ai-pop-head) {
+  text-transform: none; letter-spacing: 0; font-size: 0.8125rem; font-weight: 600; color: rgb(var(--ink-300));
+}
+
+/* Dimmer behind dialogs and the settings sheet: warm, not purple. */
+html.light .vx-ai .vx-ai-scrim::before { background: rgb(31 30 29 / 0.28); }
+
+/* Settings: a calm sheet with text tabs and outlined fields. */
+.vx-ai .vx-ai-settings-head { border-bottom: 0; padding: 14px 12px 4px 20px; }
+.vx-ai .vx-ai-settings-head h2 { font-family: var(--vx-ai-serif); font-weight: 600; font-size: 1.25rem; }
+.vx-ai .vx-ai-settings-head .vx-ai-icon-btn { background: transparent; }
+.vx-ai .vx-ai-settings-nav { gap: 2px; padding: 4px 14px 0; }
+.vx-ai .vx-ai-settings-nav .vx-ai-chip {
+  min-height: 36px; padding: 0 10px; border: 0; border-radius: 0; background: transparent;
+  color: rgb(var(--ink-400)); font-weight: 500; box-shadow: inset 0 -2px 0 transparent;
+  transition: color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
+}
+.vx-ai .vx-ai-settings-nav .vx-ai-chip:hover { color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ember-500)); background: transparent; }
+.vx-ai .vx-ai-settings-nav .vx-ai-chip:focus-visible { outline: none; box-shadow: inset 0 -2px 0 rgb(var(--ember-500)), var(--focus-ring); }
+.vx-ai .vx-ai-settings-body section { padding: 18px 0 8px; }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) {
+  background: transparent; border: 1px solid rgb(var(--ink-100) / 0.16); border-radius: var(--vx-radius-control);
+  transition: border-color var(--dur-quick) var(--ease-standard);
+}
+html.light:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) { background: rgb(var(--vx-ai-composer)); }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):hover { border-color: rgb(var(--ink-100) / 0.28); }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):focus-visible { outline: none; border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18); }
+.vx-ai .vx-ai-field input::placeholder, .vx-ai .vx-ai-field textarea::placeholder { color: rgb(var(--ink-500)); }
+.vx-ai .vx-ai-field select option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-field small, .vx-ai .vx-ai-settings-note { color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-settings-note a { color: rgb(var(--ink-100)); }
+
+/* Projects: cards like the composer, headings in the serif. */
+html:not(.hc) .vx-ai :is(.vx-ai-proj-box, .vx-ai-proj-card) { background: rgb(var(--vx-ai-composer)); border: 1px solid var(--glass-border); border-radius: var(--vx-radius-card); box-shadow: var(--vx-ai-lift-sm); }
+html:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-800)); }
+html.light:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-950)); }
+html:not(.hc) .vx-ai .vx-ai-proj-box .vx-ai-field textarea { background: transparent; }
+
+/* Artifacts gallery: neutral thumbnails; the picked kind is a dark, filled tab. */
+html:not(.hc) .vx-ai .vx-ai-gallery-card { background: rgb(var(--vx-ai-composer)); border-radius: var(--vx-radius-card); }
+html:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-800)); }
+html.light:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-950)); }
+html:not(.hc) .vx-ai .vx-ai-gallery-thumb { background: rgb(var(--ink-100) / 0.05); color: rgb(var(--ink-400)); border: 1px solid var(--glass-border); }
+.vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); border-color: transparent; }
+.vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true']:hover { background: rgb(var(--ink-200)); }
+.vx-ai .vx-ai-gallery-page .vx-ai-wordmark, .vx-ai.vx-ai-gallery-page .vx-ai-wordmark { font-size: 1.35rem; }
+
+/* The shared page: the same reading column, the kicker in quiet clay. */
+.vx-ai .vx-ai-share-kicker { text-transform: none; letter-spacing: 0; font-size: 0.8125rem; }
+
+/* A destructive button stays red (the quiet chip rule above must not flatten it). */
+.vx-ai .vx-ai-chip.is-danger { background: var(--vx-danger); color: rgb(26 5 8); border-color: transparent; font-weight: 600; }
+html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
+.vx-ai .vx-ai-chip.is-danger:hover:not(:disabled) { filter: brightness(1.08); }

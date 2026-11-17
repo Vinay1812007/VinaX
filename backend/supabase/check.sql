@@ -339,7 +339,7 @@ begin
   assert jsonb_array_length(outreach_release_people(100, array['check_a2'])) = 0, 'outreach_release_people: limited to given people';
   insert into notifications (kind, title, body, sent_by) values ('recap', 'Your week in VinaX', 'automatic', 'auto');
   insert into outreach (account_id, kind, notification_id, dedupe_key, title, body, link, facts, devices, sent)
-    values ('check_a1', 'recap', (select max(id) from notifications), 'recap:2026-11-08:check_a1', 'Your week in VinaX', '1 h of music', '/weekly', '{"seconds": 3600}', 1, 1);
+    values ('check_a1', 'recap', (select max(id) from notifications), 'recap:2026-11-08:check_a1', 'Your week in VinaX', '1 h of music', '/stats', '{"seconds": 3600}', 1, 1);
   begin
     insert into outreach (account_id, kind, dedupe_key) values ('check_a1', 'recap', 'recap:2026-11-08:check_a1');
     raise exception 'outreach accepted the same dedupe key twice';
@@ -354,7 +354,7 @@ begin
   assert (v -> 'kinds' -> 'recap' ->> 'people')::int = 1 and (v -> 'kinds' -> 'winback' ->> 'people')::int = 1 and (v -> 'kinds' -> 'release' ->> 'people')::int = 1, 'outreach_summary: people per kind';
   assert (v -> 'kinds' -> 'recap' ->> 'sent')::int = 1 and (v -> 'kinds' -> 'recap' ->> 'runs')::int = 1, 'outreach_summary: sent and runs';
   assert jsonb_array_length(v -> 'runs') = 3 and jsonb_array_length(v -> 'latest') = 3 and jsonb_array_length(v -> 'byDay') >= 1, 'outreach_summary: runs, latest, by day';
-  assert exists (select 1 from jsonb_array_elements(v -> 'latest') r where r ->> 'kind' = 'recap' and r ->> 'name' = 'Asha' and r ->> 'link' = '/weekly'), 'outreach_summary: the newest recap names the person';
+  assert exists (select 1 from jsonb_array_elements(v -> 'latest') r where r ->> 'kind' = 'recap' and r ->> 'name' = 'Asha' and r ->> 'link' = '/stats'), 'outreach_summary: the newest recap names the person';
   assert (select relforcerowsecurity from pg_class where relname = 'outreach'), 'outreach: row level security forced';
   assert not has_table_privilege('anon', 'public.outreach', 'select'), 'anon cannot read outreach';
   assert not has_function_privilege('anon', 'public.outreach_summary(integer)', 'execute'), 'anon cannot call outreach_summary';
@@ -770,6 +770,59 @@ begin
   insert into sign_ins (account_id, ip, browser, signup) values ('check_si', '203.0.113.9', 'Chrome on macOS', true);
   delete from accounts where id = 'check_si';
   assert not exists (select 1 from sign_ins where account_id = 'check_si'), 'sign_ins: deleted with the account';
+  -- v24: Songs With Problems and A/B test results. One person on two devices
+  -- (check_xa1, check_xa2) and a device nobody signed in on (check_xb).
+  insert into accounts (id, email) values ('check_xacc', 'xacc@example.com');
+  insert into listeners (id, account_id) values ('check_xa1', 'check_xacc'), ('check_xa2', 'check_xacc');
+  insert into listeners (id) values ('check_xb');
+  insert into blocked_content (kind, value, label) values ('song', 'check_xs2', 'Check X 2');
+  insert into events (at, listener_id, kind, song_id, song_title, song_artist, error_kind, message) values
+    (now() - interval '1 hour',  'check_xa1', 'error', 'check_xs1', 'X One', 'X Artist', 'playback', 'audio element error: network; no sources left'),
+    (now() - interval '2 hours', 'check_xa2', 'error', 'check_xs1', 'X One', 'X Artist', 'playback', 'audio element error: network; retrying'),
+    (now() - interval '3 hours', 'check_xb',  'error', 'check_xs1', 'X One (old title)', 'X Artist', 'playback', 'audio element error: decode; no sources left'),
+    (now() - interval '1 hour',  'check_xb',  'error', 'check_xs2', 'X Two', 'X Artist', 'playback', 'audio element error: decode; no sources left'),
+    (now() - interval '1 hour',  'check_xb',  'error', 'check_xs3', 'X Three', 'X Artist', 'TypeError', 'not a playback error'),
+    (now() - interval '1 hour',  'check_xb',  'error', null, null, null, 'playback', 'audio element error: no song; no sources left'),
+    (now() - interval '1 hour',  'check_xa1', 'lyric-miss', 'check_xs4', 'X Four', 'X Artist', null, null),
+    (now() - interval '2 hours', 'check_xb',  'lyric-miss', 'check_xs4', 'X Four', 'X Artist', null, null),
+    (now() - interval '2 hours', 'check_xb',  'lyric-miss', 'check_xs1', 'X One', 'X Artist', null, null),
+    (now() - interval '10 days', 'check_xb',  'lyric-miss', 'check_xs5', 'X Five', 'X Artist', null, null);
+  v := stats_song_problems(7, 50);
+  assert (v ->> 'playbackErrors')::int = 4 and (v ->> 'songsFailing')::int = 2 and (v ->> 'failedPlays')::int = 3, 'stats_song_problems: playback errors with a song only';
+  assert (v ->> 'lyricMisses')::int = 3 and (v ->> 'songsNoLyrics')::int = 2, 'stats_song_problems: lyric misses in the window';
+  assert v -> 'playback' -> 0 ->> 'id' = 'check_xs1' and (v -> 'playback' -> 0 ->> 'errors')::int = 3 and (v -> 'playback' -> 0 ->> 'failed')::int = 2, 'stats_song_problems: most failures first, failed = no sources left';
+  assert (v -> 'playback' -> 0 ->> 'people')::int = 2 and v -> 'playback' -> 0 ->> 'title' = 'X One' and (v -> 'playback' -> 0 ->> 'blocked')::boolean = false, 'stats_song_problems: two devices of one account are one person; the newest title';
+  assert v -> 'playback' -> 1 ->> 'id' = 'check_xs2' and (v -> 'playback' -> 1 ->> 'blocked')::boolean, 'stats_song_problems: says a song is already blocked';
+  assert v -> 'lyrics' -> 0 ->> 'id' = 'check_xs4' and (v -> 'lyrics' -> 0 ->> 'misses')::int = 2 and (v -> 'lyrics' -> 0 ->> 'people')::int = 2, 'stats_song_problems: songs with no lyrics, most first';
+  assert jsonb_array_length(stats_song_problems(7, 1) -> 'playback') = 1, 'stats_song_problems: p_limit';
+  assert (stats_song_problems(30, 50) ->> 'songsNoLyrics')::int = 3, 'stats_song_problems: a longer window counts older misses';
+  insert into events (at, listener_id, kind, meta) values
+    (now() - interval '10 days', 'check_xa1', 'rec_served',  '{"alg": "x", "exp": {"check-rec": "a"}}'),
+    (now() - interval '9 days',  'check_xa2', 'rec_served',  '{"alg": "x", "exp": {"check-rec": "a", "other": "z"}}'),
+    (now() - interval '10 days', 'check_xa1', 'rec_outcome', '{"outcome": "complete", "liked": false, "exp": {"check-rec": "a"}}'),
+    (now() - interval '10 days', 'check_xa1', 'rec_outcome', '{"outcome": "complete", "liked": true, "exp": {"check-rec": "a"}}'),
+    (now() - interval '9 days',  'check_xa2', 'rec_outcome', '{"outcome": "complete", "exp": {"check-rec": "a"}}'),
+    (now() - interval '9 days',  'check_xa2', 'rec_outcome', '{"outcome": "skip", "exp": {"check-rec": "a"}}'),
+    (now() - interval '2 days',  'check_xb',  'rec_served',  '{"alg": "x", "exp": {"check-rec": "b"}}'),
+    (now() - interval '2 days',  'check_xb',  'rec_outcome', '{"outcome": "early_skip", "liked": true, "exp": {"check-rec": "b"}}'),
+    (now() - interval '2 days',  'check_xb',  'rec_served',  '{"alg": "x", "exp": {"other": "z"}}'),
+    (now() - interval '40 days', 'check_xb',  'rec_served',  '{"alg": "x", "exp": {"check-rec": "c"}}');
+  -- check_xacc comes back 2 days after the first exposure, on the other device.
+  insert into events (at, listener_id, kind) values (now() - interval '8 days', 'check_xa2', 'play');
+  v := stats_experiment('check-rec', 30);
+  assert v ->> 'key' = 'check-rec' and (v ->> 'days')::int = 30 and (v ->> 'enough')::boolean = false, 'stats_experiment: key, days, not enough people yet';
+  assert jsonb_array_length(v -> 'variants') = 2 and v -> 'variants' -> 0 ->> 'variant' = 'a' and v -> 'variants' -> 1 ->> 'variant' = 'b', 'stats_experiment: one row per version in the window';
+  assert (v -> 'variants' -> 0 ->> 'people')::int = 1 and (v -> 'variants' -> 0 ->> 'served')::int = 2 and (v -> 'variants' -> 0 ->> 'outcomes')::int = 4, 'stats_experiment: two devices of one account are one person';
+  assert (v -> 'variants' -> 0 ->> 'completeRate')::numeric = 75 and (v -> 'variants' -> 0 ->> 'skipRate')::numeric = 25 and (v -> 'variants' -> 0 ->> 'likedRate')::numeric = 25, 'stats_experiment: rates of outcomes';
+  assert (v -> 'variants' -> 0 ->> 'playsPerPerson')::numeric = 4 and (v -> 'variants' -> 0 ->> 'returnOf')::int = 1 and (v -> 'variants' -> 0 ->> 'returnRate')::numeric = 100, 'stats_experiment: plays per person, came back within 7 days';
+  assert (v -> 'variants' -> 1 ->> 'earlySkipRate')::numeric = 100 and (v -> 'variants' -> 1 ->> 'returnOf')::int = 0 and v -> 'variants' -> 1 -> 'returnRate' = 'null'::jsonb, 'stats_experiment: too early to tell who came back';
+  assert (v -> 'variants' -> 1 ->> 'enough')::boolean = false and (v ->> 'minPeople')::int = 30 and (v ->> 'minOutcomes')::int = 100, 'stats_experiment: minimum sample';
+  assert jsonb_array_length(stats_experiment('check-rec', 60) -> 'variants') = 3, 'stats_experiment: a longer window finds the older version';
+  assert jsonb_array_length(stats_experiment('home-shelf-order', 30) -> 'variants') = 0, 'stats_experiment: a test with no exposure data has no versions';
+  assert jsonb_array_length(stats_experiment(null, 30) -> 'variants') = 0, 'stats_experiment: no key, no versions';
+  assert not has_function_privilege('anon', 'public.stats_song_problems(integer, integer)', 'execute'), 'anon cannot call stats_song_problems';
+  assert not has_function_privilege('anon', 'public.stats_experiment(text, integer)', 'execute'), 'anon cannot call stats_experiment';
+  assert has_function_privilege('service_role', 'public.stats_experiment(text, integer)', 'execute'), 'the Worker can call stats_experiment';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

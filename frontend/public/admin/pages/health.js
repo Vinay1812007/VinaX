@@ -32,7 +32,7 @@
       desc: 'Which service keys the server has. Only “Set” or “Missing” is shown — never the keys themselves.',
       keywords: 'keys secrets env environment configured missing' }
   ].forEach(function (p, i) {
-    VX.page(Object.assign({ group: 'App Health', order: i + 1 }, p));
+    VX.page(Object.assign({ group: 'Health', order: i + 1 }, p));
   });
 
   function extLink(url, text) {

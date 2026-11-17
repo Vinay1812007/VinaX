@@ -60,6 +60,18 @@
   Cache-Control: public, max-age=2592000
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
+# Android App Links (round 8): Android fetches this from www.vinaxmusic.online
+# to verify that VinaX links may open the app (scripts/patch-android.js,
+# autoVerify). It must answer 200 as application/json with no redirect. The
+# apex redirects to www (Cloudflare Redirect Rule "Apex to www"), so only the
+# www host can be verified. The fingerprint is the release key's SHA-256
+# (README, Android push setup); a new release key needs it added here.
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=3600
+# Share to VinaX (manifest share_target, the app's Share menu) is a working page, never for search.
+/share
+  X-Robots-Tag: noindex, nofollow
 
 /sw.js
   Cache-Control: no-cache

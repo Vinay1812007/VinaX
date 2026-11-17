@@ -53,7 +53,9 @@
 --  clears a code whose room has been idle 15 minutes)
 --  version 24 adds ai_feedback, section 9: the listeners' thumbs up and down
 --  on VinaX AI replies, and ai_feedback_stats for the console's per-model
---  score
+--  score; and, in section 11, stats_song_problems (songs that fail to play
+--  or have no lyrics) and stats_experiment (A/B test results per version
+--  from the recommendation events' exposure maps)
 --  12. security
 -- =============================================================================
 
@@ -1481,6 +1483,142 @@ language sql stable set search_path = public, pg_temp as $$
   );
 $$;
 
+-- Version 24 — Songs With Problems (console): the songs that most often fail
+-- to play, and the songs most often opened with no lyrics, in the last
+-- p_days days (1..365). Every device counts, like App Errors. Only playback
+-- errors the app sent with their song count (older apps sent none); `failed` counts the reports where
+-- no source was left to try (the song did not play at all), `errors` every
+-- report (a retry that then worked included). `people` is signed-in users
+-- plus devices nobody signed in on; `blocked` says the song is already on
+-- the blocklist. p_limit (1..200) rows per list.
+create or replace function stats_song_problems(p_days int default 7, p_limit int default 50) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.kind, e.at, e.song_id, e.song_title, e.song_artist, e.song_image, coalesce(e.message, '') as message,
+           coalesce(s.account_id, e.listener_id) as person
+    from events e left join s on s.listener_id = e.listener_id
+    where e.kind in ('error', 'lyric-miss') and e.at > now() - make_interval(days => _days(p_days))
+      and e.song_id is not null and e.song_id <> ''
+      and (e.kind = 'lyric-miss' or e.error_kind = 'playback')
+  ),
+  agg as (
+    select kind, song_id,
+           (array_agg(coalesce(song_title, '')  order by at desc))[1] as title,
+           (array_agg(coalesce(song_artist, '') order by at desc))[1] as artist,
+           (array_agg(coalesce(song_image, '')  order by at desc))[1] as image,
+           count(*) as n,
+           count(*) filter (where message like '%no sources left%') as failed,
+           count(distinct person) as people,
+           max(at) as last_seen
+    from ev group by 1, 2
+  ),
+  lim as (select least(greatest(coalesce(p_limit, 50), 1), 200) as n)
+  select jsonb_build_object(
+    'playbackErrors', (select count(*) from ev where kind = 'error'),
+    'failedPlays',    (select count(*) from ev where kind = 'error' and message like '%no sources left%'),
+    'songsFailing',   (select count(*) from agg where kind = 'error'),
+    'lyricMisses',    (select count(*) from ev where kind = 'lyric-miss'),
+    'songsNoLyrics',  (select count(*) from agg where kind = 'lyric-miss'),
+    'playback', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.song_id, 'title', a.title, 'artist', a.artist, 'image', a.image,
+        'errors', a.n, 'failed', a.failed, 'people', a.people, 'lastSeen', a.last_seen,
+        'blocked', exists (select 1 from blocked_content b where b.kind = 'song' and lower(b.value) = lower(a.song_id))
+      ) order by a.failed desc, a.n desc, a.people desc, a.song_id)
+      from (select * from agg where kind = 'error' order by failed desc, n desc, people desc, song_id limit (select n from lim)) a), '[]'::jsonb),
+    'lyrics', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.song_id, 'title', a.title, 'artist', a.artist, 'image', a.image,
+        'misses', a.n, 'people', a.people, 'lastSeen', a.last_seen,
+        'blocked', exists (select 1 from blocked_content b where b.kind = 'song' and lower(b.value) = lower(a.song_id))
+      ) order by a.n desc, a.people desc, a.song_id)
+      from (select * from agg where kind = 'lyric-miss' order by n desc, people desc, song_id limit (select n from lim)) a), '[]'::jsonb)
+  );
+$$;
+
+-- Version 24 — A/B test results (console): each version of the test `p_key`
+-- side by side, from the recommendation events of the last p_days days
+-- (1..365). Only rec_served and rec_outcome carry an exposure map
+-- (meta.exp = { test key: version }), so only recommendation tests have
+-- results; a test the app logs no exposure for answers no versions.
+--   people          people exposed: signed-in users, plus devices nobody signed in on
+--   served          automatic continuations queued for them
+--   outcomes        automatic songs that played and ended (complete, skip,
+--                   early_skip or partial, by the app's own thresholds)
+--   completeRate, skipRate, earlySkipRate, likedRate   % of outcomes (one decimal)
+--   playsPerPerson  outcomes / people
+--   returnOf, returned, returnRate   of the people first exposed over 7 days
+--                   ago, how many used the app again on a later India day
+--                   within 7 days of that first exposure
+--   enough          the version reached minPeople people and minOutcomes outcomes
+-- `enough` at the top is true when at least two versions each have enough.
+create or replace function stats_experiment(p_key text, p_days int default 30) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with s as (select * from signed_devices()),
+  k as (select left(btrim(coalesce(p_key, '')), 40) as key, 30 as min_people, 100 as min_outcomes),
+  ev as (
+    select e.kind, e.at, e.listener_id, coalesce(s.account_id, e.listener_id) as person,
+           left(e.meta -> 'exp' ->> (select key from k), 24) as arm,
+           e.meta ->> 'outcome' as outcome,
+           (e.meta ->> 'liked') = 'true' as liked
+    from events e left join s on s.listener_id = e.listener_id
+    where e.kind in ('rec_served', 'rec_outcome') and e.at > now() - make_interval(days => _days(p_days))
+      and (select key from k) <> ''
+      and jsonb_typeof(e.meta -> 'exp') = 'object'
+      and coalesce(e.meta -> 'exp' ->> (select key from k), '') <> ''
+  ),
+  firsts as (
+    select arm, person, min(at) as first_at from ev where kind = 'rec_served' group by 1, 2
+  ),
+  ret as (
+    select f.arm, f.person,
+           f.first_at <= now() - interval '7 days' as eligible,
+           exists (
+             select 1 from events e2
+             where e2.listener_id in (select s2.listener_id from s s2 where s2.account_id = f.person union all select f.person)
+               and e2.at > f.first_at and e2.at <= f.first_at + interval '7 days'
+               and (e2.at at time zone 'Asia/Kolkata')::date > (f.first_at at time zone 'Asia/Kolkata')::date
+           ) as returned
+    from firsts f
+  ),
+  arms as (
+    select a.arm,
+           (select count(*) from firsts f where f.arm = a.arm) as people,
+           count(*) filter (where a.kind = 'rec_served') as served,
+           count(*) filter (where a.kind = 'rec_outcome') as outcomes,
+           count(*) filter (where a.kind = 'rec_outcome' and a.outcome = 'complete') as complete,
+           count(*) filter (where a.kind = 'rec_outcome' and a.outcome = 'skip') as skip,
+           count(*) filter (where a.kind = 'rec_outcome' and a.outcome = 'early_skip') as early_skip,
+           count(*) filter (where a.kind = 'rec_outcome' and a.outcome = 'partial') as partial,
+           count(*) filter (where a.kind = 'rec_outcome' and a.liked) as liked,
+           (select count(*) from ret r where r.arm = a.arm and r.eligible) as return_of,
+           (select count(*) from ret r where r.arm = a.arm and r.eligible and r.returned) as returned
+    from ev a group by a.arm
+  ),
+  res as (
+    select a.*, (a.people >= (select min_people from k) and a.outcomes >= (select min_outcomes from k)) as enough
+    from arms a
+  )
+  select jsonb_build_object(
+    'key', (select key from k),
+    'days', _days(p_days),
+    'minPeople', (select min_people from k),
+    'minOutcomes', (select min_outcomes from k),
+    'enough', (select count(*) from res where enough) >= 2,
+    'variants', coalesce((select jsonb_agg(jsonb_build_object(
+        'variant', o.arm, 'people', o.people, 'served', o.served, 'outcomes', o.outcomes,
+        'complete', o.complete, 'skip', o.skip, 'earlySkip', o.early_skip, 'partial', o.partial, 'liked', o.liked,
+        'completeRate',  case when o.outcomes > 0 then round(o.complete::numeric * 100 / o.outcomes, 1) end,
+        'skipRate',      case when o.outcomes > 0 then round(o.skip::numeric * 100 / o.outcomes, 1) end,
+        'earlySkipRate', case when o.outcomes > 0 then round(o.early_skip::numeric * 100 / o.outcomes, 1) end,
+        'likedRate',     case when o.outcomes > 0 then round(o.liked::numeric * 100 / o.outcomes, 1) end,
+        'playsPerPerson', case when o.people > 0 then round(o.outcomes::numeric / o.people, 1) end,
+        'returnOf', o.return_of, 'returned', o.returned,
+        'returnRate', case when o.return_of > 0 then round(o.returned::numeric * 100 / o.return_of, 1) end,
+        'enough', o.enough
+      ) order by o.arm) from res o), '[]'::jsonb)
+  );
+$$;
+
 -- Version 11 — Trending (console): songs, artists and languages played by
 -- signed-in users in this window against the window of the same length just
 -- before it. The window starts at midnight India time `p_days - 1` days ago
@@ -2783,6 +2921,7 @@ begin
     where n.nspname = 'public'
       and p.proname in ('_days', 'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
                         'stats_engagement', 'stats_retention', '_device_key', 'listen_time', '_listen_spans', '_window_start', 'stats_top_listeners', 'stats_at_risk', 'stats_listening', 'stats_funnel', 'stats_skips', 'stats_errors', 'stats_trending', 'stats_searches',
+                        'stats_song_problems', 'stats_experiment',
                         'listener_profile', 'delete_listener', 'room_request', 'room_control', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
                         'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily', 'ai_feedback_stats',

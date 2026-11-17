@@ -108,7 +108,7 @@
   }
 
   VX.page({
-    id: 'trending', title: 'Trending', group: 'Music Stats', icon: 'flame', order: 5, range: true,
+    id: 'trending', title: 'Trending', group: 'Music', icon: 'flame', order: 5, range: true,
     desc: 'Songs, artists and languages getting more plays than in the period before.',
     keywords: 'trending rising climbing chart new entries hot popular artists languages',
     render: render

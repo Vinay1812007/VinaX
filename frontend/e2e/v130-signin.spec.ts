@@ -130,7 +130,8 @@ test('1.13.22: play as a guest, sign in with email from the sheet, and the play 
   const calls: string[] = [];
   await mockEmailApi(page, calls);
   await page.goto('/discover');
-  await page.getByRole('button', { name: /^Play \d{4}$/ }).click();
+  // Scoped to Pick a year: a catalogue card titled with a year has the same name.
+  await page.locator('section', { has: page.getByRole('heading', { name: 'Pick a year' }) }).getByRole('button', { name: /^Play \d{4}$/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Sign in to start listening' });
   await sheet.getByRole('link', { name: 'Sign in with email' }).click();
   await expect(page).toHaveURL(/\/login\?next=%2Fdiscover$/);

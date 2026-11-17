@@ -979,22 +979,11 @@
    *   tabs: [{ id, label, render(host, ctx) }]   — or —   render(host, ctx)
    * }
    * ctx = { refresh(), every(ms, fn), onDispose(fn), params, setParam(k, v), tab }
+   * `group` is one of the menu's eight sections (app.js GROUPS: Home, People,
+   * Music, Notifications, App Settings, Health, Growth, System) and `order`
+   * the page's place in it.
    */
-  /**
-   * 2.0 — eight menu sections instead of ten: the old group names that pages
-   * still declare fold into the new ones here, keeping each page's place
-   * (the offset keeps a folded group's pages after the ones already there).
-   */
-  var GROUP_MOVES = {
-    Overview: ['Home', 0], Users: ['People', 0], Audience: ['People', 100],
-    'Music Stats': ['Music', 0], 'Search & Library': ['Music', 100],
-    'App Health': ['Health', 0], 'Growth & SEO': ['Growth', 0]
-  };
-  VX.page = function (def) {
-    var move = GROUP_MOVES[def.group];
-    if (move) def = Object.assign({}, def, { group: move[0], order: (def.order || 50) + move[1] });
-    pages.push(def);
-  };
+  VX.page = function (def) { pages.push(def); };
   VX.pages = function () { return pages.slice(); };
 
   /** Song/listener cell: thumbnail + title + subtitle */

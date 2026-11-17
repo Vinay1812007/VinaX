@@ -74,9 +74,9 @@ describe('when each kind is due, in the person’s own time', () => {
 describe('what the messages say', () => {
   it('the recap names the time, the top artist and the most played song', () => {
     expect(recapMessage({ seconds: 3 * 3600 + 12 * 60, topArtist: 'A.R. Rahman', topSong: 'Kanne Kanne' })).toEqual({
-      title: 'Your week in VinaX', body: '3 h 12 min of music · top artist A.R. Rahman · most played “Kanne Kanne”. Tap for your week.', link: '/weekly',
+      title: 'Your week in VinaX', body: '3 h 12 min of music · top artist A.R. Rahman · most played “Kanne Kanne”. Tap for your weekly report.', link: '/stats',
     });
-    expect(recapMessage({ seconds: 45 * 60, topArtist: null, topSong: null }).body).toBe('45 min of music. Tap for your week.');
+    expect(recapMessage({ seconds: 45 * 60, topArtist: null, topSong: null }).body).toBe('45 min of music. Tap for your weekly report.');
   });
   it('the win-back names a recent song, or the artist, or just invites them back', () => {
     const s = song('s1', 'Chuttamalle', ['Anirudh Ravichander'], '2026-11-07');
@@ -142,7 +142,7 @@ describe('the job', () => {
     expect(r.winback).toMatchObject({ candidates: 0, people: 0 });
     const rows = fake.rows('outreach');
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ account_id: '111', kind: 'recap', dedupe_key: 'recap:2026-11-08:111', title: 'Your week in VinaX', link: '/weekly', facts: expect.objectContaining({ seconds: 11_520, topArtist: 'Anirudh' }) });
+    expect(rows[0]).toMatchObject({ account_id: '111', kind: 'recap', dedupe_key: 'recap:2026-11-08:111', title: 'Your week in VinaX', link: '/stats', facts: expect.objectContaining({ seconds: 11_520, topArtist: 'Anirudh' }) });
     expect(fake.rows('notifications')).toEqual([expect.objectContaining({ kind: 'recap', title: 'Weekly recap', sent_by: 'auto', audience: { label: 'Automatic · Weekly recap', auto: 'recap' } })]);
     expect(asRecaps(RECAPS)[1].tzOffset).toBe(-300);
     // The database said what the Worker asked: the last seven days, 30 minutes at least.
@@ -257,7 +257,7 @@ describe('the console', () => {
     rpc(fake, 'outreach_recap', [RECAPS[0]]);
     const editor = await tokenFor('ed@example.com');
     const r = await call(route.onRequestPost, req({ action: 'preview', kind: 'recap' }, editor));
-    expect(r).toMatchObject({ status: 200, body: { ok: true, devices: 2, real: true, message: { title: '[Preview] Your week in VinaX', link: '/weekly' } } });
+    expect(r).toMatchObject({ status: 200, body: { ok: true, devices: 2, real: true, message: { title: '[Preview] Your week in VinaX', link: '/stats' } } });
     expect(fake.rows('outreach')).toEqual([]);
     expect(fake.rows('notifications')).toEqual([]);
     expect(fake.calls.filter((c) => c.table === 'push_devices' && c.method === 'PATCH')).toEqual([]); // not counted toward the cap

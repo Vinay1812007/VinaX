@@ -5,7 +5,8 @@
  *   recap    Sunday from 7 PM in each person's own time (a missed Sunday is
  *            caught up Monday morning): "Your week in VinaX — 3 h 12 min of
  *            music · top artist X · most played Y", only when they listened
- *            30 minutes or more that week. Opens /weekly. Once a week.
+ *            30 minutes or more that week. Opens /stats (the weekly
+ *            report, this week against last). Once a week.
  *   winback  nothing from any of their devices for 7 days or more (but active
  *            in the 30 days before): a recent song from their top artist, in
  *            the daytime, at most one a week per person, and no more after
@@ -119,7 +120,7 @@ export function recapMessage(c: Pick<RecapCandidate, 'seconds' | 'topArtist' | '
   const parts = [`${hoursText(c.seconds)} of music`];
   if (c.topArtist) parts.push(`top artist ${c.topArtist}`);
   if (c.topSong) parts.push(`most played ${quote(c.topSong)}`);
-  return { title: 'Your week in VinaX', body: `${parts.join(' · ')}. Tap for your week.`, link: '/weekly' };
+  return { title: 'Your week in VinaX', body: `${parts.join(' · ')}. Tap for your weekly report.`, link: '/stats' };
 }
 
 /** A nudge for someone who went quiet, naming a recent song from their top artist when the catalogue has one. */

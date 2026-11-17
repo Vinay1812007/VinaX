@@ -4,7 +4,13 @@
  * works better. The app picks each person's version on their own phone (the
  * server never learns who saw which), so "users per version" is an estimate
  * from how many people used the app this week.
- * Routes: GET/POST /api/admin/experiments; app versions from /api/admin/overview.
+ * Results: tests of next-song picks are measured. The app reports which
+ * version picked each song it queued (the recommendation events' exposure
+ * map), so each version's people, songs played to the end, skips and who
+ * came back are known. Other tests report nothing about who saw which
+ * version, and the page says so.
+ * Routes: GET/POST /api/admin/experiments (results: ?view=results&key=&days=,
+ * stats_experiment, schema 24); app versions from /api/admin/overview.
  */
 (function () {
   'use strict';
@@ -22,6 +28,11 @@
       versions: [{ name: 'control', label: 'As today' }, { name: 'taste-0.15', label: 'A little less like their taste' }, { name: 'taste-0.18', label: 'A little more like their taste' }] },
     { key: 'custom', label: 'Something new (needs an app update)', about: 'A test the app does not read yet. Set it up now; a developer connects it in the next app update.', versions: null }
   ];
+  /**
+   * Tests whose results the server can measure: the app logs exposure for
+   * these keys only (REC_EXPERIMENT_KEYS in frontend/src/features/experiments/recExperiment.ts).
+   */
+  var RESULT_KEYS = ['rec-next-songs'];
   var STATUS = { draft: ['Draft', null], running: ['Running', 'ok'], paused: ['Paused', 'warn'], finished: ['Finished', 'info'] };
   var PLATFORMS = [{ value: 'all', label: 'All platforms' }, { value: 'android', label: 'Android' }, { value: 'web', label: 'Web' }, { value: 'ios', label: 'iOS' }];
 
@@ -194,6 +205,72 @@
     draw();
   }
 
+  /* -------------------------------------------------------------- results */
+
+  var RESULTS_DAYS = 30;
+
+  /** One measured test: each version side by side, for the chosen days. */
+  function resultsBlock(r) {
+    var days = RESULTS_DAYS;
+    var inner = h('div.ab-results-body');
+    function load() {
+      return ui.load(inner, function () {
+        return VX.api.get('/api/admin/experiments', { view: 'results', key: r.key, days: days }).then(function (res) {
+          return !res.ok && res.error === 'db_update_needed' ? { ok: true, status: res.status, data: { updateNeeded: true } } : res;
+        });
+      }, function (d) {
+        if (d && d.updateNeeded) return ui.notice('Results need the one-time database update. An Owner can run it from Database › Maintenance.', 'warn');
+        var data = obj(d && d.data);
+        var list = arr(data.variants);
+        if (!list.length) return ui.emptyState('No results yet', 'Results show once people in this test play songs the app picked for them.');
+        var order = arr(r.variants).map(function (v) { return v.name; });
+        function name(v) { var i = order.indexOf(v.variant); return (i >= 0 ? letter(i) + ': ' : '') + versionLabel(r.key, v.variant); }
+        var ready = list.filter(function (v) { return v.enough === true && v.completeRate != null; });
+        var best = ready.slice().sort(function (a, b) { return num(b.completeRate) - num(a.completeRate); })[0];
+        return [
+          ui.dataTable({
+            rows: list, rowId: function (v) { return String(v.variant); }, search: false, exportName: 'vinax-ab-results-' + r.key, pageSize: 25,
+            columns: [
+              { key: 'variant', label: 'Version', always: true, sortVal: function (v) { var i = order.indexOf(v.variant); return i < 0 ? 99 : i; }, render: function (v) { return h('div', h('div.cell-main', name(v)), v.enough === true ? null : h('div.cell-sub', 'Too few people yet')); }, csv: function (v) { return v.variant; } },
+              { key: 'people', label: 'People', align: 'right', render: function (v) { return fmt.num(v.people); } },
+              { key: 'outcomes', label: 'Songs played', align: 'right', render: function (v) { return fmt.num(v.outcomes); } },
+              { key: 'completeRate', label: 'Played to the end', align: 'right', render: function (v) { return fmt.pct(v.completeRate, 1); } },
+              { key: 'skipRate', label: 'Skipped', align: 'right', render: function (v) { return fmt.pct(v.skipRate, 1); } },
+              { key: 'earlySkipRate', label: 'Skipped in seconds', align: 'right', render: function (v) { return fmt.pct(v.earlySkipRate, 1); } },
+              { key: 'playsPerPerson', label: 'Songs per person', align: 'right', render: function (v) { return fmt.num(v.playsPerPerson); } },
+              { key: 'returnRate', label: 'Came back in 7 days', align: 'right', render: function (v) {
+                return v.returnRate == null ? h('span.muted', { title: 'Nobody in this version started over 7 days ago yet.' }, 'Not yet') : h('span', { title: fmt.num(v.returned) + ' of ' + fmt.plural(v.returnOf, 'person', 'people') }, fmt.pct(v.returnRate, 1));
+              } },
+              { key: 'likedRate', label: 'Liked', align: 'right', hidden: true, render: function (v) { return fmt.pct(v.likedRate, 1); } }
+            ]
+          }),
+          data.enough === true && best
+            ? ui.notice(name(best) + ' had the most songs played to the end (' + fmt.pct(best.completeRate, 1) + '). Look at skips and who came back too before you pick a winner.', 'info')
+            : ui.notice('Too few people yet to pick a winner. Each version needs at least ' + fmt.plural(num(data.minPeople) || 30, 'person', 'people') + ' and ' + fmt.num(num(data.minOutcomes) || 100) + ' songs played. Keep the test running.', 'warn')
+        ];
+      });
+    }
+    var picker = VX.ui.daysPicker(days, function (v) { days = Number(v) || RESULTS_DAYS; load(); });
+    load();
+    return h('div.ab-results', { style: { 'margin-top': '16px' } },
+      h('div.toolbar', { style: { 'margin-bottom': '8px' } }, h('strong', r.name || versionLabel(r.key, r.key)), statusPill(r.status), h('span.grow'), picker),
+      inner);
+  }
+
+  /** The Results card: measured tests, and a plain word on the ones that cannot be measured. */
+  function resultsCard(rows) {
+    var measured = rows.filter(function (r) { return RESULT_KEYS.indexOf(r.key) >= 0 && r.status !== 'draft'; });
+    var others = rows.filter(function (r) { return RESULT_KEYS.indexOf(r.key) < 0 && r.status !== 'draft'; });
+    return ui.card({
+      title: 'Results', sub: 'How each version did. Songs are the ones the app picked to play next; every device counts, signed in or not.',
+      body: [
+        ui.notice('Only tests of next-song picks have results: the app reports which version picked each song. Other tests, like the order of the Home screen, send nothing about who saw which version, so they cannot be measured here.' +
+          (others.length ? ' No results for: ' + others.map(function (r) { return r.name || r.key; }).join(', ') + '.' : ''), 'info'),
+        measured.length ? measured.map(resultsBlock) : ui.emptyState('No next-song test yet', 'Start a test of “Next-song picks” to see each version’s results here.')
+      ]
+    });
+  }
+
   /* ------------------------------------------------------------- the list */
 
   function render(host, ctx) {
@@ -227,6 +304,7 @@
         VX.modal({
           title: 'End “' + (r.name || r.key) + '”', body: [
             h('p', 'Everyone goes back to the app as it is today. Pick the version that did best so the team knows what to keep.'),
+            RESULT_KEYS.indexOf(r.key) >= 0 ? h('p.muted.small', 'The Results below the list show how each version did.') : null,
             ui.radios('Winner', arr(r.variants).map(function (v, i) { return { value: v.name, label: letter(i) + ': ' + versionLabel(r.key, v.name) }; }).concat([{ value: '', label: 'No clear winner' }]), pick, function (v) { pick = v; })
           ],
           actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'End test', kind: 'danger', onClick: function (close) {
@@ -279,13 +357,14 @@
           { label: 'Drafts', value: fmt.num(rows.filter(function (r) { return r.status === 'draft'; }).length), info: 'Tests set up but not started.' },
           { label: 'Finished', value: fmt.num(rows.filter(function (r) { return r.status === 'finished'; }).length), info: 'Tests that ended, with the winning version if one was picked.' }
         ]),
-        ui.card({ title: 'Tests', actions: newBtn ? [newBtn] : null, pad: false, body: table })
+        ui.card({ title: 'Tests', actions: newBtn ? [newBtn] : null, pad: false, body: table }),
+        resultsCard(rows)
       ];
     });
   }
 
   VX.page({
-    id: 'ab-tests', title: 'A/B Tests', group: 'Growth & SEO', icon: 'flask', order: 4,
+    id: 'ab-tests', title: 'A/B Tests', group: 'Growth', icon: 'flask', order: 4,
     desc: 'Try two versions of something in the app and see which one works better.',
     keywords: 'experiment split test variant',
     render: render

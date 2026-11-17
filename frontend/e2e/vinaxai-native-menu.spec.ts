@@ -1,7 +1,7 @@
 /**
  * VinaX AI keeps the browser's own right-click menu and text selection (to
- * copy replies, links and code); the rest of the app keeps its own menu.
- * Runs on the production build, where the cosmetic deterrence is on.
+ * copy replies, links and code); the rest of the app keeps its own menu, and
+ * text pages stay selectable. Runs on the production build.
  */
 import { expect, test, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
@@ -56,4 +56,12 @@ test('elsewhere the app keeps its own right-click menu', async ({ page }) => {
   await page.goto('/library');
   await page.locator('main').click({ button: 'right', position: { x: 40, y: 40 } });
   await expect(page.getByRole('menu', { name: 'App actions' })).toBeVisible();
+});
+
+test('text pages can be selected and copied', async ({ page }) => {
+  await setup(page);
+  await page.goto('/privacy');
+  const heading = page.getByRole('heading', { name: 'Privacy', level: 1 });
+  await expect(heading).toBeVisible();
+  expect(await heading.evaluate((el) => getComputedStyle(el).userSelect)).not.toBe('none');
 });

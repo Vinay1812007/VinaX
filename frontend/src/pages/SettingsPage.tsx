@@ -261,7 +261,6 @@ const ERASE_LABELS: Record<string, string> = {
   deviceId: 'Anonymous device id',
   userName: 'Your name',
   userHandle: 'Your username',
-  userHandlePending: 'Username waiting to be confirmed',
   signedDeviceId: 'Service-issued device token',
   updateSnooze: '“Update later” choice',
   analyticsConsent: 'Analytics consent choice',

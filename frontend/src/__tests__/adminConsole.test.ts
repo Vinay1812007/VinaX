@@ -16,9 +16,10 @@
  *    through /api/admin.
  *  - Console rebuild — the shared controls in kit/, the console lands on
  *    the Dashboard, old addresses redirect, and the spec's plain words.
- *  - One job per page — every old tab is its own page: fifty pages in ten
- *    groups, each with a one-line description; old page/tab addresses go
- *    to the page that does that job now.
+ *  - One job per page — every old tab is its own page, each with a one-line
+ *    description; old page/tab addresses go to the page that does that job
+ *    now. Each page declares its own section (the eight in app.js GROUPS)
+ *    and its place in it.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -101,7 +102,7 @@ describe('page registry', () => {
       'google-search', 'languages', 'listen-together', 'listening-hours', 'listening-now', 'listening-time', 'music-sources',
       'notification-rules', 'notification-setup', 'page-check', 'phones-browsers', 'recent-activity', 'rising-songs',
       'saved-audiences', 'scheduled-jobs', 'search-console', 'search-no-results', 'search-overview', 'search-pins',
-      'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'top-artists',
+      'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'song-problems', 'top-artists',
       'top-listeners', 'top-songs', 'trending', 'user', 'users', 'where-users-are']);
     // Only a person's profile stays out of the menu.
     expect(pages.filter((p) => p.hidden).map((p) => p.id)).toEqual(['user']);
@@ -160,7 +161,26 @@ describe('page registry', () => {
 
   it('every group has its own pages in the sidebar', () => {
     const counts = Object.fromEntries(GROUPS.map((g) => [g, VX.pages().filter((p) => p.group === g && !p.hidden).length]));
-    expect(counts).toEqual({ Home: 5, People: 10, Music: 11, Notifications: 6, 'App Settings': 7, Health: 6, Growth: 4, System: 5 });
+    expect(counts).toEqual({ Home: 5, People: 10, Music: 12, Notifications: 6, 'App Settings': 7, Health: 6, Growth: 4, System: 5 });
+  });
+
+  it('each page declares its own section and place: the sidebar order, with no two pages sharing a place', () => {
+    const order = (p: PageDef) => (p as { order?: number }).order ?? 50;
+    const menu = (g: string) => VX.pages().filter((p) => p.group === g && !p.hidden).sort((a, b) => order(a) - order(b));
+    for (const g of GROUPS) {
+      const places = menu(g).map(order);
+      expect(new Set(places).size, `${g}: two pages share a place`).toBe(places.length);
+    }
+    const titles = (g: string) => menu(g).map((p) => p.title);
+    expect(titles('Home')).toEqual(['Dashboard', 'Listening Now', 'Recent Activity', 'Listen Together Rooms', 'Smart Alerts']);
+    expect(titles('People')).toEqual(['All Users', 'Top Listeners', 'At Risk', 'Feedback', 'Where Users Are', 'How Much They Listen', 'When They Listen', 'Do They Come Back', 'Sign-up Journey', 'Phones & Browsers']);
+    expect(titles('Music')).toEqual(['Top Songs', 'Rising Songs', 'Top Artists', 'Languages', 'Trending', 'Songs People Skip', 'Songs With Problems', 'Search Overview', 'Searches That Found Nothing', 'Pins & Synonyms', 'Find Music', 'Blocked Songs & Albums']);
+    expect(titles('Notifications')).toEqual(['Send Notification', 'Sent History', 'Saved Audiences', 'Notification Rules', 'Setup Check', 'Automatic Notifications']);
+    expect(titles('Health')).toEqual(['App Errors', 'Server Checks', 'Music Sources', 'AI Assistant', 'App Versions', 'API Keys Status']);
+    expect(titles('Growth')).toEqual(['Google Search', 'Page Check', 'Search Console', 'A/B Tests']);
+    expect(titles('System')).toEqual(['Database Tables', 'Scheduled Jobs', 'Change Log', 'Database Maintenance', 'Admins & Roles']);
+    // No page declares an old section name any more (core.js no longer folds them).
+    expect(read('core.js')).not.toContain('GROUP_MOVES');
   });
 
   it('App Settings pages are listed under one group, in the spec order', () => {

@@ -36,7 +36,7 @@ function library(base: string) {
   return { songs, entries };
 }
 
-async function seed(page: Page, baseURL: string, theme: 'dark' | 'light' | 'amoled'): Promise<void> {
+async function seed(page: Page, baseURL: string, theme: 'dark' | 'light'): Promise<void> {
   const { songs, entries } = library(baseURL);
   await page.addInitScript(
     ({ songs, entries, theme, fp }) => {
@@ -82,7 +82,7 @@ const noHorizontalScroll = (page: Page) => page.evaluate(() => document.document
 const SIZES = [
   { width: 390, height: 844, theme: 'light' as const },
   { width: 1440, height: 1000, theme: 'dark' as const },
-  { width: 390, height: 844, theme: 'amoled' as const },
+  { width: 390, height: 844, theme: 'dark' as const },
 ];
 
 for (const size of SIZES) {

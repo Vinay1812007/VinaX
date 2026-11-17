@@ -99,6 +99,8 @@ const TermsPage = lazy(() => import('@/pages/TermsPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const DmcaPage = lazy(() => import('@/pages/DmcaPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+// Round 8 — Share to VinaX: the share target of the installed web app and the Android app.
+const SharePage = lazy(() => import('@/pages/SharePage'));
 // v5.7.9 — music videos: browse + cinematic player.
 const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
@@ -226,6 +228,7 @@ export const router = createBrowserRouter([
       { path: 'p/:id', element: <SharedPlaylistPage /> },
       { path: 'offline', element: <OfflinePage /> },
       { path: 'together', element: <ListenTogetherPage /> },
+      { path: 'share', element: <SharePage /> },
       { path: 'collection/:id', element: <CollectionPage /> },
       { path: 'smart/:id', element: <SmartCollectionPage /> },
       { path: 'karaoke', element: <KaraokePage /> },

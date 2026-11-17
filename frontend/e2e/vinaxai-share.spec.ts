@@ -29,7 +29,7 @@ interface Server {
   continued: number;
 }
 
-async function setup(page: Page, opts: { theme?: 'dark' | 'light' | 'amoled'; template?: string; highContrast?: boolean; shared?: boolean } = {}): Promise<Server> {
+async function setup(page: Page, opts: { theme?: 'dark' | 'light'; highContrast?: boolean; shared?: boolean } = {}): Promise<Server> {
   const server: Server = { shares: [], created: [], deleted: [], continued: 0 };
   if (opts.shared) server.shares.push({ id: SID, conversationId: C1, title: 'Raga Yaman', messageCount: 2, createdAt: now, updatedAt: now });
   const conv = { id: C1, title: 'Raga Yaman', starred: false, activeLeafId: 'a1', createdAt: now, updatedAt: now };
@@ -50,12 +50,12 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light' | 'amoled'; te
       { role: 'assistant', text: ANSWER, createdAt: '2026-10-30T10:00:01Z' },
     ],
   };
-  await page.addInitScript(({ fp, theme, template, highContrast }) => {
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, ...(template ? { template } : {}), highContrast, pinnedLanguages: ['telugu'] }, version: 5 }));
+  await page.addInitScript(({ fp, theme, highContrast }) => {
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, highContrast, pinnedLanguages: ['telugu'] }, version: 5 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.analytics-consent', 'false');
     localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
-  }, { fp: latestNotesFingerprint(), theme: opts.theme ?? 'dark', template: opts.template ?? null, highContrast: !!opts.highContrast });
+  }, { fp: latestNotesFingerprint(), theme: opts.theme ?? 'dark', highContrast: !!opts.highContrast });
   await page.route('**/*', async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -175,14 +175,15 @@ test('the shared page opens signed out: title, label, turns, artifacts, no compo
   await axe(page);
 });
 
-const LOOKS: Array<{ theme: 'dark' | 'light' | 'amoled'; template: string; highContrast?: boolean }> = [
-  ...['vinax'].flatMap((template) => (['dark', 'light'] as const).map((theme) => ({ theme, template }))),
-  { theme: 'amoled', template: 'vinax' },
-  { theme: 'dark', template: 'vinax', highContrast: true },
-  { theme: 'light', template: 'vinax', highContrast: true },
+// Dark, light and high contrast: the only looks since settings v6 (no Black theme, one app style).
+const LOOKS: Array<{ theme: 'dark' | 'light'; highContrast?: boolean }> = [
+  { theme: 'dark' },
+  { theme: 'light' },
+  { theme: 'dark', highContrast: true },
+  { theme: 'light', highContrast: true },
 ];
 for (const look of LOOKS) {
-  test(`no WCAG A/AA violations on the shared page: ${look.template}, ${look.theme}${look.highContrast ? ', high contrast' : ''}`, async ({ page }) => {
+  test(`no WCAG A/AA violations on the shared page: ${look.theme}${look.highContrast ? ', high contrast' : ''}`, async ({ page }) => {
     await setup(page, look);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/vinaxai/share/${SID}?e2e-signed-out`);

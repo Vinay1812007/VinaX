@@ -22,12 +22,8 @@ export const KEYS = {
    *  the server derives ip+ua ids and one listener multiplies into many rows. */
   signedDeviceId: `${STORAGE_PREFIX}.signed-device-id`,
   userName: `${STORAGE_PREFIX}.user-name`,
-  /** Unique lowercase handle claimed via /api/username at onboarding —
-   *  display names collide, the handle never does. */
+  /** The signed-in account's username, copied here on sign-in (services/auth). */
   userHandle: `${STORAGE_PREFIX}.user-handle`,
-  /** A handle the listener chose that the service has NOT confirmed yet
-   *  (offline / server error / refused as taken) — see features/identity. */
-  userHandlePending: `${STORAGE_PREFIX}.user-handle-pending.v1`,
   /** 12.2 — the optional Google sign-in: VinaX's own session and the profile it returned. */
   account: `${STORAGE_PREFIX}.account.v1`,
   analyticsConsent: `${STORAGE_PREFIX}.analytics-consent`,

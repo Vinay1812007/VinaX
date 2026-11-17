@@ -11,7 +11,7 @@
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
 
   VX.page({
-    id: 'dashboard', title: 'Dashboard', group: 'Overview', icon: 'grid', order: 1, range: true,
+    id: 'dashboard', title: 'Dashboard', group: 'Home', icon: 'grid', order: 1, range: true,
     desc: 'What is happening in VinaX today, and anything that needs you.',
     keywords: 'overview home summary attention',
     render: render

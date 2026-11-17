@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // vite.config.ts belongs to the node TypeScript project; load it at run time so
 // the app project never type-resolves it (TS6305).
-type Split = (bundle: Record<string, unknown>) => { precache: string[]; onDemand: string[] };
+type Split = (bundle: Record<string, unknown>) => { precache: string[]; onDemand: string[]; light: string[] };
 const loadSplit = async (): Promise<Split> => {
   const spec = '../../vite.config';
   return ((await import(/* @vite-ignore */ spec)) as { splitPrecache: Split }).splitPrecache;
@@ -21,7 +21,7 @@ const source = readFileSync(resolve(__dirname, '../../public/sw.js'), 'utf8');
 interface Res { ok: boolean; headers: Headers; body: string }
 const res = (body: string, type = 'application/javascript'): Res => ({ ok: true, headers: new Headers({ 'content-type': type }), body });
 
-async function runPrecache(manifest: unknown, alreadyCached: string[]): Promise<{ cached: Set<string>; fetched: string[] }> {
+async function runPrecache(manifest: unknown, alreadyCached: string[], message: Record<string, unknown> | 'install' = { type: 'PRECACHE' }): Promise<{ cached: Set<string>; fetched: string[] }> {
   const store = new Map<string, Res>(alreadyCached.map((p) => [p, res('old')]));
   const fetched: string[] = [];
   const cache = {
@@ -40,7 +40,9 @@ async function runPrecache(manifest: unknown, alreadyCached: string[]): Promise<
   };
   new Function('self', 'caches', 'fetch', source)(fakeSelf, fakeCaches, fakeFetch);
   let job: Promise<unknown> = Promise.resolve();
-  listeners.get('message')?.({ data: { type: 'PRECACHE' }, waitUntil: (p: Promise<unknown>) => { job = p; } });
+  const waitUntil = (p: Promise<unknown>) => { job = p; };
+  if (message === 'install') listeners.get('install')?.({ waitUntil });
+  else listeners.get('message')?.({ data: message, waitUntil });
   await job;
   return { cached: new Set(store.keys()), fetched };
 }
@@ -53,6 +55,28 @@ describe('service worker precache', () => {
     expect(cached.has('/assets/app.js')).toBe(true);
     expect(cached.has('/assets/diagram.js')).toBe(true); // runtime-cached earlier: not pruned
     expect(cached.has('/assets/stale-old-deploy.js')).toBe(false); // left the build: pruned
+  });
+
+  it('the light mode downloads only the light list and prunes as the full one does', async () => {
+    const manifest = { v: 2, precache: ['/assets/index.js', '/assets/Library.js', '/assets/Radio.js'], onDemand: ['/assets/ai.js'], light: ['/assets/index.js', '/assets/Library.js'] };
+    const { cached, fetched } = await runPrecache(manifest, ['/assets/Radio.js', '/assets/ai.js', '/assets/old.js'], { type: 'PRECACHE', mode: 'light' });
+    expect(fetched).toContain('/assets/index.js');
+    expect(fetched).toContain('/assets/Library.js');
+    expect(fetched).not.toContain('/assets/Radio.js');
+    expect(cached.has('/assets/Radio.js')).toBe(true); // in the build: kept
+    expect(cached.has('/assets/ai.js')).toBe(true);
+    expect(cached.has('/assets/old.js')).toBe(false);
+  });
+
+  it('install takes the light precache; the page asks for the rest', async () => {
+    const { fetched } = await runPrecache({ v: 2, precache: ['/assets/index.js', '/assets/Radio.js'], onDemand: [], light: ['/assets/index.js'] }, [], 'install');
+    expect(fetched).toContain('/assets/index.js');
+    expect(fetched).not.toContain('/assets/Radio.js');
+  });
+
+  it('a light request on a manifest without a light list gets the full one', async () => {
+    const { fetched } = await runPrecache({ v: 2, precache: ['/assets/a.js', '/assets/b.js'], onDemand: [] }, [], { type: 'PRECACHE', mode: 'light' });
+    expect(fetched).toEqual(expect.arrayContaining(['/assets/a.js', '/assets/b.js']));
   });
 
   it('still reads a plain array manifest', async () => {
@@ -128,5 +152,33 @@ describe('splitPrecache', () => {
     const { precache, onDemand } = splitPrecache(bundle);
     expect(onDemand.sort()).toEqual(['/assets/KaTeX_Main-Regular-d4.woff2', '/assets/VinaXAIPage-b2.js', '/assets/VinaXAIPage-b9.css', '/assets/math-c3.js', '/assets/math-c7.css', '/assets/micTap.worklet-g8.js', '/assets/pdf.worker.min-f6.mjs']);
     expect(precache.sort()).toEqual(['/assets/index-a1.css', '/assets/index-a1.js', '/assets/inter-e5.woff2']);
+  });
+
+  it('lists a light precache: the entry graph and the layout\'s lazy pieces, stopping at route pages other than Offline, Library and Now Playing', async () => {
+    const splitPrecache = await loadSplit();
+    const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });
+    const asset = (fileName: string) => ({ type: 'asset' as const, fileName });
+    const bundle = {
+      'assets/index.js': chunk('assets/index.js', { isEntry: true, imports: ['assets/vendor.js'], dynamicImports: ['assets/Offline.js', 'assets/Library.js', 'assets/NowPlaying.js', 'assets/Radio.js', 'assets/VinaXAIPage.js', 'assets/Bridges.js'], viteMetadata: { importedCss: new Set(['assets/index.css']) } }),
+      'assets/vendor.js': chunk('assets/vendor.js'),
+      'assets/Offline.js': chunk('assets/Offline.js', { facadeModuleId: '/r/src/pages/OfflinePage.tsx', imports: ['assets/rows.js'] }),
+      'assets/Library.js': chunk('assets/Library.js', { facadeModuleId: '/r/src/pages/LibraryPage.tsx', imports: ['assets/rows.js'], dynamicImports: ['assets/ImportSheet.js'], viteMetadata: { importedCss: new Set(['assets/Library.css']) } }),
+      'assets/rows.js': chunk('assets/rows.js'),
+      'assets/NowPlaying.js': chunk('assets/NowPlaying.js', { facadeModuleId: '/r/src/pages/NowPlayingPage.tsx' }),
+      'assets/Bridges.js': chunk('assets/Bridges.js', { facadeModuleId: '/r/src/layouts/Bridges15.tsx', dynamicImports: ['assets/Search.js'] }),
+      'assets/Search.js': chunk('assets/Search.js', { facadeModuleId: '/r/src/pages/SearchPage.tsx', imports: ['assets/searchLib.js'] }),
+      'assets/searchLib.js': chunk('assets/searchLib.js'),
+      'assets/ImportSheet.js': chunk('assets/ImportSheet.js'),
+      'assets/Radio.js': chunk('assets/Radio.js', { facadeModuleId: '/r/src/pages/RadioPage.tsx', viteMetadata: { importedCss: new Set(['assets/Radio.css']) } }),
+      'assets/VinaXAIPage.js': chunk('assets/VinaXAIPage.js', { facadeModuleId: '/r/src/pages/VinaXAIPage.tsx' }),
+      'assets/index.css': asset('assets/index.css'),
+      'assets/Library.css': asset('assets/Library.css'),
+      'assets/Radio.css': asset('assets/Radio.css'),
+    };
+    const { precache, light } = splitPrecache(bundle);
+    expect(light.sort()).toEqual(['/assets/Bridges.js', '/assets/ImportSheet.js', '/assets/Library.css', '/assets/Library.js', '/assets/NowPlaying.js', '/assets/Offline.js', '/assets/index.css', '/assets/index.js', '/assets/rows.js', '/assets/vendor.js']);
+    for (const f of light) expect(precache).toContain(f);
+    for (const f of ['/assets/Radio.js', '/assets/Radio.css', '/assets/Search.js', '/assets/searchLib.js']) expect(precache).toContain(f);
+    expect(light).not.toContain('/assets/VinaXAIPage.js');
   });
 });

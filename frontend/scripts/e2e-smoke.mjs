@@ -90,6 +90,11 @@ for (const url of listed) {
   }
 }
 if (absent === 0) pass(`all ${listed.length} precache-manifest.json entries exist on disk`);
+// The light precache (Data saver) is a non-empty part of the full one.
+const light = manifest.light ?? [];
+const full = new Set(manifest.precache ?? []);
+if (light.length && light.every((u) => full.has(u))) pass(`light precache: ${light.length} of ${full.size} files`);
+else fail('precache-manifest.json light list is empty or not part of precache');
 
 // ---------- static server: SPA fallback + /assets 404 guard ----------
 const server = createServer(async (req, res) => {

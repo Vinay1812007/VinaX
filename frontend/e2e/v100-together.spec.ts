@@ -536,6 +536,36 @@ test('a jam: the guest pauses, plays, adds, takes out and skips for everyone; th
   await expect.poll(async () => (await audioState(host))?.src ?? '', { timeout: 10_000 }).toContain('/t-b.wav');
   await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-b.wav');
 
+  // "Play on this phone" off: the guest is in the same room as the host's
+  // speaker. This phone goes quiet but stays in the session as the remote.
+  const onThisPhone = guest.getByRole('switch', { name: 'Play on this phone' });
+  await expect(onThisPhone).toBeChecked();
+  await onThisPhone.click();
+  await expect(onThisPhone).not.toBeChecked();
+  await expect(guest.getByText('Only Asha’s speaker is playing. This phone is the remote.')).toBeVisible();
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 10_000 }).toBe(true);
+  await expect(check.getByTestId('lt-offset')).toHaveText('Not playing here (remote only)');
+  await expect(check.getByRole('button', { name: 'Resync' })).toBeDisabled();
+  // The host's music carries on, and the guest is still in the room.
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+  await expect(guest.locator('.vx-lt-status')).toBeVisible();
+  await expect(host.locator('section[aria-labelledby="vx-lt-people"]')).toContainText('Ravi');
+  // The remote still pauses and plays for everyone, and this phone stays quiet throughout.
+  await guest.getByRole('button', { name: 'Pause for everyone' }).click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(true);
+  await guest.getByRole('button', { name: 'Play for everyone' }).click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+  const hostAt = (await audioState(host))?.t ?? 0;
+  await expect.poll(async () => (await audioState(host))?.t ?? 0, { timeout: 15_000 }).toBeGreaterThan(hostAt + 2);
+  expect((await audioState(guest))?.paused).toBe(true);
+  // Still in the room after all that: the host still lists the remote.
+  await expect(host.locator('section[aria-labelledby="vx-lt-people"]')).toContainText('Ravi');
+  // Back on: this phone plays the host's song again, in the room.
+  await onThisPhone.click();
+  await startListeningIfAsked(guest);
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 15_000 }).toBe(false);
+  await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-b.wav');
+
   // The host keeps playback to itself: the guest's buttons go quiet and a vote to skip comes back.
   await host.getByRole('switch', { name: 'Guests can control playback' }).click();
   await expect(guest.getByRole('button', { name: /for everyone$/ })).toBeDisabled({ timeout: 10_000 });

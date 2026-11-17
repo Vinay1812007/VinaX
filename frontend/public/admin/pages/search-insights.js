@@ -246,19 +246,19 @@
   }
 
   VX.page({
-    id: 'search-overview', title: 'Search Overview', group: 'Search & Library', icon: 'search', order: 1, range: true,
+    id: 'search-overview', title: 'Search Overview', group: 'Music', icon: 'search', order: 8, range: true,
     desc: 'What people search for in the app, and how often they find what they want.',
     keywords: 'search insights searches queries top popular',
     render: overview
   });
   VX.page({
-    id: 'search-no-results', title: 'Searches That Found Nothing', group: 'Search & Library', icon: 'alert', order: 2, range: true,
+    id: 'search-no-results', title: 'Searches That Found Nothing', group: 'Music', icon: 'alert', order: 9, range: true,
     desc: 'Searches that showed no songs. Fix one by pinning a song or adding a synonym.',
     keywords: 'search found nothing no results zero empty',
     render: nothingFound
   });
   VX.page({
-    id: 'search-pins', title: 'Pins & Synonyms', group: 'Search & Library', icon: 'pin', order: 3,
+    id: 'search-pins', title: 'Pins & Synonyms', group: 'Music', icon: 'pin', order: 10,
     desc: 'Songs you pinned to the top of a search, and words that also search for other words.',
     keywords: 'search pin pinned results synonyms words',
     render: pinsTab

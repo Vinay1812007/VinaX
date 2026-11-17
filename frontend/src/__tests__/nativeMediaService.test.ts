@@ -286,8 +286,9 @@ describe('scripts/patch-android.js', () => {
 
   it('lets MainActivity open VinaX links, so an invite can hand over from the website to the app', () => {
     expect(patchScript).toContain('<category android:name="android.intent.category.BROWSABLE" />');
-    expect(patchScript).toContain('<data android:host="www.vinaxmusic.online" />');
-    expect(patchScript).not.toContain('android:autoVerify');
+    expect(patchScript).toContain("linkData('www.vinaxmusic.online')");
+    // Round 8: verified on www only (patchAndroidLinks.test.ts runs the script).
+    expect(patchScript).toContain('<intent-filter android:autoVerify="true">');
   });
 
   it('declares both microphone permissions the WebView asks for when VinaX AI opens the mic', () => {

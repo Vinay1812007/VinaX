@@ -24,7 +24,7 @@ const mk = (base: string, id: string, title: string, artist: string, extra: Part
 
 const LONG = 'A very long playlist name for the monsoon evenings drive back home from the coast';
 
-async function seed(page: Page, baseURL: string, theme: 'dark' | 'light' | 'amoled'): Promise<void> {
+async function seed(page: Page, baseURL: string, theme: 'dark' | 'light'): Promise<void> {
   const songs = [
     mk(baseURL, 's1', 'Samajavaragamana', 'Sid Sriram'),
     mk(baseURL, 's2', 'Naatu Naatu', 'Rahul Sipligunj'),
@@ -84,7 +84,7 @@ const rowTitles = (page: Page) => page.locator('.vx-lp-row:not(.is-trashed) .vx-
 const SIZES = [
   { width: 390, height: 844, theme: 'light' as const },
   { width: 1440, height: 1000, theme: 'dark' as const },
-  { width: 390, height: 844, theme: 'amoled' as const },
+  { width: 390, height: 844, theme: 'dark' as const },
 ];
 
 for (const size of SIZES) {

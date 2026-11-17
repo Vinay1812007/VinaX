@@ -23,7 +23,7 @@
       desc: 'Where to tell Google and Bing about the site, and what to check each week.',
       keywords: 'search console bing webmaster submit sitemap' }
   ].forEach(function (p, i) {
-    VX.page(Object.assign({ group: 'Growth & SEO', order: i + 1, noAuto: true }, p));
+    VX.page(Object.assign({ group: 'Growth', order: i + 1, noAuto: true }, p));
   });
 
   var cache = null;

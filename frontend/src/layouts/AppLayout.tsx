@@ -59,7 +59,6 @@ import { resolveRegion } from '@/services/location/inference';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { defaultLanguagesForCountry } from '@/constants/regions';
 import { isNativePlatform } from '@/services/native';
-import { installDeterrence } from '@/utils/deterrence';
 
 // Lazy: the palette costs nothing until the first ⌘/Ctrl+K.
 const CommandPalette = lazy(() => import('@/components/CommandPalette'));
@@ -278,7 +277,6 @@ export function AppLayout() {
     // Everything else is non-blocking; defer to idle so first paint and
     // time-to-interactive stay fast on cold start.
     onIdle(() => {
-      installDeterrence();
       // 14.0.3 — a device that onboarded with the old unticked box is switched
       // to the new default once, and told, with the switch one tap away.
       if (applyUsageSharingDefault()) {

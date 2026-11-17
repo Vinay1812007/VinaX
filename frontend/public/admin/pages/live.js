@@ -17,19 +17,19 @@
   VX.kindText = function (k) { return KIND[k] || fmt.label(k || 'activity'); };
 
   VX.page({
-    id: 'listening-now', title: 'Listening Now', group: 'Overview', icon: 'live', order: 2, noAuto: true,
+    id: 'listening-now', title: 'Listening Now', group: 'Home', icon: 'live', order: 2, noAuto: true,
     desc: 'Who has the app open right now and what they are playing. Signed-in users only.',
     keywords: 'live realtime now playing active',
     render: function (host, ctx) { return frame(host, ctx, now); }
   });
   VX.page({
-    id: 'recent-activity', title: 'Recent Activity', group: 'Overview', icon: 'inbox', order: 3, noAuto: true,
+    id: 'recent-activity', title: 'Recent Activity', group: 'Home', icon: 'inbox', order: 3, noAuto: true,
     desc: 'The latest things people did in the app: songs played, sign-ins and more.',
     keywords: 'live activity feed latest plays events',
     render: function (host, ctx) { return frame(host, ctx, activity); }
   });
   VX.page({
-    id: 'listen-together', title: 'Listen Together Rooms', group: 'Overview', icon: 'users', order: 4, noAuto: true,
+    id: 'listen-together', title: 'Listen Together Rooms', group: 'Home', icon: 'users', order: 4, noAuto: true,
     desc: 'Rooms where friends are listening to the same song at the same time.',
     keywords: 'live rooms listen together party friends',
     render: function (host, ctx) { return frame(host, ctx, rooms); }

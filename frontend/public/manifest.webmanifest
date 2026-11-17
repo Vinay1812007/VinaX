@@ -9,8 +9,8 @@
   "dir": "ltr",
   "categories": ["music", "entertainment"],
   "display": "standalone",
-  "background_color": "#0d090f",
-  "theme_color": "#0d090f",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [
     {
       "src": "/icons/icon-192.png?v=14",
@@ -32,6 +32,11 @@
     }
   ],
   "orientation": "portrait",
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
   "shortcuts": [
     { "name": "Search", "short_name": "Search", "url": "/search", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] },
     { "name": "Liked Songs", "short_name": "Liked", "url": "/favorites", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] },

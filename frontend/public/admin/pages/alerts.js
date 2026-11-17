@@ -80,7 +80,7 @@
   };
 
   VX.page({
-    id: 'alerts', title: 'Smart Alerts', group: 'Overview', icon: 'bell', order: 5, noAuto: true,
+    id: 'alerts', title: 'Smart Alerts', group: 'Home', icon: 'bell', order: 5, noAuto: true,
     desc: 'Alerts on your phone when something goes wrong: errors rising, the site not answering, no plays, new feedback, a job failing, requests running low.',
     keywords: 'alerts alarm warn notify phone push errors down outage feedback monitoring jobs quota requests',
     render: function (host, ctx) {

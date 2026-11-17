@@ -119,6 +119,19 @@ export default {
       browsers: [{ browser: 'Chrome', devices: 22 }, { browser: 'Safari', devices: 7 }, { browser: 'Edge', devices: 3 }, { browser: 'Samsung Internet', devices: 1 }],
       androidKnown: 57, androidAll: 66, modelKnown: 55,
     } };
+    // Schema 24: Songs With Problems (s9 is on the blocklist already).
+    if (view === 'problems') {
+      const row = (s, { min, ...o }) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, lastSeen: ago(min), blocked: false, ...o });
+      return { ...base, data: {
+        playbackErrors: 12, failedPlays: 7, songsFailing: 3, lyricMisses: 22, songsNoLyrics: 2,
+        playback: [
+          row(songs[3], { errors: 6, failed: 4, people: 3, min: 20 }),
+          { id: 's9', title: 'Fake Remix 2024', artist: 'Unknown', image: IMG, errors: 4, failed: 3, people: 2, lastSeen: ago(90), blocked: true },
+          row(songs[1], { errors: 2, failed: 0, people: 2, min: 300 }),
+        ],
+        lyrics: [row(songs[4], { misses: 12, people: 9, min: 45 }), row(songs[2], { misses: 10, people: 7, min: 600 })],
+      } };
+    }
     return { ...base, data: {} };
   },
 

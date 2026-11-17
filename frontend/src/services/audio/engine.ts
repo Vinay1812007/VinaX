@@ -494,8 +494,9 @@ class AudioEngine {
     const action = recoveryAction(this.srcPlayedOk, this.retriedCurrentSrc);
     const detail = mediaErrorDetail(this.el?.error ?? null, this.sources[this.sourceIdx]);
     const next = action === 'retry-same' ? 'retrying' : this.sourceIdx < this.sources.length - 1 ? 'next source' : 'no sources left';
+    const failing = this.song;
     void import('@/services/analytics/telemetry')
-      .then((m) => m.reportError('playback', `audio element error: ${detail}; ${next}`))
+      .then((m) => m.reportError('playback', `audio element error: ${detail}; ${next}`, failing))
       .catch(() => undefined);
     if (action === 'retry-same') {
       this.retriedCurrentSrc = true;

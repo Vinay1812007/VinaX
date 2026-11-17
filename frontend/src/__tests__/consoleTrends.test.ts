@@ -76,7 +76,7 @@ async function show(id: string, tab?: string, c = ctx()): Promise<HTMLElement> {
 const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]/;
 
 describe('Trending', () => {
-  it('is a Music Stats page between Languages and Songs People Skip, following the date range', () => {
+  it('is a Music page between Languages and Songs People Skip, following the date range', () => {
     const p = page('trending');
     expect(p).toMatchObject({ title: 'Trending', group: 'Music', icon: 'flame', range: true });
     expect(p.order).toBeGreaterThan(page('languages').order);
@@ -112,7 +112,7 @@ describe('Trending', () => {
 });
 
 describe('Search Insights', () => {
-  it('is three pages under Search & Library, and every stat card explains itself', async () => {
+  it('is three Music pages, and every stat card explains itself', async () => {
     expect(page('search-overview')).toMatchObject({ group: 'Music', icon: 'search', range: true });
     expect(page('search-no-results')).toMatchObject({ group: 'Music', range: true });
     expect(page('search-pins')).toMatchObject({ group: 'Music', icon: 'pin' });

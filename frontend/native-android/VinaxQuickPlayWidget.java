@@ -11,7 +11,7 @@ import android.widget.RemoteViews;
 
 /**
  * Quick-play home-screen widget: VinaX logo, "Play my mix", a shuffle hint
- * and the violet play disc. One tap opens the app with ?widget=play — the
+ * and the green play disc. One tap opens the app with ?widget=play — the
  * web layer (AppLayout relays the URL, HomePage auto-starts the mix as soon
  * as its hero songs land). No service, no polling, no battery cost: the
  * widget is a static RemoteViews with a single PendingIntent.

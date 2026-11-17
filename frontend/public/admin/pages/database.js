@@ -238,7 +238,7 @@
           action('Clean up old data now', 'Removes play history and activity older than the period you choose, and data past its Data & Privacy period. This also runs by itself every hour.',
             ui.dropdown('Delete activity older than', purgeChoices.map(function (n) { return { value: n, label: (n % 365 === 0 ? n / 365 + ' year' + (n === 365 ? '' : 's') : n + ' days') + (n === keep ? ' (your Data & Privacy setting)' : '') }; }), keep, function (v) { purgeDays = Number(v); }, { disabled: !owner }),
             ui.button('Clean up now', { kind: 'danger', icon: 'trash', onClick: function () {
-              return VX.confirm({ title: 'Delete activity older than ' + fmt.plural(purgeDays, 'day') + '?', body: 'Plays, searches and other activity older than that are deleted for good, and Music Stats for that time go with them. Users, feedback and settings are not touched.', danger: true, typed: true, confirmLabel: 'Delete old activity' }).then(function (yes) {
+              return VX.confirm({ title: 'Delete activity older than ' + fmt.plural(purgeDays, 'day') + '?', body: 'Plays, searches and other activity older than that are deleted for good, and the Music and People stats for that time go with them. Users, feedback and settings are not touched.', danger: true, typed: true, confirmLabel: 'Delete old activity' }).then(function (yes) {
                 if (yes) return post({ action: 'purge_events', days: purgeDays }, 'Clean-up', function (r) { return fmt.plural(r.deleted, 'row') + ' removed'; });
               });
             } })),

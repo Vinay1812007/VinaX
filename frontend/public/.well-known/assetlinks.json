@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.Vinax.music",
+      "sha256_cert_fingerprints": [
+        "8C:AF:24:E7:AA:83:B7:EA:12:E1:2C:E3:FF:C1:14:DD:8C:EB:57:38:25:AB:EB:82:3E:FE:AE:E4:F2:6B:7C:CE"
+      ]
+    }
+  }
+]

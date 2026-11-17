@@ -85,7 +85,8 @@ window.addEventListener('vite:preloadError', (event) => {
   // v5.3.1 — offline downloads: with no network a reload can never fetch the
   // missing chunk; it only makes the screen flash over and over. Stay put and
   // let the error boundary render instead (the service worker precaches the
-  // full chunk graph now, so this is a rare last resort).
+  // chunk graph, or with Data saver the pages an offline launch needs, so this
+  // is a rare last resort).
   if (!navigator.onLine) return;
   const KEY = 'vinax.preloadReload';
   let n = 0;
@@ -159,22 +160,12 @@ if (
           if (installing.state === 'installed') nudge(reg.waiting);
         });
       });
-      // v5.3.1 — offline downloads: ask the worker to download the full
-      // chunk graph (see public/sw.js PRECACHE) so every page — Downloads
-      // included — opens with no network. Refresh it on every boot and
-      // whenever connectivity comes back, because sw.js itself rarely
-      // changes between deploys and install-time precache alone would
-      // never pick up new chunks.
-      const precache = (): void => {
-        try {
-          reg.active?.postMessage({ type: 'PRECACHE' });
-        } catch {
-          /* ignore */
-        }
-      };
-      precache();
-      window.addEventListener('online', precache);
-      navigator.serviceWorker.addEventListener('controllerchange', precache);
+      // v5.3.1 — offline downloads: ask the worker to download the chunk
+      // graph (see public/sw.js PRECACHE) so every page opens with no
+      // network; on every boot, when connectivity comes back and when a new
+      // worker takes over. Data saver asks for a light precache instead
+      // (utils/precache.ts, loaded here so it stays out of the first load).
+      void import('./utils/precache').then((m) => m.startPrecache(reg)).catch(() => undefined);
     }).catch(() => {
       /* ignore: the app works fine without a service worker */
     });

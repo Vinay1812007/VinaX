@@ -59,7 +59,7 @@
     });
   }
 
-  VX.page({ id: 'phones-browsers', title: 'Phones & Browsers', group: 'Audience', icon: 'phone', order: 5, range: true, render: render,
+  VX.page({ id: 'phones-browsers', title: 'Phones & Browsers', group: 'People', icon: 'phone', order: 10, range: true, render: render,
     desc: 'How people run VinaX — app, home screen or browser tab — and which phones, systems and browsers they use.',
     keywords: 'devices phones models brands samsung android version ios browsers installed pwa home screen' });
 })();

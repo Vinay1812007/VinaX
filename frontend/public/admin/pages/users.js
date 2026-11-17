@@ -17,7 +17,7 @@
   var LISTEN_INFO = 'Worked out from the app’s “still playing” signal (every 25 seconds while music plays) and each song played; a gap over 6 minutes counts as stopped. An estimate: a phone in the background can send fewer signals.';
 
   VX.page({
-    id: 'users', title: 'All Users', group: 'Users', icon: 'users', order: 1,
+    id: 'users', title: 'All Users', group: 'People', icon: 'users', order: 1,
     desc: 'Everyone who signed in to VinaX with Google. Click a person to open their profile.',
     keywords: 'listeners people accounts google profile block delete devices',
     render: render
@@ -25,7 +25,7 @@
   // One person's profile. Not in the menu: All Users, Feedback, Listening Now
   // and search open it.
   VX.page({
-    id: 'user', title: 'User Profile', group: 'Users', icon: 'user', order: 9, hidden: true, navAs: 'users',
+    id: 'user', title: 'User Profile', group: 'People', icon: 'user', order: 20, hidden: true, navAs: 'users',
     desc: 'Everything about one person: what they play, their devices, sign-ins and feedback.',
     render: renderProfile
   });

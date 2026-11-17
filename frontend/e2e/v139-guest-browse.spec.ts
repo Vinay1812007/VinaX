@@ -51,7 +51,8 @@ test('tapping play on Discover asks to sign in and plays nothing; the sheet clos
     if (q) queries.push(q);
   });
   await page.goto('/discover');
-  const play = page.getByRole('button', { name: /^Play \d{4}$/ });
+  // Scoped to Pick a year: a catalogue card titled with a year (e.g. "2026" under Movies you missed) has the same name.
+  const play = page.locator('section', { has: page.getByRole('heading', { name: 'Pick a year' }) }).getByRole('button', { name: /^Play \d{4}$/ });
   const year = ((await play.textContent()) ?? '').replace(/\D/g, '');
   await play.click();
   const sheet = page.getByRole('dialog', { name: 'Sign in to start listening' });

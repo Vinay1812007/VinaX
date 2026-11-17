@@ -145,7 +145,7 @@
   }
 
   VX.page({
-    id: 'automatic-notifications', title: 'Automatic Notifications', group: 'Notifications', icon: 'bell', order: 5,
+    id: 'automatic-notifications', title: 'Automatic Notifications', group: 'Notifications', icon: 'bell', order: 6,
     desc: 'Messages VinaX sends on its own: the weekly recap, win-back nudges and new releases from each person’s favourite artists, with who got them and who opened them.',
     keywords: 'recap win-back winback new releases automatic outreach',
     render: render

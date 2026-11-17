@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Quick-play widget: logo, "Play my mix", a shuffle hint and the violet
+<!-- Quick-play widget: logo, "Play my mix", a shuffle hint and the green
      play disc. The whole card is one tap (VinaxQuickPlayWidget). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/vinax_widget_root"

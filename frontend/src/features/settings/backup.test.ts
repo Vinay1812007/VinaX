@@ -141,23 +141,25 @@ describe('round trip', () => {
     expect((get('vinax.search.workspace.v1') as { state: { presets: Array<{ name: string }> } }).state.presets[0].name).toBe('Telugu 90s');
     expect(get('vinax.home.design.v1')).toMatchObject({ hidden: ['charts'] });
     expect(get(KEYS.userName)).toBe('Vinay');
-    // Identity is a claim, not a fact: the username is re-confirmed, not written.
+    // The username belongs to the account: a backup never carries or writes one.
     expect(get(KEYS.userHandle)).toBeNull();
-    expect(get(KEYS.userHandlePending)).toMatchObject({ username: 'vinay_k', status: 'pending' });
-    expect(res.ok && res.pendingHandle).toBe('vinay_k');
     // Nothing device-bound came back.
     expect(get(KEYS.signedDeviceId)).toBeNull();
     expect(get(KEYS.downloads)).toBeNull();
     expect(backupMeta().lastImportMode).toBe('replace');
   });
 
-  it('does not re-claim a username this device already holds', () => {
-    const json = serializeBackup(createBackup());
-    const parsed = parseBackup(json);
+  it('leaves this device\'s username alone and ignores one in an older backup', () => {
+    const file = createBackup();
+    expect(file.categories.identity).not.toHaveProperty(KEYS.userHandle);
+    (file.categories.identity as Record<string, unknown>)[KEYS.userHandle] = 'someone_else';
+    const parsed = parseBackup(serializeBackup(file));
     if (!parsed.ok) throw new Error('parse');
+    expect(parsed.rejected).toEqual([]);
+    expect(parsed.categories.find((c) => c.id === 'identity')?.values).not.toHaveProperty(KEYS.userHandle);
     applyBackup(parsed, { mode: 'replace' });
     expect(get(KEYS.userHandle)).toBe('vinay_k');
-    expect(get(KEYS.userHandlePending)).toBeNull();
+    expect(localStorage.getItem('vinax.user-handle-pending.v1')).toBeNull();
   });
 });
 
@@ -189,7 +191,8 @@ describe('legacy export migration', () => {
     expect((get(KEYS.library) as { state: { favorites: Song[] } }).state.favorites[0].id).toBe('old1');
     expect(get(KEYS.signedDeviceId)).toBeNull();
     expect(get(KEYS.roomHostTokens)).toBeNull();
-    expect(get(KEYS.userHandlePending)).toMatchObject({ username: 'old_me' });
+    expect(get(KEYS.userName)).toBe('Old Me');
+    expect(get(KEYS.userHandle)).toBeNull();
   });
 
   it('also accepts the pre-rename "tarang" export', () => {
@@ -236,9 +239,9 @@ describe('malformed input leaves existing data intact', () => {
 
   it('nested identity values are checked before anything is written', () => {
     const file = createBackup();
-    (file.categories.identity as Record<string, unknown>)[KEYS.userHandle] = 'Not A Handle!!';
+    (file.categories.identity as Record<string, unknown>)[KEYS.userName] = 42;
     const parsed = parseBackup(serializeBackup(file));
-    expect(parsed.ok && parsed.rejected[0]).toMatchObject({ id: 'identity', error: /invalid format/ });
+    expect(parsed.ok && parsed.rejected[0]).toMatchObject({ id: 'identity', error: /not text/ });
   });
 });
 
@@ -577,12 +580,10 @@ describe('size caps', () => {
 });
 
 describe('undo snapshot', () => {
-  it('captures the pending-username key when identity is restored', () => {
-    set(KEYS.userHandlePending, { username: 'before', status: 'pending' });
+  it('captures only the keys of the categories being restored', () => {
     expect(keepUndo(['identity'])).toBe(true);
-    const keys = readUndo()?.entries.map(([k]) => k) ?? [];
-    expect(keys).toContain(KEYS.userHandlePending);
-    expect(readUndo()?.entries.find(([k]) => k === KEYS.userHandlePending)?.[1]).toBe(JSON.stringify({ username: 'before', status: 'pending' }));
+    expect(readUndo()?.entries.map(([k]) => k)).toEqual([KEYS.userName, KEYS.onboarded]);
+    expect(readUndo()?.entries.find(([k]) => k === KEYS.userName)?.[1]).toBe(JSON.stringify('Vinay'));
     keepUndo(['history']);
     expect(readUndo()?.entries.map(([k]) => k)).toEqual([KEYS.history]);
   });

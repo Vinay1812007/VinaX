@@ -34,14 +34,14 @@ const seedItems = (): Item[] => [
   { id: '33333333-3333-4333-8333-333333333332', text: 'Prefers answers in Telugu', origin: 'user', createdAt: '2026-11-01T11:00:00Z' },
 ];
 
-async function setup(page: Page, opts: { theme?: 'dark' | 'light' | 'amoled'; template?: string; highContrast?: boolean } = {}): Promise<Server> {
+async function setup(page: Page, opts: { theme?: 'dark' | 'light'; highContrast?: boolean } = {}): Promise<Server> {
   const server: Server = { items: seedItems(), prefs: { use: true, learn: true }, puts: [], deleted: [], chats: [] };
-  await page.addInitScript(({ fp, theme, template, highContrast }) => {
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, ...(template ? { template } : {}), highContrast, pinnedLanguages: ['telugu'] }, version: 5 }));
+  await page.addInitScript(({ fp, theme, highContrast }) => {
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, highContrast, pinnedLanguages: ['telugu'] }, version: 5 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.analytics-consent', 'false');
     localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
-  }, { fp: latestNotesFingerprint(), theme: opts.theme ?? 'dark', template: opts.template ?? null, highContrast: !!opts.highContrast });
+  }, { fp: latestNotesFingerprint(), theme: opts.theme ?? 'dark', highContrast: !!opts.highContrast });
   await page.route('**/*', async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -180,14 +180,15 @@ test('an incognito chat sends its flag with every message and says so; a normal 
   expect(server.chats[2]).not.toHaveProperty('incognito');
 });
 
-const LOOKS: Array<{ theme: 'dark' | 'light' | 'amoled'; template: string; highContrast?: boolean }> = [
-  ...['vinax'].flatMap((template) => (['dark', 'light'] as const).map((theme) => ({ theme, template }))),
-  { theme: 'amoled', template: 'vinax' },
-  { theme: 'dark', template: 'vinax', highContrast: true },
-  { theme: 'light', template: 'vinax', highContrast: true },
+// Dark, light and high contrast: the only looks since settings v6 (no Black theme, one app style).
+const LOOKS: Array<{ theme: 'dark' | 'light'; highContrast?: boolean }> = [
+  { theme: 'dark' },
+  { theme: 'light' },
+  { theme: 'dark', highContrast: true },
+  { theme: 'light', highContrast: true },
 ];
 for (const look of LOOKS) {
-  test(`no WCAG A/AA violations in Memory settings and an incognito chat: ${look.template}, ${look.theme}${look.highContrast ? ', high contrast' : ''}`, async ({ page }) => {
+  test(`no WCAG A/AA violations in Memory settings and an incognito chat: ${look.theme}${look.highContrast ? ', high contrast' : ''}`, async ({ page }) => {
     await setup(page, look);
     await page.goto('/vinaxai');
     await page.getByRole('button', { name: 'Incognito chat' }).click();
