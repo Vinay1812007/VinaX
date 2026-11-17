@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.17.0': {
+    title: 'Real crossfade, offline saves on the web, cast from Android, even volume and more',
+    changes: [
+      { type: 'improved', text: 'Crossfade now overlaps songs for the length you pick, even with the screen off.' },
+      { type: 'improved', text: 'Save songs for offline in the web app and on iPhone or iPad from the Home Screen.' },
+      { type: 'improved', text: 'Cast to a TV from the Android app, and Karaoke can take the vocals out.' },
+      { type: 'improved', text: 'Normalize volume levels every song to the same loudness, and VinaX links open straight in the app.' },
+    ],
+  },
   '1.16.2': {
     title: 'Disco lights: flash the phone\'s flashlight on the beat',
     changes: [
