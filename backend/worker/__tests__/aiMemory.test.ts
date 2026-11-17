@@ -198,7 +198,7 @@ describe('the <memory> block', () => {
     expect(memoryBlock({ ...ctx, learn: false }, 'hi')).toMatch(/Learning is switched off/);
   });
 
-  it('sits after the visuals block and before the user\'s preferences and search results; small models get none', () => {
+  it('sits after the visuals block and before the user\'s preferences and search results, for every model', () => {
     const memory = memoryBlock(ctx, 'hi');
     const system = buildSystemPrompt({ spec: full, vars, artifacts: true, memory, personal: { about: 'I sing.', style: 'normal' }, search: { sources: [{ n: 1, url: 'https://example.com', title: 'T', site: 'example.com' }] } });
     const at = (s: string) => system.indexOf(s);
@@ -207,7 +207,7 @@ describe('the <memory> block', () => {
     expect(at('# The user\'s preferences')).toBeGreaterThan(at('# Memory'));
     expect(at('<search_results>')).toBeGreaterThan(at('# The user\'s preferences'));
     const small = { ...full, maxContextChars: 8_000 };
-    expect(buildSystemPrompt({ spec: small, vars, artifacts: true, memory })).not.toContain('<memory>');
+    expect(buildSystemPrompt({ spec: small, vars, artifacts: true, memory })).toContain('<memory>');
   });
 });
 

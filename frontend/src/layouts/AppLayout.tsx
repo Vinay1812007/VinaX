@@ -37,8 +37,7 @@ import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/sc
 import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
 import { loadBlocklist } from '@/services/content/blocklist';
 import { initDownloads } from '@/services/downloads';
-import { initSpatialNav } from '@/services/tv/spatialNav';
-import { initAlarm } from '@/services/alarm';
+import { bootAlarm } from '@/services/alarm/boot';
 // On demand: it only listens for "?" until opened, and nothing else in the first load needs it.
 const ShortcutsModal = lazy(() => import('@/components/ShortcutsModal').then((m) => ({ default: m.ShortcutsModal })));
 // Android-app only, so loaded on demand: never part of a browser's first load.
@@ -51,8 +50,6 @@ const SignInPrompt = lazy(() => import('@/components/SignInPrompt'));
 import { initAudioOutputWatcher } from '@/services/audio/outputWatcher';
 import { audioEngine } from '@/services/audio/engine';
 import { useCastStore } from '@/services/cast';
-import { checkForUpdate, mergeResumeCheck } from '@/services/update';
-import { useUpdateStore } from '@/store/updateStore';
 import { PageSkeleton } from '@/components/Skeletons';
 import { ErrorBoundary, PlayerErrorBoundary } from '@/components/ErrorBoundary';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -307,23 +304,28 @@ export function AppLayout() {
       void import('@/services/media-session/lockscreenLyrics').then((m) => m.initLockScreenLyrics()).catch(() => undefined);
       // 13.0.2 — mirror an active sleep timer onto the playback notification.
       if (isNativePlatform()) void import('@/services/media-session/sleepNotification').then((m) => m.initSleepNotification()).catch(() => undefined);
-      initSpatialNav();
-      initAlarm();
+      // On demand: the D-pad code does anything only on a TV; the alarm loads in the app, and on the web once one is set.
+      void import('@/services/tv/spatialNav').then((m) => m.initSpatialNav()).catch(() => undefined);
+      bootAlarm(isNativePlatform());
       initAudioOutputWatcher();
       useCastStore.getState().init();
       // Android 13+: the media notification needs the notification permission.
       // The "Allow access" sheet asks for it at start-up, after saying why.
-      // Update gate (native only; no-op on web) + foreground re-check.
-      void checkForUpdate().then((info) => useUpdateStore.getState().setInfo(info));
-      void import('@capacitor/app').then(({ App }) => {
-        void App.addListener('resume', () => {
-          // A null re-check (offline / snoozed / failed) keeps the current gate.
-          void checkForUpdate().then((info) => {
-            const store = useUpdateStore.getState();
-            store.setInfo(mergeResumeCheck(store.info, info));
-          });
-        });
-      }).catch(() => undefined);
+      // Update gate (the app only) + foreground re-check, loaded on demand.
+      if (isNativePlatform()) {
+        void Promise.all([import('@/services/update'), import('@/store/updateStore'), import('@capacitor/app')]).then(
+          ([{ checkForUpdate, mergeResumeCheck }, { useUpdateStore }, { App }]) => {
+            void checkForUpdate().then((info) => useUpdateStore.getState().setInfo(info));
+            void App.addListener('resume', () => {
+              // A null re-check (offline / snoozed / failed) keeps the current gate.
+              void checkForUpdate().then((info) => {
+                const store = useUpdateStore.getState();
+                store.setInfo(mergeResumeCheck(store.info, info));
+              });
+            });
+          },
+        ).catch(() => undefined);
+      }
     });
 
     // 9.1.0 — carry a 9.0 device's shown-song memory into the shared exposure

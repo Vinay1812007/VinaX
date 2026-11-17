@@ -73,18 +73,14 @@ function SearchChips() {
   const q = useQuery({
     queryKey: ['most-searched-queries', langs.join(',')],
     queryFn: async (): Promise<string[]> => {
-      // 1.3 — the catalogue's top searches first; the Worker's list is the fallback.
+      // 1.3 — the catalogue's top searches. The Worker's /api/trending-searches
+      // is always empty, so a failure just means no chips.
       try {
         const top = await getTopSearches(langs);
-        const names = [...new Set(top.map((t) => t.name.trim()).filter(Boolean))];
-        if (names.length) return names;
+        return [...new Set(top.map((t) => t.name.trim()).filter(Boolean))];
       } catch {
-        /* fall back */
+        return [];
       }
-      const r = await fetch('/api/trending-searches');
-      if (!r.ok) return [];
-      const j = (await r.json()) as { queries?: unknown };
-      return Array.isArray(j.queries) ? (j.queries as string[]).filter((s) => typeof s === 'string') : [];
     },
     staleTime: 10 * 60_000,
   });

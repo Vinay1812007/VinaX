@@ -6,7 +6,7 @@ import '@/styles/pages/secondary.css';
 
 const FEATURES = [
   'Playback notification with controls, headset and car buttons',
-  'Sign in with Google — your library follows you to every device',
+  'Sign in with Google or your email — your library follows you to every device',
   'Synced lyrics, charts and mixes in your languages',
   'Automatic updates — new features arrive without reinstalling',
 ];

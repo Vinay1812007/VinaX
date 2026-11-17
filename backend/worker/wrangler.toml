@@ -47,12 +47,11 @@ routes = [
   # Image proxy + APK download
   { pattern = "www.vinaxmusic.online/img", zone_name = "vinaxmusic.online" },
   { pattern = "www.vinaxmusic.online/apk", zone_name = "vinaxmusic.online" },
-  # The retired AI pages (AI Playlist, shared AI chats): the Worker answers
-  # them with a 301 to Home (index.ts RETIRED_AI_PATH), ahead of the static
-  # host and its caches. /vinaxai is NOT a Worker route: the VinaX AI chat is
-  # an ordinary app page served by the static host; its API is /api/ai/*.
-  { pattern = "www.vinaxmusic.online/ai-playlist*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/ai/shared/*", zone_name = "vinaxmusic.online" },
+  # The retired AI pages (/ai-playlist, /ai/shared/*) are NOT Worker routes:
+  # frontend/public/_redirects sends them Home with a 301 (and the app's
+  # router does too), so a crawler hit costs nothing from the daily quota.
+  # /vinaxai is NOT a Worker route either: the VinaX AI chat is an ordinary
+  # app page served by the static host; its API is /api/ai/*.
 
   # Host-level redirects handled by functions/_middleware.ts
   { pattern = "update.vinaxmusic.online/*", zone_name = "vinaxmusic.online" },
@@ -105,7 +104,9 @@ REALTIME_KEY = "sb_publishable__HaUd2EdtNC4Z-fFDTewfg_0XUpwSJ7"
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in
 # .env.example now lives on this Worker instead of the Pages project.
-# One-time encrypted device-handoff links (worker/functions/api/handoff.ts).
+# Small edge KV: the IndexNow list (_lib/indexnow.ts) and Android push reports
+# (api/push/fcm-report.ts). The name is left from the retired device handoff;
+# renaming it means changing every env.HANDOFF reader.
 [[kv_namespaces]]
 binding = "HANDOFF"
 id = "34a611e441644d0b9eb77cbbe584a766"

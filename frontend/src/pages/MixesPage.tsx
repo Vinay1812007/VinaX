@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongRow } from '@/components/SongRow';
 import { ShelfSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
+import { useShelfSafety } from '@/features/home/useShelfSafety';
 import { usePlayerStore } from '@/store/playerStore';
 import { PlayIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
@@ -13,7 +15,15 @@ import '@/styles/pages/library.css';
 
 export default function MixesPage() {
   usePageTitle('Mixes');
-  const { data: mixes, isLoading, isError, refetch } = useRecommendations();
+  const { data: raw, isLoading, isError, refetch } = useRecommendations();
+  // Mixes stay cached for up to 30 minutes, so a song hidden, an artist set to
+  // "Never play", a "show fewer" mute or Kid mode would not reach them until the
+  // next rebuild. Filter at render; Play all plays the same filtered list.
+  const isSafe = useShelfSafety();
+  const mixes = useMemo(
+    () => raw?.map((mix) => ({ ...mix, songs: mix.songs.filter(isSafe) })).filter((mix) => mix.songs.length > 0),
+    [raw, isSafe],
+  );
   const failed = isError && !mixes?.length;
   const playQueue = usePlayerStore((s) => s.playQueue);
 

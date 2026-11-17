@@ -3,7 +3,7 @@ const HI: Record<string, string> = {
   Profile: 'प्रोफ़ाइल', Appearance: 'दिखावट', Colour: 'रंग', 'Size and comfort': 'आकार और सुविधा', Playback: 'प्लेबैक',
   Lyrics: 'बोल', 'Your goal': 'आपका लक्ष्य', Sound: 'ध्वनि', Recommendations: 'सुझाव', 'How far to roam': 'कितनी दूर तक खोजें',
   'Smart Queue': 'स्मार्ट क़तार', 'Hearing less': 'कम सुनना', 'Start over': 'फिर से शुरू', Notifications: 'सूचनाएँ',
-  'Wake-up alarm': 'अलार्म', 'Region & privacy': 'क्षेत्र और निजता', 'Your data': 'आपका डेटा', 'Back up and move': 'बैकअप और स्थानांतरण',
+  'Wake-up alarm': 'अलार्म', 'Region & privacy': 'क्षेत्र और निजता', 'Your data': 'आपका डेटा', 'Back up and restore': 'बैकअप और रीस्टोर',
   Storage: 'स्टोरेज', 'Clear and reset': 'साफ़ करें और रीसेट', 'Help & about': 'मदद और जानकारी',
   Account: 'खाता', 'App permissions': 'ऐप अनुमतियाँ', 'App version': 'ऐप संस्करण', 'Audio quality': 'ऑडियो गुणवत्ता', Autoplay: 'ऑटोप्ले',
   'Background blur': 'पृष्ठभूमि धुंधलापन', 'Backup Center': 'बैकअप केंद्र', 'Clear favorites': 'पसंदीदा हटाएँ', 'Clear history': 'इतिहास हटाएँ',
@@ -11,7 +11,7 @@ const HI: Record<string, string> = {
   'Data saver': 'डेटा सेवर', Density: 'घनत्व', 'Display size': 'डिस्प्ले आकार', 'Download quality': 'डाउनलोड गुणवत्ता', 'Dynamic theme': 'डायनामिक थीम',
   'Gentle wake': 'धीरे से जगाएँ', 'Glass effect': 'ग्लास इफ़ेक्ट', Haptics: 'हैप्टिक्स', 'High contrast': 'उच्च कंट्रास्ट',
   'Keep screen on in player': 'प्लेयर में स्क्रीन चालू रखें', 'Lock screen lyrics': 'लॉक स्क्रीन पर बोल', 'Lyrics script': 'बोल की लिपि', 'Lyrics size': 'बोल का आकार',
-  'Minutes a week': 'हर हफ़्ते मिनट', 'New artists a week': 'हर हफ़्ते नए कलाकार', 'New-music alerts': 'नए गानों की सूचना', 'Push notifications': 'पुश सूचनाएँ',
+  'New-music alerts': 'नए गानों की सूचना', 'Push notifications': 'पुश सूचनाएँ',
   'Reduce motion': 'मोशन कम करें', 'Reset app state': 'ऐप रीसेट करें', 'Resume playback': 'जहाँ छोड़ा था वहीं से', 'Smart downloads': 'स्मार्ट डाउनलोड', Theme: 'थीम',
   Time: 'समय', 'Wake alarm': 'जगाने वाला अलार्म', 'Sound effects': 'साउंड इफ़ेक्ट', 'Match the song': 'गाने के अनुसार', Equalizer: 'इक्वलाइज़र', Balance: 'बैलेंस',
   'Mono audio': 'मोनो ऑडियो', 'Loudness normalisation': 'आवाज़ संतुलन', 'Public profile': 'सार्वजनिक प्रोफ़ाइल',
@@ -28,7 +28,7 @@ const HI: Record<string, string> = {
   'Your artists': 'आपके कलाकार', 'Your favourite artists': 'आपके पसंदीदा कलाकार', 'New from your artists': 'आपके कलाकारों से नया', 'Most listened': 'सबसे ज़्यादा सुने',
   'On repeat': 'बार-बार', 'On this day': 'इसी दिन', 'Repeat rewind': 'पुराने पसंदीदा', 'Continue listening': 'सुनना जारी रखें', 'Fresh finds': 'नई खोजें',
   'Hidden gems': 'छिपे रत्न', 'Popular in your languages': 'आपकी भाषाओं में लोकप्रिय', 'Recently liked': 'हाल में पसंद किए', 'Most played lately': 'हाल में सबसे ज़्यादा चले',
-  'Keep it going': 'जारी रखें', Badges: 'बैज', 'Listening calendar': 'सुनने का कैलेंडर', 'This week’s report': 'इस हफ़्ते की रिपोर्ट', 'Show all': 'सभी देखें',
+  'Listening calendar': 'सुनने का कैलेंडर', 'This week’s report': 'इस हफ़्ते की रिपोर्ट', 'Show all': 'सभी देखें',
   'Artists you follow': 'जिन कलाकारों को आप फ़ॉलो करते हैं', 'Your profile': 'आपकी प्रोफ़ाइल', 'Recent likes': 'हाल की पसंद', 'Your taste profile': 'आपकी पसंद की प्रोफ़ाइल',
 };
 export default HI;

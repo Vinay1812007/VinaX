@@ -6,6 +6,7 @@ const fetchVerifiedTrends = vi.fn<() => Promise<TrendsSnapshot | null>>();
 vi.mock('./client', () => ({ fetchVerifiedTrends: () => fetchVerifiedTrends() }));
 
 import { resetTrendSignal, trendSignalNow, TREND_EDITORIAL_MAX, TREND_MAX } from './signal';
+import { setTrendsConnected } from '@/features/home/useAppConfig';
 
 const ctx = (country: string | null, languages: string[] = ['telugu']) => ({ region: country ? { country, regionLabel: null, source: 'edge' as const } : null, pinnedLanguages: languages });
 const item = (over: Partial<TrendsSnapshot['items'][number]>) => ({
@@ -15,8 +16,19 @@ const item = (over: Partial<TrendsSnapshot['items'][number]>) => ({
 /** The refresh runs through a dynamic import: let real timers drain it. */
 const settle = async () => { for (let i = 0; i < 4; i += 1) await new Promise((r) => setTimeout(r, 0)); };
 
-beforeEach(() => { resetTrendSignal(); fetchVerifiedTrends.mockReset(); });
-afterEach(() => vi.useRealTimers());
+beforeEach(() => { resetTrendSignal(); fetchVerifiedTrends.mockReset(); setTrendsConnected(true); });
+afterEach(() => { vi.useRealTimers(); setTrendsConnected(false); });
+
+describe('while no trend source is connected (the client-config default)', () => {
+  it('asks nothing and stays empty', async () => {
+    setTrendsConnected(false);
+    fetchVerifiedTrends.mockResolvedValue({ generatedAt: '', sources: [], items: [item({ catalogId: 'top' })] });
+    expect(trendSignalNow(ctx('IN')).bonus.size).toBe(0);
+    await settle();
+    expect(trendSignalNow(ctx('IN')).bonus.size).toBe(0);
+    expect(fetchVerifiedTrends).not.toHaveBeenCalled();
+  });
+});
 
 describe('verified charts as one bounded signal', () => {
   it('never waits: the first round gets nothing and the snapshot serves the next one', async () => {

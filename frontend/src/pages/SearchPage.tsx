@@ -271,25 +271,21 @@ export default function SearchPage() {
     setResultFilter('');
   }, [q]);
 
-  // Community top searches (aggregated + cached) — chips under the bar.
+  // Top searches — chips under the bar.
   const trendingQ = useQuery<{ queries: string[] }>({
     queryKey: ['trending-searches', pinnedLangs.join(',')],
     staleTime: 10 * 60_000,
     queryFn: async ({ signal }) => {
       // 1.3 — what people search for in the catalogue now, in the listener's
-      // languages; the Worker's own list (always empty) stays as the fallback.
+      // languages. The Worker's /api/trending-searches is always empty (search
+      // terms are never recorded), so there is no fallback: no chips instead.
       try {
         const top = await getTopSearches(pinnedLangs, { signal });
-        const queries = [...new Set(top.map((t) => t.name.trim()).filter(Boolean))];
-        if (queries.length) return { queries };
+        return { queries: [...new Set(top.map((t) => t.name.trim()).filter(Boolean))] };
       } catch {
         if (signal?.aborted) throw new Error('cancelled');
+        return { queries: [] };
       }
-      const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
-      // Decorative chips: never worth a hung request — 6 s, and gone on unmount.
-      const r = await fetchWithTimeout(`${base}/api/trending-searches`, 6000, signal);
-      const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;
-      return { queries: Array.isArray(j?.queries) ? j.queries : [] };
     },
   });
 

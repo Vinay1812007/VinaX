@@ -78,3 +78,13 @@ it('1.15.1 — the theme is back: a 1.15 record (no theme) opens on System, and 
   await useSettingsStore.persist.rehydrate();
   expect(useSettingsStore.getState().theme).toBe('system');
 });
+
+it('loads a record that still has the removed weekly goals, and drops them', async () => {
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 7, state: { weeklyGoalMinutes: 300, weeklyGoalArtists: 5, dailyGoalMinutes: 45, crossfade: false } }));
+  await useSettingsStore.persist.rehydrate();
+  const state = useSettingsStore.getState();
+  expect(state).toMatchObject({ dailyGoalMinutes: 45, crossfade: false });
+  expect(state).not.toHaveProperty('weeklyGoalMinutes');
+  expect(state).not.toHaveProperty('weeklyGoalArtists');
+  expect(pickSettings({ weeklyGoalMinutes: 300 })).toEqual({});
+});

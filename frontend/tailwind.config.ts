@@ -115,10 +115,6 @@ export default {
           '0%': { backgroundPosition: '-400px 0' },
           '100%': { backgroundPosition: '400px 0' },
         },
-        'pulse-bar': {
-          '0%, 100%': { transform: 'scaleY(0.4)' },
-          '50%': { transform: 'scaleY(1)' },
-        },
         'fade-up': {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
@@ -132,18 +128,9 @@ export default {
           '0%': { transform: 'translateY(0) rotate(0deg)', opacity: '1' },
           '100%': { transform: 'translateY(110vh) rotate(540deg)', opacity: '0.7' },
         },
-        'aurora-a': {
-          '0%,100%': { transform: 'translate(0,0) scale(1)' },
-          '50%': { transform: 'translate(8vw,6vh) scale(1.15)' },
-        },
-        'aurora-b': {
-          '0%,100%': { transform: 'translate(0,0) scale(1.1)' },
-          '50%': { transform: 'translate(-6vw,-8vh) scale(0.95)' },
-        },
       },
       animation: {
         shimmer: 'shimmer 1.4s linear infinite',
-        'pulse-bar': 'pulse-bar 0.9s ease-in-out infinite',
         // `backwards`, never `both`: a forwards fill leaves `transform:
         // translateY(0)` on the element for good, which makes it a containing
         // block + stacking context — every `fixed` overlay inside a page was
@@ -152,8 +139,6 @@ export default {
         'fade-up': 'fade-up 0.25s ease-out backwards',
         marquee: 'marquee 12s linear infinite',
         confetti: 'confetti 2.4s linear both',
-        'aurora-a': 'aurora-a 22s ease-in-out infinite',
-        'aurora-b': 'aurora-b 28s ease-in-out infinite',
       },
     },
   },

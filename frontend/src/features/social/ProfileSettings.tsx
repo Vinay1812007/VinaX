@@ -19,7 +19,7 @@ export function ProfileSettings() {
   const [handle, setHandle] = useState(profile?.handle ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   useEffect(() => { setHandle(profile?.handle ?? ''); setBio(profile?.bio ?? ''); }, [profile?.handle, profile?.bio]);
-  if (!account) return <Row label="Public profile" note="Sign in with Google to make a profile other listeners can follow."><span className="text-[13px] text-ink-400">Signed out</span></Row>;
+  if (!account) return <Row label="Public profile" note="Sign in to make a profile other listeners can follow."><span className="text-[13px] text-ink-400">Signed out</span></Row>;
 
   const valid = HANDLE_RE.test(handle.trim().toLowerCase());
   const dirty = handle.trim().toLowerCase() !== (profile?.handle ?? '') || (bio.trim() || '') !== (profile?.bio ?? '');

@@ -57,9 +57,6 @@ export interface SettingsState {
   smartDownloads: boolean;
   /** 15.0 — the equaliser preset follows the playing song (services/audio/autoEq.ts). */
   eqAuto: boolean;
-  /** 15.0 — weekly goals (0 = off): minutes a week, new artists a week. */
-  weeklyGoalMinutes: number;
-  weeklyGoalArtists: number;
   /** The preset and gains the listener had when Auto EQ went on, put back when it goes off. */
   eqOwnPreset: string | null;
   eqOwnGains: number[] | null;
@@ -148,8 +145,6 @@ export interface SettingsState {
   setHaptics(v: boolean): void;
   setSmartDownloads(v: boolean): void;
   setEqAuto(v: boolean): void;
-  setWeeklyGoalMinutes(n: number): void;
-  setWeeklyGoalArtists(n: number): void;
   setDensity(v: 'comfortable' | 'compact'): void;
   setResumePlayback(v: boolean): void;
   setAudioQuality(q: StreamQualityPref): void;
@@ -216,8 +211,6 @@ const defaults = {
   haptics: true,
   smartDownloads: false,
   eqAuto: false,
-  weeklyGoalMinutes: 0,
-  weeklyGoalArtists: 0,
   eqOwnPreset: null as string | null,
   eqOwnGains: null as number[] | null,
   density: 'comfortable' as const,
@@ -271,8 +264,6 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
 };
 const SETTINGS_RANGES: Partial<Record<keyof SettingsData, readonly [number, number]>> = {
   dailyGoalMinutes: [0, 600],
-  weeklyGoalMinutes: [0, 3000],
-  weeklyGoalArtists: [0, 100],
   glassLevel: [0, 100],
   glassBlur: [0, 100],
   recommendationIntensity: [0, 1],
@@ -353,8 +344,6 @@ export const useSettingsStore = create<SettingsState>()(
       setCrossfadeSeconds: (crossfadeSeconds) => set({ crossfadeSeconds }),
       setHaptics: (haptics) => set({ haptics }),
       setSmartDownloads: (smartDownloads) => set({ smartDownloads }),
-      setWeeklyGoalMinutes: (n) => set({ weeklyGoalMinutes: Math.max(0, Math.min(3000, Math.round(n))) }),
-      setWeeklyGoalArtists: (n) => set({ weeklyGoalArtists: Math.max(0, Math.min(100, Math.round(n))) }),
       setEqAuto: (eqAuto) => set(eqAuto ? { eqAuto, eqOwnPreset: get().eqPreset, eqOwnGains: [...get().eqGains] } : { eqAuto }),
       setDensity: (density) => set({ density }),
       setResumePlayback: (resumePlayback) => set({ resumePlayback }),

@@ -2,77 +2,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * A host push carries the position it had when it left the phone, but the
- * server stamps it when it arrives. The host measures that trip and sends
- * the next position that far ahead; otherwise every guest places the host a
- * little behind where it is (the host sounds "a little fast").
+ * A host that knows the server's clock sends `at`, the server moment its
+ * position was read at, so how long the push takes to arrive does not
+ * matter. Without one (before the host's first poll) the position goes as
+ * it is and the server stamps it on arrival. Nothing is guessed from the trip.
  */
-describe('updateRoom: a push says where the playhead will be when it lands', () => {
-  let sent: Array<{ position: number; playing: boolean }>;
+describe('updateRoom: a push carries the position as it is, with the server moment when known', () => {
+  let sent: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     vi.resetModules();
-    vi.useFakeTimers();
     sent = [];
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  /** A server `flightMs` away each way that spends `tookMs` on its database. */
-  const server = (flightMs: number, tookMs: number, sayTook = true, stamps = false) =>
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
-      sent.push(JSON.parse(init.body) as { position: number; playing: boolean });
-      await new Promise((r) => setTimeout(r, flightMs * 2 + tookMs));
-      return new Response(JSON.stringify(sayTook ? { ok: true, took: tookMs, ...(stamps ? { stamps: true } : {}) } : { ok: true }), { status: 200 });
+      sent.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify({ ok: true, took: 300, stamps: true }), { status: 200 });
     }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
 
   const push = async (position: number, playing: boolean, at?: number) => {
     const { updateRoom } = await import('./index');
-    const p = updateRoom('ABC123', null, position, playing, [], [], at);
-    await vi.advanceTimersByTimeAsync(5000);
-    return p;
+    return updateRoom('ABC123', null, position, playing, [], [], at);
   };
 
-  it('adds the measured trip (round trip minus the server’s time, halved) while playing', async () => {
-    server(120, 300);
-    expect(await push(10, true)).toBe('ok');
-    // Nothing measured yet: sent as it is.
-    expect(sent[0].position).toBe(10);
-    await push(20, true);
-    expect(sent[1].position).toBeCloseTo(20.12, 3);
-  });
-
-  it('a paused position is exact', async () => {
-    server(120, 300);
-    await push(10, true);
-    await push(20, false);
-    expect(sent[1].position).toBe(20);
-  });
-
-  it('once the server says it honours it, a push carries the server moment its position was read at, as it is', async () => {
-    server(120, 300, true, true);
-    await push(10, true, 1_800_000_000_000);
-    // Not yet known to be honoured: sent the old way, without the field.
-    expect('at' in sent[0]).toBe(false);
+  it('sends `at` from the very first push, and the position unchanged', async () => {
+    expect(await push(10, true, 1_800_000_000_000)).toBe('ok');
+    expect(sent[0]).toMatchObject({ action: 'update', position: 10, playing: true, at: 1_800_000_000_000 });
     await push(20, true, 1_800_000_000_123);
     expect(sent[1]).toMatchObject({ position: 20, at: 1_800_000_000_123 });
   });
 
-  it('against a server that does not honour it, the push keeps leading by the measured trip', async () => {
-    server(120, 300);
-    await push(10, true, 1_800_000_000_000);
-    await push(20, true, 1_800_000_000_123);
-    expect('at' in sent[1]).toBe(false);
-    expect(sent[1].position).toBeCloseTo(20.12, 3);
-  });
-
-  it('adds nothing against a server that does not say how long it took', async () => {
-    server(120, 300, false);
+  it('without a server moment, no `at` and no lead added while playing', async () => {
     await push(10, true);
     await push(20, true);
+    expect('at' in sent[1]).toBe(false);
     expect(sent[1].position).toBe(20);
+  });
+
+  it('a room that is gone or no longer ours says so', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    expect(await push(1, false)).toBe('gone');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })));
+    expect(await push(1, false)).toBe('forbidden');
   });
 });
 

@@ -520,7 +520,7 @@ export default function SettingsPage() {
           {!wide && !q && <SectionJump sections={sections} />}
           {q && <SearchStatus q={q} />}
 
-          <Section title="Profile" id="profile" lede="Your Google account, what syncs with it, and what VinaX has learned about you.">
+          <Section title="Profile" id="profile" lede="Your account (Google, or email and password), what syncs with it, and what VinaX has learned about you.">
             <AccountRow />
             <PasswordRow />
             <LinkRow to="/languages" label="Music languages" note="The languages Home, charts, radio and search lean on." keywords="language pick choose content hindi telugu tamil english punjabi" />
@@ -975,9 +975,8 @@ export default function SettingsPage() {
             <LinkRow to="/taste-profile" label="What VinaX knows about you" note="Your taste profile, in full." keywords="see taste profile" />
           </Section>
 
-          <Section title="Your data" id="your-data" lede="Your library, history and settings sync with your account. Back them up, move them or clear them.">
-            <Group title="Back up and move">
-              <LinkRow to="/handoff" label="Move to a new device" note="An encrypted, one-use QR. Parked for 10 minutes." keywords="handoff transfer qr" />
+          <Section title="Your data" id="your-data" lede="Your library, history and settings sync with your account. On a new device, sign in with the same account and they come back. Back them up or clear them here.">
+            <Group title="Back up and restore">
               <Row label="Backup Center" note="What a backup holds and leaves out; restore with a merge-or-replace preview and undo." keywords="restore merge">
                 <RowButton onClick={() => setBackupOpen(true)}>Open</RowButton>
               </Row>

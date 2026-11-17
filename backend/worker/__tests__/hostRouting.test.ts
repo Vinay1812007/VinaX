@@ -98,32 +98,20 @@ describe('worker entry point on the update host', () => {
   });
 });
 
-describe('the retired AI pages', () => {
-  const ctx = { waitUntil: () => undefined };
-  it('answer a 301 to Home from the Worker, never the old page', async () => {
-    for (const path of ['/ai-playlist', '/ai-playlist/', '/AI-Playlist', '/ai/shared/abc123']) {
-      const res = await worker.fetch(new Request(`https://www.vinaxmusic.online${path}`), { ASSETS_HOST: 'vinax.pages.dev' }, ctx);
-      expect(res.status, path).toBe(301);
-      expect(res.headers.get('location'), path).toBe('https://www.vinaxmusic.online/');
-      expect(res.headers.get('cache-control'), path).toBe('no-store');
-    }
-  });
-  it('leaves look-alike paths alone', async () => {
-    const { RETIRED_AI_PATH } = await import('../index');
-    for (const p of ['/radio', '/ai', '/airplay', '/ai-playlists-x', '/VinaXAIx', '/about']) expect(RETIRED_AI_PATH.test(p), p).toBe(false);
-  });
-});
-
-describe('VinaX AI lives at /vinaxai', () => {
-  it('is never redirected by the Worker', async () => {
-    const { RETIRED_AI_PATH } = await import('../index');
-    for (const p of ['/vinaxai', '/vinaxai/', '/vinaxai/c/abc', '/VinaXAI', '/VinaXAI/']) expect(RETIRED_AI_PATH.test(p), p).toBe(false);
-  });
-  it('is not a Worker route in wrangler.toml (the static host serves the app shell)', async () => {
+describe('the retired AI pages and VinaX AI', () => {
+  const toml = async (): Promise<string> => {
     const { readFileSync } = await import('node:fs');
-    const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
-    expect(toml).not.toMatch(/vinaxmusic\.online\/vinaxai/i);
-    expect(toml).toMatch(/vinaxmusic\.online\/ai-playlist\*/);
-    expect(toml).toMatch(/vinaxmusic\.online\/ai\/shared\/\*/);
+    return readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  };
+  it('the retired AI pages are not Worker routes: _redirects sends them Home', async () => {
+    const { readFileSync } = await import('node:fs');
+    const routes = await toml();
+    expect(routes).not.toMatch(/pattern = "www\.vinaxmusic\.online\/ai-playlist/);
+    expect(routes).not.toMatch(/pattern = "www\.vinaxmusic\.online\/ai\/shared/);
+    const redirects = readFileSync(new URL('../../../frontend/public/_redirects', import.meta.url), 'utf8');
+    for (const from of ['/ai-playlist', '/ai-playlist/*', '/ai/shared/*']) expect(redirects).toMatch(new RegExp(`^${from.replace(/[/*]/g, '\\$&')}\\s+/\\s+301$`, 'm'));
+  });
+  it('/vinaxai is not a Worker route in wrangler.toml (the static host serves the app shell)', async () => {
+    expect(await toml()).not.toMatch(/vinaxmusic\.online\/vinaxai/i);
   });
 });

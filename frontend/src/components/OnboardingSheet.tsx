@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { LANGUAGES } from '@/constants/languages';
 import { KEYS } from '@/constants/storage-keys';
 // Dynamic-imported inside finish() so the heavy changelog module doesn't
@@ -103,8 +102,6 @@ export function OnboardingSheet() {
   const account = useAccount();
   const tourOpen = useUiStore((s) => s.tourOpen);
   const closeTour = useUiStore((s) => s.closeTour);
-  const location = useLocation();
-  const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
   // V2 — a returning account is marked welcomed at sign-in (or by the first
   // sync pull): re-read the flag whenever the account changes, and close a
@@ -113,12 +110,8 @@ export function OnboardingSheet() {
   useEffect(() => {
     if (account && getLocal<boolean>(KEYS.onboarded, false)) setFirstRun(false);
   }, [account]);
-  // The sheet steps aside on /handoff so a first-run device can complete the
-  // QR "Move to a new device" import (which reloads with the old device's
-  // profile, onboarded flag included). Leaving /handoff without importing
-  // brings the sheet straight back.
   // 13.0 — the welcome comes after Google sign-in, never on the public pages a signed-out visitor can read.
-  const open = !!account && (firstRun || tourOpen) && location.pathname !== '/handoff';
+  const open = !!account && (firstRun || tourOpen);
   const [stage, setStage] = useState<Stage>('you');
   useEffect(() => {
     const onReturning = (): void => {
@@ -410,7 +403,7 @@ export function OnboardingSheet() {
                 <span className="vx-welcome-badge">Free forever</span>
               </div>
               {title('Welcome to VinaX', true)}
-              {lede('You’re signed in. Pick the name VinaX greets you with — your library and taste follow your Google account.')}
+              {lede('You’re signed in. Pick the name VinaX greets you with — your library and taste follow your account to every device.')}
               <label className="vx-welcome-label mt-5" htmlFor="vx-name">Your name</label>
               <input
                 id="vx-name"
@@ -425,9 +418,7 @@ export function OnboardingSheet() {
               {nameErr && <p className="vx-welcome-msg is-bad">Enter a name of at least two letters.</p>}
               {(
                 <div className="mt-5 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
-                  <span>Already use VinaX elsewhere?</span>
-                  <button type="button" onClick={() => navigate('/handoff?mode=receive')} className="vx-welcome-link">Move from old device</button>
-                  <span aria-hidden>·</span>
+                  <span>Have a VinaX backup file?</span>
                   <button type="button" onClick={() => fileRef.current?.click()} className="vx-welcome-link">Import a file</button>
                 </div>
               )}

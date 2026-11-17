@@ -75,11 +75,11 @@ describe('params per level', () => {
     expect(specAtLevel(NVIDIA, 'standard')).toBe(NVIDIA);
   });
 
-  it('the request field: a level name, else the old extendedThinking flag, else Auto', () => {
-    expect(parseThinking('max', false)).toBe('max');
-    expect(parseThinking(undefined, true)).toBe('extended');
-    expect(parseThinking('nonsense', false)).toBe('auto');
-    expect(parseThinking(undefined, undefined)).toBe('auto');
+  it('the request field: a level name, else Auto', () => {
+    expect(parseThinking('max')).toBe('max');
+    expect(parseThinking('extended')).toBe('extended');
+    expect(parseThinking('nonsense')).toBe('auto');
+    expect(parseThinking(undefined)).toBe('auto');
   });
 });
 

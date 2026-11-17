@@ -100,6 +100,10 @@ async function seed(page: Page, baseURL: string, primaryDelayMs = 0): Promise<Hi
         },
       };
     }
+    // The catalogue's top searches feed the trending chips and completions.
+    if (path.startsWith('/search/top')) {
+      return { data: [{ type: 'song', id: 't1', name: 'kesariya reprise' }, { type: 'playlist', id: 't2', name: 'telugu hits' }] };
+    }
     if (path.includes('/search/songs') || path.includes('/suggestions')) return { data: { results: list } };
     return { data: { results: [] } };
   };
@@ -121,7 +125,6 @@ async function seed(page: Page, baseURL: string, primaryDelayMs = 0): Promise<Hi
       return route.fulfill({ json: answer(path, query) }).catch(() => undefined);
     }
     if (!local) return route.abort();
-    if (url.pathname === '/api/trending-searches') return route.fulfill({ json: { queries: ['kesariya reprise', 'telugu hits'] } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });

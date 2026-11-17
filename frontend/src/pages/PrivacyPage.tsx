@@ -13,12 +13,20 @@ export default function PrivacyPage() {
       <div className="vx-doc">
         <H>Your account and what syncs</H>
         <p>
-          You sign in with Google. VinaX stores your Google account ID, email, name and profile photo, and keeps a copy
+          You sign in with Google, or with your email address and a password. With Google, VinaX stores your Google
+          account ID, email, name and profile photo; with email, it stores your email and the name you give, if any. VinaX keeps a copy
           of your library and playlists, listening history, taste profile, smart collections, bookmarks, Home layout and
           settings with your account, so they follow you to every device you sign in on. This copy is stored by our
           database provider and is only readable by VinaX&rsquo;s server. <strong>Downloads, searches
           and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Profile)
           removes the account and its synced copy.
+        </p>
+        <p>
+          <strong>Passwords and email codes.</strong> If you sign up with email, or add a password to a Google account,
+          VinaX stores only a bcrypt hash of your password, never the password itself; nobody can read it back, including
+          VinaX. To confirm an email address or set a new password, VinaX emails you a 6-digit code and stores a one-way
+          hash of it (not the code) with your email address. The code stops working once it is used, after five wrong tries,
+          or after 15 minutes, and is then deleted. Deleting your account deletes its password hash.
         </p>
         <p>
           To run the service, your account also records where and on what you last signed in: the city, region and
@@ -37,8 +45,8 @@ export default function PrivacyPage() {
           IP address.
         </p>
         <p>
-          VinaX emails your Google address about your account only: a welcome the first time you sign in, and an
-          alert each time your account signs in after that. Both show the same details as the sign-in history. These
+          VinaX emails your account&rsquo;s address about your account only: a welcome the first time you sign in, an
+          alert each time your account signs in after that, and the 6-digit codes you ask for. The welcome and the alerts show the same details as the sign-in history. These
           emails are sent through our email provider, Resend, which receives your email address, your first name and
           what the email says. VinaX never sends marketing emails.
         </p>
@@ -90,7 +98,7 @@ export default function PrivacyPage() {
           OpenRouter, NVIDIA, Cloudflare Workers AI or Anthropic (Claude), depending on the model. When a reply searches the web, the search
           words go to Google (through Gemini) or to the search service Tavily or Serper. VinaX AI never sees your listening
           history. What you write in its Personalisation settings stays on your device and is sent with each message so
-          the reply can use it; it isn&rsquo;t saved with your chats. Your chats, and any files you add to them, are stored with your Google account so they follow you to
+          the reply can use it; it isn&rsquo;t saved with your chats. Your chats, and any files you add to them, are stored with your account so they follow you to
           every device (images are shrunk on your device first); deleting a chat
           removes it within a day, and deleting your account removes every chat. Settings → Your data → Export VinaX AI
           chats downloads them all.

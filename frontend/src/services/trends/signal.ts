@@ -1,4 +1,5 @@
 import type { RecommendationContext } from '@/services/recommendation/types';
+import { trendsConnected } from '@/features/home/useAppConfig';
 
 /**
  * 7.2 — verified charts as ONE bounded signal for the next song.
@@ -16,6 +17,10 @@ import type { RecommendationContext } from '@/services/recommendation/types';
  * lock, and at `TREND_MAX` it is smaller than a candidate source boost, so it
  * nudges an order rather than dictating it. Editorial picks count for less
  * than a chart position, because someone chose them by hand.
+ *
+ * While the Worker's client config does not say `trendsConnected` (the
+ * default: no trend source is connected today), the signal is empty and no
+ * request is made and no client chunk loads.
  */
 export interface TrendSignal {
   /** Catalogue id → bonus in score units (already capped). */
@@ -130,6 +135,7 @@ async function refresh(region: string | null, language: string | null): Promise<
  * returned as it is.
  */
 export function trendSignalNow(ctx: Pick<RecommendationContext, 'region' | 'pinnedLanguages'>): TrendSignal {
+  if (!trendsConnected()) return EMPTY;
   const region = ctx.region?.country ?? null;
   const language = ctx.pinnedLanguages[0] ?? null;
   // 9.1.0 — the LANGUAGE counts too. A snapshot fetched for Telugu is not an

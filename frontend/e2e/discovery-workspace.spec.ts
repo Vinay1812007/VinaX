@@ -50,9 +50,11 @@ async function setup(page: Page, theme: string) {
           },
         },
       });
-    if (url.pathname === '/api/trending-searches')
+    if (url.pathname === '/api/cat/search/top')
       return route.fulfill({
-        json: { queries: ['Telugu melodies', 'Anirudh', '90s hits', 'Evening chill'] },
+        json: {
+          data: ['Telugu melodies', 'Anirudh', '90s hits', 'Evening chill'].map((name, i) => ({ type: 'playlist', id: `top-${i}`, name })),
+        },
       });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();

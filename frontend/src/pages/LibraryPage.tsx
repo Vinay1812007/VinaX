@@ -19,7 +19,7 @@ import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { CollageCover } from '@/features/library/CollageCover';
 import { LibraryCard, LibraryRow, type LibraryItem } from '@/features/library/LibraryItems';
 import { LibraryShortcuts } from '@/features/library/LibraryShortcuts';
-import { BackupIcon, HandoffIcon, ImportTextIcon } from '@/features/library/LibraryGlyphs';
+import { BackupIcon, ImportTextIcon } from '@/features/library/LibraryGlyphs';
 import { trashDaysLeft } from '@/features/library/trash';
 import { allTags, matchesTags } from '@/features/library/tags';
 import { describeRules, evaluateSmartCollection } from '@/features/library/smartCollections';
@@ -62,8 +62,8 @@ const matchesQuery = (q: string, ...fields: (string | undefined)[]) => !q || nor
  * downloads and history; one list of playlists and saved music, pinned
  * first, sorted by when you added them or A–Z, as rows or artwork cards,
  * each with a ⋯ menu (pin, delete with undo, remove from library); search
- * reaches liked songs and smart collections too; and the Backup Center and
- * device handoff are one tap away at the end.
+ * reaches liked songs and smart collections too; and the Backup Center is
+ * one tap away at the end.
  */
 export default function LibraryPage() {
   usePageTitle('Library');
@@ -477,7 +477,7 @@ export default function LibraryPage() {
 
       {showAll && !searching && (
         <section className="vx-lp-section">
-          <SectionHeader title="Keep it with you" explanation="Your library lives on this device. Back it up, or carry it to a new one." />
+          <SectionHeader title="Keep it with you" explanation="Your library syncs with your account. Keep a backup file too." />
           <div className="vx-lp-links">
             {/* Each row is named by its title; the note is its description. */}
             <button type="button" onClick={() => setBackupOpen(true)} aria-label="Backup Center" aria-describedby="lp-backup-note" className="vx-lp-link">
@@ -488,14 +488,6 @@ export default function LibraryPage() {
               </span>
               <ChevronRightIcon className="vx-lp-link-go" />
             </button>
-            <Link to="/handoff" aria-label="Move to a new device" aria-describedby="lp-handoff-note" className="vx-lp-link">
-              <span className="vx-lp-link-glyph" aria-hidden><HandoffIcon /></span>
-              <span className="vx-lp-link-text">
-                <span className="t">Move to a new device</span>
-                <span className="m" id="lp-handoff-note">An encrypted, one-use QR code</span>
-              </span>
-              <ChevronRightIcon className="vx-lp-link-go" />
-            </Link>
           </div>
           {backupOpen && (
             <Suspense fallback={null}>

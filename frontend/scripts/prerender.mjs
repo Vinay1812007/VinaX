@@ -30,10 +30,10 @@ const collection = (p, name) => ({ '@context': 'https://schema.org', '@type': 'C
 
 const ROUTES = [
   // Home description must sit in Bing's 25–160 char window (BWT flagged the
-  // old 205-char version, 2026-08-17). This one is 159; the console's Page
+  // old 205-char version, 2026-08-17). This one is 156; the console's Page
   // Check flags anything outside 50–160 on every page. 10.0 — it leads with
   // the free promise, as the app's first-visit welcome does.
-  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India with one Google sign-in and no subscription: Telugu, Hindi, Tamil and 9 more languages, smart mixes, charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
+  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India: sign in with Google or email, no subscription. Telugu, Hindi, Tamil and 9 more languages, mixes, charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', more: 'Charts, moods, languages and new music, all in one place: pick a language or a mood, see what is new this week, and open playlists and film soundtracks.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/charts/#page', name: 'Top Charts', url: 'https://www.vinaxmusic.online/charts/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/top-songs/#page', name: 'Top Songs on VinaX', url: 'https://www.vinaxmusic.online/top-songs/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
@@ -55,8 +55,8 @@ const ROUTES = [
   { p: '/videos', t: 'Music Videos', d: 'Watch music videos from Indian films and independent artists, free on VinaX.', more: 'Music videos in your languages. Every one opens in its own player, free and with no subscription.', h1: 'Music Videos', ld: collection('/videos', 'Music Videos on VinaX') },
   { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.vinaxmusic.online/about/#page', name: 'About VinaX', url: 'https://www.vinaxmusic.online/about/', mainEntity: { '@id': 'https://www.vinaxmusic.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem or send feedback about VinaX.', h1: 'Help & Feedback' },
-  { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', more: 'The Android app adds background playback and offline downloads, and signs in with the same Google account as the website.', h1: 'Get VinaX for Android' },
-  { p: '/privacy', t: 'Privacy', d: 'What VinaX stores with your Google account, what stays on your device, and how to export or delete it.', h1: 'Privacy' },
+  { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', more: 'The Android app adds background playback and offline downloads, and signs in with the same account as the website (Google, or email and password).', h1: 'Get VinaX for Android' },
+  { p: '/privacy', t: 'Privacy', d: 'What VinaX stores with your account, what stays on your device, and how to export or delete it.', h1: 'Privacy' },
   { p: '/terms', t: 'Terms of Use', d: 'Content is sourced from third parties; no DRM circumvention. Plain-language terms.', h1: 'Terms of Use' },
   { p: '/contact', t: 'Contact & Takedowns', d: 'Contact VinaX for support, bug reports, or rights / takedown requests.', h1: 'Contact & Takedowns' },
   { p: '/dmca', t: 'Copyright & Takedowns', d: 'How VinaX credits artists and labels, and how rights holders can have content removed within minutes.', h1: 'Copyright and takedowns' },
@@ -248,7 +248,7 @@ let bodies;
 /** Home's hero line: the free promise, as the first-visit welcome states it (features/home/HomeWelcome.tsx). */
 const HOME_PROMISE =
   '<p><strong>All the music you love. Free.</strong> Free forever, with no subscription: ' +
-  'sign in with Google once and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, Radio, ' +
+  'sign in with Google or your email and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, Radio, ' +
   'Listen Together rooms and offline downloads in the Android app.</p>';
 
 /** The crawlable body for one route: the real page text, then the nav. */

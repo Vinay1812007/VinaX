@@ -7,8 +7,9 @@ import { songKey } from '@/services/recommendation/songKey';
  *
  * Pure, so it can be tested without a browser, and computed from what the engine
  * already publishes to the recs-debug feed (./RecsDebugPanel.tsx shows it). The
- * live SOURCE HEALTH half comes from /api/trends and is
- * fetched by the panel, not here — it is about the server, not this device.
+ * live SOURCE HEALTH half comes from /api/trends (only while the client
+ * config says a trend source is connected) and is fetched by the panel, not
+ * here — it is about the server, not this device.
  */
 
 export interface RepeatRates {

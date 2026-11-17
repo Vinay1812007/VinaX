@@ -80,20 +80,16 @@ test('Settings renders its control surface', async ({ page }) => {
   await expect(discovery.getByRole('radio', { name: 'Discover' })).toHaveAttribute('aria-checked', 'true');
   await expect(discovery.getByRole('radio', { name: 'Balanced' })).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByRole('heading', { name: 'Your data' })).toBeVisible();
-  await expect(page.getByText('Move to a new device', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Backup Center', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Move to a new device', { exact: true })).toHaveCount(0);
 });
 
-test('handoff fails soft when no relay is reachable', async ({ page }) => {
+test('an old /handoff link lands on Settings, Your data', async ({ page }) => {
   await markOnboarded(page);
   await goOffline(page);
-  await page.goto('/handoff');
-  await expect(page.getByRole('heading', { name: 'Move to a new device' })).toBeVisible();
-  await page.getByRole('button', { name: 'Create transfer' }).click();
-  // vite preview answers the POST with the SPA shell (HTML, not JSON) — the
-  // page must land on its honest error state, never a crash or a spinner.
-  await expect(
-    page.getByText(/Couldn’t create the transfer|isn’t enabled on this server/).first(),
-  ).toBeVisible({ timeout: 20_000 });
+  await page.goto('/handoff?c=abcdefghjk');
+  await expect(page).toHaveURL(/\/settings#your-data$/);
+  await expect(page.getByRole('heading', { name: 'Your data' })).toBeVisible();
 });
 
 test('a light theme stored by an older build still opens dark (1.15: one look)', async ({ page }) => {

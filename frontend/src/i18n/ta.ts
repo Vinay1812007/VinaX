@@ -3,7 +3,7 @@ const TA: Record<string, string> = {
   Profile: 'சுயவிவரம்', Appearance: 'தோற்றம்', Colour: 'நிறம்', 'Size and comfort': 'அளவும் வசதியும்', Playback: 'இயக்கம்',
   Lyrics: 'பாடல் வரிகள்', 'Your goal': 'உங்கள் இலக்கு', Sound: 'ஒலி', Recommendations: 'பரிந்துரைகள்', 'How far to roam': 'எவ்வளவு தூரம் தேடலாம்',
   'Smart Queue': 'ஸ்மார்ட் வரிசை', 'Hearing less': 'குறைவாகக் கேட்பது', 'Start over': 'மீண்டும் தொடங்கு', Notifications: 'அறிவிப்புகள்',
-  'Wake-up alarm': 'அலாரம்', 'Region & privacy': 'பகுதியும் தனியுரிமையும்', 'Your data': 'உங்கள் தரவு', 'Back up and move': 'காப்புப் பிரதியும் மாற்றமும்',
+  'Wake-up alarm': 'அலாரம்', 'Region & privacy': 'பகுதியும் தனியுரிமையும்', 'Your data': 'உங்கள் தரவு', 'Back up and restore': 'காப்புப் பிரதியும் மீட்டமைப்பும்',
   Storage: 'சேமிப்பகம்', 'Clear and reset': 'அழித்து மீட்டமை', 'Help & about': 'உதவியும் விவரமும்',
   Account: 'கணக்கு', 'App permissions': 'செயலி அனுமதிகள்', 'App version': 'செயலி பதிப்பு', 'Audio quality': 'ஒலித் தரம்', Autoplay: 'தானியக்கம்',
   'Background blur': 'பின்னணி மங்கல்', 'Backup Center': 'காப்பு மையம்', 'Clear favorites': 'பிடித்தவற்றை அழி', 'Clear history': 'வரலாற்றை அழி',
@@ -11,7 +11,7 @@ const TA: Record<string, string> = {
   'Data saver': 'டேட்டா சேமிப்பு', Density: 'அடர்த்தி', 'Display size': 'திரை அளவு', 'Download quality': 'பதிவிறக்கத் தரம்', 'Dynamic theme': 'மாறும் தீம்',
   'Gentle wake': 'மெதுவாக எழுப்பு', 'Glass effect': 'கண்ணாடி விளைவு', Haptics: 'அதிர்வு', 'High contrast': 'அதிக மாறுபாடு',
   'Keep screen on in player': 'பிளேயரில் திரையை ஒளிரவிடு', 'Lock screen lyrics': 'பூட்டுத் திரையில் வரிகள்', 'Lyrics script': 'வரிகளின் எழுத்து', 'Lyrics size': 'வரிகளின் அளவு',
-  'Minutes a week': 'வாரத்திற்கு நிமிடங்கள்', 'New artists a week': 'வாரத்திற்கு புதிய கலைஞர்கள்', 'New-music alerts': 'புதிய பாடல் அறிவிப்புகள்', 'Push notifications': 'புஷ் அறிவிப்புகள்',
+  'New-music alerts': 'புதிய பாடல் அறிவிப்புகள்', 'Push notifications': 'புஷ் அறிவிப்புகள்',
   'Reduce motion': 'அசைவைக் குறை', 'Reset app state': 'செயலியை மீட்டமை', 'Resume playback': 'நிறுத்திய இடத்திலிருந்து', 'Smart downloads': 'ஸ்மார்ட் பதிவிறக்கங்கள்', Theme: 'தீம்',
   Time: 'நேரம்', 'Wake alarm': 'எழுப்பும் அலாரம்', 'Sound effects': 'ஒலி விளைவுகள்', 'Match the song': 'பாடலுக்கு ஏற்ப', Equalizer: 'ஈக்வலைசர்', Balance: 'சமநிலை',
   'Mono audio': 'மோனோ ஒலி', 'Loudness normalisation': 'ஒலி சமநிலைப்படுத்தல்', 'Public profile': 'பொது சுயவிவரம்',
@@ -28,7 +28,7 @@ const TA: Record<string, string> = {
   'Your artists': 'உங்கள் கலைஞர்கள்', 'Your favourite artists': 'உங்களுக்குப் பிடித்த கலைஞர்கள்', 'New from your artists': 'உங்கள் கலைஞர்களின் புதியவை', 'Most listened': 'அதிகம் கேட்டவை',
   'On repeat': 'மீண்டும் மீண்டும்', 'On this day': 'இந்த நாளில்', 'Repeat rewind': 'பழைய பிடித்தவை', 'Continue listening': 'தொடர்ந்து கேளுங்கள்', 'Fresh finds': 'புதிய கண்டுபிடிப்புகள்',
   'Hidden gems': 'மறைந்த முத்துகள்', 'Popular in your languages': 'உங்கள் மொழிகளில் பிரபலம்', 'Recently liked': 'சமீபத்தில் பிடித்தவை', 'Most played lately': 'சமீபத்தில் அதிகம் கேட்டவை',
-  'Keep it going': 'தொடருங்கள்', Badges: 'பேட்ஜ்கள்', 'Listening calendar': 'கேட்கும் நாட்காட்டி', 'This week’s report': 'இந்த வார அறிக்கை', 'Show all': 'அனைத்தையும் காண்',
+  'Listening calendar': 'கேட்கும் நாட்காட்டி', 'This week’s report': 'இந்த வார அறிக்கை', 'Show all': 'அனைத்தையும் காண்',
   'Artists you follow': 'நீங்கள் பின்தொடரும் கலைஞர்கள்', 'Your profile': 'உங்கள் சுயவிவரம்', 'Recent likes': 'சமீபத்திய பிடித்தவை', 'Your taste profile': 'உங்கள் ரசனை சுயவிவரம்',
 };
 export default TA;

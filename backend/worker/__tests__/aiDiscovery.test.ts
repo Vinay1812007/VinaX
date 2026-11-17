@@ -13,7 +13,7 @@ import {
 } from '../functions/_lib/ai/discovery';
 import { pickerRegistryFor, sanitizeAiSettings } from '../functions/_lib/ai/config';
 import { APPROVED_MODELS, MODELS } from '../functions/_lib/ai/models';
-import { artifactsOffered, promptFor } from '../functions/_lib/ai/prompt';
+import { artifactsOffered } from '../functions/_lib/ai/prompt';
 import { onRequestGet as modelsGet } from '../functions/api/ai/models';
 import { onRequestPost as chatPost } from '../functions/api/ai/chat';
 import { onRequestGet as adminGet, onRequestPost as adminPost } from '../functions/api/admin/ai';
@@ -118,20 +118,18 @@ describe('reading each provider’s list', () => {
 });
 
 describe('registry entries', () => {
-  it('the full prompt and artifacts for a roomy window, the compact prompt for a small one', () => {
+  it('artifacts for a roomy window, none for a small one (too short a reply)', () => {
     const big = toSpec('openrouter', { upstream: 'a/b:free', name: 'B', contextTokens: 131_072 });
     expect(big).toMatchObject({ id: 'openrouter:a/b:free', group: 'more-openrouter', discovered: true, maxContextChars: 100_000, maxOutput: 4_096 });
-    expect(promptFor(big)).toBe('full');
     expect(artifactsOffered(big)).toBe(true);
     const small = toSpec('groq', { upstream: 'tiny-8k', name: 'Tiny', contextTokens: 8_192 });
     expect(small.maxOutput).toBe(2_048);
     expect(small.maxContextChars).toBe((8_192 - 2_048) * 3);
-    expect(promptFor(small)).toBe('compact');
     expect(artifactsOffered(small)).toBe(false);
     // Groq keeps a short history (tokens per minute), like the curated Groq models.
     expect(toSpec('groq', { upstream: 'x', name: 'X', contextTokens: 131_072 }).maxContextChars).toBe(30_000);
-    // No window in the list (NVIDIA): enough for the full prompt.
-    expect(promptFor(toSpec('nvidia', { upstream: 'a/b', name: 'B' }))).toBe('full');
+    // No window in the list (NVIDIA): room enough for artifacts.
+    expect(artifactsOffered(toSpec('nvidia', { upstream: 'a/b', name: 'B' }))).toBe(true);
   });
 
   it('Gemini thinking models ask for thoughts; others send no thinking config', () => {

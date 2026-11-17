@@ -37,15 +37,6 @@ export const BackupIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-/** A phone handing over to another: move to a new device. */
-export const HandoffIcon = ({ className }: { className?: string }) => (
-  <svg {...stroke} className={className ?? 'w-5 h-5'}>
-    <rect x="3" y="5" width="8" height="14" rx="2" />
-    <rect x="15" y="5" width="6" height="11" rx="1.6" />
-    <path d="M11.5 10.5h3M13 9l1.5 1.5L13 12" />
-  </svg>
-);
-
 /** Lines of text flowing into a list: import a playlist from text. */
 export const ImportTextIcon = ({ className }: { className?: string }) => (
   <svg {...stroke} className={className ?? 'w-5 h-5'}>

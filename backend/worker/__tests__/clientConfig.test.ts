@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { publicClientConfig, maintenanceActive } from '../functions/_lib/clientConfig';
+import { publicClientConfig, maintenanceActive, TRENDS_CONNECTED } from '../functions/_lib/clientConfig';
 
 describe('client config bundle', () => {
   it('sanitises and windows every field', () => {
@@ -26,6 +26,12 @@ describe('client config bundle', () => {
     const cfg = publicClientConfig({ greeting: { text: 'x', end: '2026-09-30' }, broadcast: { id: 'b', text: 'y', link: 'https://evil.example' } }, now);
     expect(cfg.greeting).toBeNull();
     expect(cfg.broadcast).toEqual({ id: 'b', text: 'y' });
+  });
+  it('says nothing about trends while no trend source is connected, and drops an old rec-config row', () => {
+    expect(TRENDS_CONNECTED).toBe(false);
+    const cfg = publicClientConfig({ 'rec-config': { version: 3, overrides: { mood: 0.2 }, rollout: { mode: 'all' } } });
+    expect('trendsConnected' in cfg).toBe(false);
+    expect('recConfig' in cfg).toBe(false);
   });
   it('returns a safe empty bundle for garbage', () => {
     const cfg = publicClientConfig({ greeting: 'nope', 'support-faq': 'nope', 'min-version': { build: -1 } });

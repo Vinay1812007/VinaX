@@ -83,7 +83,6 @@ const MoodsPage = lazy(() => import('@/pages/MoodsPage'));
 const RegionsPage = lazy(() => import('@/pages/RegionsPage'));
 const TasteProfilePage = lazy(() => import('@/pages/TasteProfilePage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
-const HandoffPage = lazy(() => import('@/pages/HandoffPage'));
 const CacheInfoPage = lazy(() => import('@/pages/CacheInfoPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
 const HelpPage = lazy(() => import('@/pages/HelpPage'));
@@ -160,7 +159,9 @@ export const router = createBrowserRouter([
       { path: 'top-artists', element: <TopArtistsPage /> },
       { path: 'top-playlists', element: <TopPlaylistsPage /> },
       { path: 'made-for-you', element: <MadeForYouPage /> },
-      { path: 'ai-playlist', element: <Navigate to="/" replace /> },
+      // Retired AI pages; frontend/public/_redirects 301s them too.
+      { path: 'ai-playlist/*', element: <Navigate to="/" replace /> },
+      { path: 'ai/shared/*', element: <Navigate to="/" replace /> },
       { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/c/:id', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/artifacts', caseSensitive: true, element: <VinaXAIArtifactsPage /> },
@@ -204,7 +205,9 @@ export const router = createBrowserRouter([
       { path: 'videos', element: <VideosPage /> },
       { path: 'video/:id', element: <VideoPage /> },
       { path: 'settings', element: <SettingsPage /> },
-      { path: 'handoff', element: <HandoffPage /> },
+      // Move to a new device is gone: signing in with the same account brings
+      // everything across. Old links and QR codes land on Your data.
+      { path: 'handoff', element: <Navigate to="/settings#your-data" replace /> },
       { path: 'cache-info', element: <CacheInfoPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'privacy', element: <PrivacyPage /> },

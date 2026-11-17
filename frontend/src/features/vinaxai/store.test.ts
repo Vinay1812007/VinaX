@@ -139,11 +139,10 @@ describe('pass-through streams (the provider\'s own lines)', () => {
   };
   const settle = () => new Promise((r) => setTimeout(r, 0));
 
-  it('reads thinking and text out of the raw lines and asks for pass-through', async () => {
+  it('reads thinking and text out of the raw lines', async () => {
     const calls = stub([sse([['meta', META]]) + line({ reasoning_content: 'Plan.' }) + line({ content: 'Kafka ' }) + line({ content: 'rocks.' }) + 'data: [DONE]\n\n\n\n' + sse([['done', { stopReason: 'end', saved: true }]])]);
     await expect(sendMessage('Explain Kafka')).resolves.toEqual({ ok: true });
     expect(useChatStore.getState().messages.a1).toMatchObject({ text: 'Kafka rocks.', thinking: 'Plan.', stopReason: 'end' });
-    expect(calls[0].body.passthrough).toBe(true);
     expect(calls.some((c) => c.url.endsWith('/keep'))).toBe(false);
   });
 
@@ -225,10 +224,11 @@ describe('what the controller asks for', () => {
     useChatStore.setState({ conversationId: 'c1', messages: { u1: { id: 'u1', parentId: null, role: 'user', text: 'q', thinking: '', thinkingMs: null, model: null, stopReason: null, error: null, createdAt: '1' }, a1: { id: 'a1', parentId: 'u1', role: 'assistant', text: 'cut', thinking: '', thinkingMs: null, model: null, stopReason: 'length', error: null, createdAt: '2' } }, leafId: 'a1' });
   });
 
-  it('the composer model and Thinking level go with every message (with extendedThinking for an older Worker)', async () => {
+  it('the composer model and Thinking level go with every message', async () => {
     usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', thinking: 'max', webSearch: 'on' });
     await sendMessage('hello');
-    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', thinking: 'max', extendedThinking: true, webSearch: 'on' });
+    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', thinking: 'max', webSearch: 'on' });
+    expect(bodies[0]).not.toHaveProperty('extendedThinking');
   });
 
   it('files go first in the content; a message may be files alone', async () => {

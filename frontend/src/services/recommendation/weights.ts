@@ -4,13 +4,12 @@
  * file deliberately boring: product tuning can happen here without touching
  * candidate generation or UI code.
  *
- * 7.2.0 — the owner console can publish bounded overrides (Recommendation
- * Tuning, config key `rec-config`). RECOMMENDATION_WEIGHTS is the LIVE object
- * the scorer and the re-ranker read on every call: applyWeightOverrides()
- * rewrites it in place from the defaults below, resetWeightOverrides() puts
- * the defaults back. The Worker mirrors DEFAULT_WEIGHTS for its own
- * validation (backend/worker/functions/_lib/clientConfig.ts, pinned by a test
- * that parses this literal), so keep it a plain `key: number` list.
+ * RECOMMENDATION_WEIGHTS is the LIVE object the scorer and the re-ranker
+ * read on every call: applyWeightOverrides() rewrites it in place from the
+ * defaults below, resetWeightOverrides() puts the defaults back. Nothing in
+ * the app publishes overrides any more (the owner's `rec-config` rollout and
+ * its Worker read are gone); the pair stays as the tuning lever the weight
+ * tests use, and the app always runs on the defaults.
  */
 const DEFAULT_WEIGHTS = Object.freeze({
   mood: 0.16,
@@ -123,7 +122,7 @@ export const DEFAULT_RECOMMENDATION_WEIGHTS: Readonly<RecommendationWeights> = D
 export const RECOMMENDATION_WEIGHTS: Readonly<RecommendationWeights> = { ...DEFAULT_WEIGHTS };
 const live = RECOMMENDATION_WEIGHTS as RecommendationWeights;
 
-/** An override is clamped to half … double its default (the Worker applies the same rule). */
+/** An override is clamped to half … double its default. */
 export const WEIGHT_OVERRIDE_MIN_FACTOR = 0.5;
 export const WEIGHT_OVERRIDE_MAX_FACTOR = 2;
 
@@ -159,9 +158,4 @@ export function resetWeightOverrides(): void {
 /** "1.3.0" on the defaults; "1.3.0+rc7" while published config version 7 is applied. */
 export function activeWeightsVersion(): string {
   return active ? `${SCORING_WEIGHTS_VERSION}+rc${active.version}` : SCORING_WEIGHTS_VERSION;
-}
-
-/** The applied override (config version, experiment variant, keys), or null on the defaults. */
-export function activeWeightOverride(): Readonly<{ version: number; variant: string | null; keys: readonly RecommendationWeightKey[] }> | null {
-  return active;
 }

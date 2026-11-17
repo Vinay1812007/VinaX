@@ -314,20 +314,9 @@ const pickHandler = (mod: Mod, method: string): Handler | undefined => {
   return specific ?? mod.onRequest;
 };
 
-/**
- * Retired AI pages (AI Playlist, shared AI chats) answer a 301 to Home from
- * the Worker itself: a Worker route runs before the static host and every
- * cache in front of it, so a stale prerendered copy can never be served.
- * /vinaxai is not in this list: the VinaX AI chat is a normal app page.
- */
-export const RETIRED_AI_PATH = /^\/ai-playlist(?:\/.*)?$|^\/ai\/shared(?:\/.*)?$/i;
-
 const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response> => {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (RETIRED_AI_PATH.test(path)) {
-    return new Response(null, { status: 301, headers: { location: `${url.origin}/`, 'cache-control': 'no-store' } });
-  }
   const passthrough = (): Promise<Response> => assetsFetch(env)(request);
 
   let mod: Mod | undefined = EXACT[path];

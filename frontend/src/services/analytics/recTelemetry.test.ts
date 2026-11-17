@@ -58,8 +58,7 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { resetSessionIntent } from '@/services/personalization/sessionIntent';
 import { classifyOutcome, initRecTelemetry, REC_BUCKET, REC_OUTBOX_CAP, REC_REFILL_MS } from './recTelemetry';
-import { decideRecVariant, EXP_REC_CONFIG, EXP_REC_NEXT_SONGS, resetRecExperiments } from '@/features/experiments/recExperiment';
-import { applyWeightOverrides, resetWeightOverrides } from '@/services/recommendation/weights';
+import { decideRecVariant, EXP_REC_NEXT_SONGS, resetRecExperiments } from '@/features/experiments/recExperiment';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: `Title ${id}`, subtitle: `Artist ${id}`, artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
 const ALG = '8.2.0/1.2.0';
@@ -101,7 +100,6 @@ beforeEach(() => {
   usePlayerStore.getState().initEngine();
 });
 afterEach(() => {
-  resetWeightOverrides();
   stop?.();
   stop = null;
   vi.clearAllTimers();
@@ -224,25 +222,6 @@ describe('experiments', () => {
     await settle();
     expect(ofType('rec_served').map((m) => m.exp)).toEqual([{}, { [EXP_REC_NEXT_SONGS]: 'treatment' }]);
     expect(ofType('rec_outcome').map((m) => m.exp)).toEqual([{ [EXP_REC_NEXT_SONGS]: 'treatment' }, {}]);
-  });
-
-  it('an applied owner tuning rollout rides as rec-config, as of the moment the continuation was served', async () => {
-    consent(true);
-    stop = initRecTelemetry();
-    applyWeightOverrides({ mood: 0.2 }, { version: 7, variant: 'warmer' });
-    emitPlaybackEvent(served(1, { alg: '7.2.0/1.2.0+rc7' }));
-    applyWeightOverrides({ mood: 0.2 }, { version: 8, variant: null });
-    emitPlaybackEvent(served(2, { alg: '7.2.0/1.2.0+rc8' }));
-    resetWeightOverrides();
-    emitPlaybackEvent(served(3));
-    emitPlaybackEvent(ended('a', 190, 'ended', auto(1, 0)));
-    await settle();
-    expect(ofType('rec_served').map((m) => [m.alg, m.exp])).toEqual([
-      ['7.2.0/1.2.0+rc7', { [EXP_REC_CONFIG]: 'warmer' }],
-      ['7.2.0/1.2.0+rc8', { [EXP_REC_CONFIG]: 'all' }],
-      [ALG, {}],
-    ]);
-    expect(ofType('rec_outcome')[0].exp).toEqual({ [EXP_REC_CONFIG]: 'warmer' });
   });
 });
 

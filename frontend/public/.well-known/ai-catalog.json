@@ -3,7 +3,7 @@
   "version": "1.0",
   "name": "VinaX",
   "url": "https://www.vinaxmusic.online/",
-  "description": "Free music streaming web app and Android app for India in 12 languages. Browse without signing in; sign in with Google to play and save. No subscription.",
+  "description": "Free music streaming web app and Android app for India in 12 languages. Browse without signing in; sign in with Google or an email and password to play and save. No subscription.",
   "llms_txt": "https://www.vinaxmusic.online/llms.txt",
   "sitemap": "https://www.vinaxmusic.online/sitemap.xml",
   "languages": ["hindi", "telugu", "tamil", "english", "punjabi", "kannada", "malayalam", "bengali", "marathi", "bhojpuri", "gujarati", "urdu"],
@@ -38,8 +38,8 @@
   },
   "actions": [
     { "name": "search", "url": "https://www.vinaxmusic.online/search/{query}", "description": "Search songs, albums, artists and playlists" },
-    { "name": "play_song", "url": "https://www.vinaxmusic.online/song/{id}", "description": "Open a song page; playing asks for a Google sign-in" }
+    { "name": "play_song", "url": "https://www.vinaxmusic.online/song/{id}", "description": "Open a song page; playing asks you to sign in (Google, or email and password)" }
   ],
   "pricing": { "free": true, "subscription": false, "ads_in_player": false },
-  "sign_in": { "required_to_browse": false, "required_to_play": true, "method": "google" }
+  "sign_in": { "required_to_browse": false, "required_to_play": true, "methods": ["google", "email_password"] }
 }

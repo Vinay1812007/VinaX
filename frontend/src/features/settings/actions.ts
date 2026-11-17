@@ -1,5 +1,5 @@
 import { clearAllVinaxStorage, freezeLocalWrites } from '@/services/storage/local';
-import { MAX_BACKUP_BYTES, applyTransferPayload, createBackup, createTransferPayload, parseBackup, recordBackupEvent, restoreWithUndo, serializeBackup, type BackupCategoryId, type BackupFile, HEARD_IMPORT_KEY } from './backup';
+import { MAX_BACKUP_BYTES, createBackup, parseBackup, recordBackupEvent, restoreWithUndo, serializeBackup, type BackupCategoryId, type BackupFile, HEARD_IMPORT_KEY } from './backup';
 import { clearEvents } from '@/services/storage/idb';
 import { resetProfile } from '@/services/personalization/storage';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
@@ -195,18 +195,4 @@ export function importProfileJson(json: string, opts: { reload?: boolean } = {})
     window.location.reload();
   }
   return { ok: true, applied: res.applied, pendingHandle: res.pendingHandle, warnings: parsed.warnings };
-}
-
-/** Device handoff payload: the backup PLUS device identity (see createTransferPayload). */
-export function exportTransferJson(): string {
-  return JSON.stringify(createTransferPayload());
-}
-
-/** Apply a device handoff payload; reloads on success. */
-export function importTransferJson(json: string): { ok: true } | { ok: false; error: string } {
-  const res = applyTransferPayload(json);
-  if (!res.ok) return { ok: false, error: 'message' in res ? res.message : res.error };
-  freezeLocalWrites();
-  window.location.reload();
-  return { ok: true };
 }

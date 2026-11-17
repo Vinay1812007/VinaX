@@ -10,14 +10,14 @@ import { humanReason, isSmallTalk, pickLadder, runChat, type RouterEvent } from 
 import type { Adapter, ModelSpec, ProviderEvent, ProviderId } from '../functions/_lib/ai/types';
 
 const spec = (id: string): ModelSpec => modelById(MODELS, id)!;
-const signals = (over: Partial<Parameters<typeof pickLadder>[0]> = {}) => ({ text: 'Tell me about Indian classical music', threadChars: 100, hasImages: false, hasPdf: false, extendedThinking: false, ...over });
+const signals = (over: Partial<Parameters<typeof pickLadder>[0]> = {}) => ({ text: 'Tell me about Indian classical music', threadChars: 100, hasImages: false, hasPdf: false, deep: false, ...over });
 
 describe('pickLadder', () => {
   it('checks images, then PDFs or long threads, then thinking, then code, then small talk', () => {
-    expect(pickLadder(signals({ hasImages: true, hasPdf: true, extendedThinking: true }))).toBe('vision');
-    expect(pickLadder(signals({ hasPdf: true, extendedThinking: true }))).toBe('long');
+    expect(pickLadder(signals({ hasImages: true, hasPdf: true, deep: true }))).toBe('vision');
+    expect(pickLadder(signals({ hasPdf: true, deep: true }))).toBe('long');
     expect(pickLadder(signals({ threadChars: 150_001 }))).toBe('long');
-    expect(pickLadder(signals({ extendedThinking: true, text: 'fix this bug' }))).toBe('deep');
+    expect(pickLadder(signals({ deep: true, text: 'fix this bug' }))).toBe('deep');
     expect(pickLadder(signals({ text: 'Why does this function return undefined?' }))).toBe('code');
     expect(pickLadder(signals({ text: 'TypeError: x is not a function\n    at main (app.js:3:9)' }))).toBe('code');
     expect(pickLadder(signals({ text: 'rename utils.py please' }))).toBe('code');

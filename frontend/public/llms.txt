@@ -1,6 +1,6 @@
 # VinaX
 
-> Free music-streaming web app and Android app for India. Browse Home, charts, new releases, radio, podcasts and every song, album and artist page without signing in; sign in with Google (one tap) to play, like, save and keep your library on every device. No subscription, no premium tier, no ads in the player. Tuned for Indian languages: Hindi, Telugu, Tamil, Punjabi, Kannada, Malayalam, Bengali, Marathi, Bhojpuri, Gujarati, Urdu and English. Recommendations run on your device, with no AI.
+> Free music-streaming web app and Android app for India. Browse Home, charts, new releases, radio, podcasts and every song, album and artist page without signing in; sign in with Google (one tap) or with an email address and password to play, like, save and keep your library on every device. No subscription, no premium tier, no ads in the player. Tuned for Indian languages: Hindi, Telugu, Tamil, Punjabi, Kannada, Malayalam, Bengali, Marathi, Bhojpuri, Gujarati, Urdu and English. Recommendations run on your device, with no AI.
 
 ## Pages
 
@@ -42,19 +42,19 @@ Each language also has mood pages at /{language}-{mood}-songs for romantic, sad,
 ## What a listener can do
 
 - Tap any song and Up Next fills itself five songs at a time, led by that song's language and mood, never repeating what you have heard; songs you queue yourself play first. Familiar, Balanced or Discover sets how adventurous it is; Tune this queue pins a mood.
-- Signed in: Home shelves made for you on your device ("Made for you", "Because you liked…", your languages, discoveries), a weekly mix, Discover 5 unheard songs a day, badges and listening stats.
+- Signed in: Home shelves made for you on your device ("Made for you", "Because you liked…", your languages, discoveries), a weekly mix, Discover 5 unheard songs a day and listening stats.
 - Search by title, artist, album or a line of lyrics; synced lyrics with romanised text; karaoke mode.
 - One "Music languages" button in the top bar changes Home, charts, radio and search together.
-- Five reactions under every song; follow artists and see their new songs first on the Following page; share playlists as public pages; Listen Together rooms with a link, QR code or room code.
-- Appearance: six app styles (Lumen, Verdant, Monsoon, Harbour, Verse, Onyx), dark, light, true-black, system or automatic themes, any accent colour, and an app language of English, Telugu, Hindi or Tamil.
+- Follow artists and see their new songs first on the Following page; share playlists as public pages; Listen Together rooms with a link, QR code or room code.
+- Appearance: one black-and-green look with a System, Light or Dark theme, an optional glass effect, and an app language of English, Telugu, Hindi or Tamil.
 - Android app: background playback, lock-screen and headset controls, home-screen widgets, offline downloads, push notifications and in-app updates. On an iPhone, Add to Home Screen keeps music playing with the screen off.
-- Back up the library and settings to one file, restore it, or move to a new device with a one-time code.
+- Back up the library and settings to one file and restore it; on a new device, signing in with the same account brings everything back.
 - Ideas & bugs: the lightbulb in the top bar opens a popup to suggest a feature or report a bug; it names your device for you.
 
 ## Notes
 
 - VinaX is free: no subscription, no premium tier.
-- Browsing needs no account. Playing, liking and saving ask for a Google sign-in; there is no password.
-- Favourites, playlists, history and the on-device taste profile stay on the listener's device; a signed-in listener's copy syncs to the account.
+- Browsing needs no account. Playing, liking and saving ask you to sign in: with Google, or with an email address and a password (a 6-digit emailed code confirms the address and resets a forgotten password; passwords are stored only as bcrypt hashes).
+- Favourites, playlists, history and the on-device taste profile are kept with the listener's account, so they follow them to every device. Downloads, searches and the queue stay on the device.
 - Audio and artwork come from public music catalogues and are not hosted by VinaX. Rights holders can use /dmca.
 - Canonical origin is https://www.vinaxmusic.online (with www). A machine-readable catalogue of the pages is at /.well-known/ai-catalog.json.

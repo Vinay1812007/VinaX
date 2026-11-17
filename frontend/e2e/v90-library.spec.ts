@@ -6,8 +6,8 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * every /api call answered `{}`: the shortcuts carry live counts; a playlist
  * row's ⋯ menu pins it to the top and deletes it with an Undo; a saved album
  * leaves the library from its menu (and comes back on Undo); search reaches
- * liked songs; the layout switch announces its state; the Backup Center and
- * device handoff open from the Library; History's scoped clears live in its
+ * liked songs; the layout switch announces its state; the Backup Center
+ * opens from the Library; History's scoped clears live in its
  * ⋯ menu; Liked songs can be searched; and nothing scrolls sideways on a
  * phone even with a very long playlist name and Indic titles.
  */
@@ -149,7 +149,7 @@ for (const size of SIZES) {
     expect(await noSideways(page)).toBe(true);
   });
 
-  test(`library: create a playlist, Backup Center and device handoff entry points (${tag})`, async ({ page, baseURL }) => {
+  test(`library: create a playlist and open the Backup Center (${tag})`, async ({ page, baseURL }) => {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/library');
@@ -164,7 +164,7 @@ for (const size of SIZES) {
     await expect(page.getByRole('dialog', { name: 'Backup Center' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Backup Center' })).toBeHidden();
-    await expect(page.getByRole('link', { name: 'Move to a new device', exact: true })).toHaveAttribute('href', '/handoff');
+    await expect(page.getByRole('link', { name: 'Move to a new device', exact: true })).toHaveCount(0);
   });
 
   test(`history menu, liked-songs search, collection reorder (${tag})`, async ({ page, baseURL }) => {

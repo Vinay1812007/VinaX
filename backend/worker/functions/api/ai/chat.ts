@@ -10,12 +10,11 @@
  *                                          // empty + parentMessageId of a user message = retry
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
- *     thinking?: "auto" | "fast" | "standard" | "extended" | "max",   // thinking.ts; the older extendedThinking: true = "extended"
- *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
+ *     thinking?: "auto" | "fast" | "standard" | "extended" | "max",   // thinking.ts
+ *     webSearch?, artifacts? (default true), timezone?, locale?,
  *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
  *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
- *     incognito?: true,                    // a chat that never reads or writes memory; kept on a new chat (memory.ts)
- *     passthrough?: true }                 // the page reads the provider's own lines (below); without it, named text events
+ *     incognito?: true }                   // a chat that never reads or writes memory; kept on a new chat (memory.ts)
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued?,
@@ -28,12 +27,10 @@
  *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search", queries?, entryPointHtml?, markers? }
  *                (search: before the text, the model cites [n] itself; grounding: after the text,
  *                 with `markers` [{ at, ns }] saying where [n] goes in it)
- *       thinking { delta }   (without `passthrough` only)
- *       text     { delta }   (without `passthrough` only)
  *       error    { code, message, retryable, alternatives? }
  *       done     { stopReason: end | length | aborted | error, usage?, saved }
  *
- *   Pass-through (`passthrough: true`): between the opening events and the
+ *   Pass-through: between the opening events and the
  *   closing ones (error, sources, done) come the provider's own `data:` lines,
  *   untouched and without an event name; `meta.wire` says how they are
  *   written and the page reads the text out of them (frontend vinaxai/wire.ts).
@@ -47,8 +44,7 @@
  *
  * The listener's message is saved before streaming; the reply is saved when
  * it ends. One that did not end on its own (Stop, a broken stream) is only
- * whole on the page, which saves it (POST /api/ai/keep; `done.saved` false);
- * without pass-through the relayed text is saved here as before.
+ * whole on the page, which saves it (POST /api/ai/keep; `done.saved` false).
  * A continued reply is appended to the message it continues.
  * Logs carry route, model, provider, latency, status and token counts, never
  * message text. See README.md (VinaX AI).
@@ -137,14 +133,12 @@ interface ChatBody {
   continueFrom?: unknown;
   webSearch?: unknown;
   artifacts?: unknown;
-  extendedThinking?: unknown;
   thinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
   personal?: unknown;
   projectId?: unknown;
   incognito?: unknown;
-  passthrough?: unknown;
 }
 
 interface Ctx {
@@ -234,10 +228,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   // Counted while the conversation loads; answered before anything is written.
   const dailyJob = settings.dailyLimit ? db.rpc<boolean>(env, 'ai_take_daily', { p_kind: `msg:${sub}`, p_limit: settings.dailyLimit }) : null;
   const mode = body.mode === 'model' ? 'model' : 'auto';
-  /** The page reads the provider's own lines (vinaxai/wire.ts); older pages get named text events. */
-  const passthrough = body.passthrough === true;
   /** The composer's Thinking choice; Auto judges each message (thinking.ts). */
-  const thinkingChoice = parseThinking(body.thinking, body.extendedThinking);
+  const thinkingChoice = parseThinking(body.thinking);
   const parentRaw = body.parentMessageId;
   if (body.conversationId != null && !isUuid(body.conversationId)) return json({ error: 'not_found' }, 404);
   if (parentRaw != null && parentRaw !== 'root' && !isUuid(parentRaw)) return json({ error: 'bad_request' }, 400);
@@ -400,7 +392,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   if (mode === 'auto') {
     // Hard questions go to the deep ladder, except code, whose own ladder already reasons well.
     const deep = wanted === 'extended' || wanted === 'max' ? thinkingChoice !== 'auto' || task.kind !== 'code' : false;
-    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), extendedThinking: deep });
+    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), deep });
     candidates = ladderModels(registry, ladder);
     if (!candidates.length) candidates = ladderModels(registry, 'default');
     // Never Claude (claudeAccess.ts): it is paid, and only some accounts may use it.
@@ -574,56 +566,33 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
           send('meta', metaOf(model));
         }
         let broke = false;
-        /** What a page without pass-through was sent (kept if the reply breaks off). */
-        let relayed = { text: '', thinking: '' };
-        if (!passthrough) {
-          // An older page reads only named events: relay them one by one (the old, CPU-hungry way).
+        // Hand the provider's bytes over; frames from now on wait for the end.
+        await chain;
+        held = [];
+        writer?.releaseLock();
+        writer = null;
+        if (open) {
           try {
-            for await (const ev of ADAPTERS[model.provider].parse(opened.live)) {
-              if (!open) break;
-              if (ev.type === 'thinking') { relayed.thinking += ev.delta; send('thinking', { delta: ev.delta }); }
-              else if (ev.type === 'text') { relayed.text += ev.delta; send('text', { delta: ev.delta }); }
-            }
+            await opened.live.pipeTo(out, { preventClose: true, preventAbort: true });
           } catch {
             broke = true;
           }
-          await chain;
-          if (!open) opened.abort();
-        } else {
-          // Hand the provider's bytes over; frames from now on wait for the end.
-          await chain;
-          held = [];
-          writer?.releaseLock();
-          writer = null;
-          if (open) {
-            try {
-              await opened.live.pipeTo(out, { preventClose: true, preventAbort: true });
-            } catch {
-              broke = true;
-            }
-          } else void opened.live.cancel().catch(() => undefined);
-          // A page that went away (Stop) cancels the pipe: stop the model too.
-          try { writer = out.getWriter(); } catch { gone(); }
-          const later = held;
-          held = null;
-          write(enc.encode('\n\n'));
-          for (const f of later) write(f);
-          await chain;
-          if (!open) opened.abort();
-          relayed = { text: '', thinking: '' };
-        }
+        } else void opened.live.cancel().catch(() => undefined);
+        // A page that went away (Stop) cancels the pipe: stop the model too.
+        try { writer = out.getWriter(); } catch { gone(); }
+        const later = held;
+        held = null;
+        write(enc.encode('\n\n'));
+        for (const f of later) write(f);
+        await chain;
+        if (!open) opened.abort();
         let raw: string | null = null;
         try { raw = await opened.whole(); } catch { raw = null; }
         opened.finish();
         if (raw === null) {
-          // The reply broke off (time budget, network, Stop): the page keeps what it saw
-          // (an older page cannot, so its relayed text is saved here).
+          // The reply broke off (time budget, network, Stop): the page keeps what it saw.
           if (!abort.signal.aborted) failed(broke ? new ProviderError('network') : new ProviderError('timeout'), model, true);
-          if (relayed.text.trim()) {
-            ({ text, thinking } = relayed);
-            complete = true;
-          }
-        } else if (passthrough && raw.length > PARSE_MAX_CHARS) {
+        } else if (raw.length > PARSE_MAX_CHARS) {
           // Too big to read again within the CPU allowance: the page saves what it showed.
           stop = tailStop(raw);
           tooBig = true;
@@ -665,7 +634,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       stop = 'error';
       send('error', { code: 'model_unavailable', message: 'VinaX AI couldn’t save this chat just now. Try again.', retryable: true });
     }
-    const savedReply = userOk && complete && (!abort.signal.aborted || !passthrough) && text.trim().length > 0;
+    const savedReply = userOk && complete && !abort.signal.aborted && text.trim().length > 0;
     send('done', { stopReason: stop, saved: savedReply || (!!continuing && !tooBig), ...(usage ? { usage } : {}) });
     await chain;
     if (open) {

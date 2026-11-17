@@ -6,7 +6,6 @@
  * its own dialog. The logic lives in services/permissions/startup.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { isNativePlatform } from '@/services/native';
@@ -72,7 +71,6 @@ function rows(native: boolean): RowDef[] {
 
 export function PermissionsSheet() {
   const account = useAccount();
-  const { pathname } = useLocation();
   const [states, setStates] = useState<PermStates | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<PermKind | 'all' | null>(null);
@@ -97,7 +95,7 @@ export function PermissionsSheet() {
   useEffect(() => () => window.clearTimeout(waitTimer.current), []);
 
   // Start-up: once signed in and past the welcome, open if something is unanswered.
-  const ready = !!account && getLocal<boolean>(KEYS.onboarded, false) && pathname !== '/handoff';
+  const ready = !!account && getLocal<boolean>(KEYS.onboarded, false);
   useEffect(() => {
     if (!ready || startupChecked.current) return;
     startupChecked.current = true;

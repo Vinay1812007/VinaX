@@ -182,8 +182,6 @@ export interface ChatRequestBody {
   model?: string;
   /** Thinking: Auto or a level (the Worker's thinking.ts). */
   thinking?: 'auto' | 'fast' | 'standard' | 'extended' | 'max';
-  /** The same for an older Worker: true for Extended and Maximum. */
-  extendedThinking?: boolean;
   webSearch?: 'auto' | 'on' | 'off';
   artifacts?: boolean;
   timezone?: string;
@@ -194,8 +192,6 @@ export interface ChatRequestBody {
   projectId?: string;
   /** An incognito chat: no memory is read or written. */
   incognito?: boolean;
-  /** Read the provider's own lines (wire.ts); always sent by this page. */
-  passthrough?: boolean;
 }
 
 // ---------- voice (phase 6) ----------
@@ -313,7 +309,7 @@ export function noticeFor(code: string): string {
 export async function streamChat(body: ChatRequestBody, onEvent: (ev: StreamEvent) => void, signal: AbortSignal): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${AI_BASE}/chat`, { method: 'POST', headers: { ...headers(true), accept: 'text/event-stream' }, body: JSON.stringify({ ...body, passthrough: true }), signal });
+    res = await fetch(`${AI_BASE}/chat`, { method: 'POST', headers: { ...headers(true), accept: 'text/event-stream' }, body: JSON.stringify(body), signal });
   } catch (e) {
     if (signal.aborted) throw e;
     throw new AiError(0, 'network');

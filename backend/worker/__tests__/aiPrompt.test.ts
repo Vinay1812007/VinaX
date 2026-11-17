@@ -1,17 +1,17 @@
 /**
  * VinaX AI — the system message: the owner's prompt verbatim (snapshots),
- * the compact prompt for very small windows, artifacts for every model with
- * room, the listener's preferences, the search blocks and the runtime variables.
+ * one prompt for every model, artifacts for every model that can write a
+ * whole file, the listener's preferences, the search blocks and the runtime variables.
  */
 import { describe, expect, it } from 'vitest';
 import { MODELS, modelById } from '../functions/_lib/ai/models';
-import { ARTIFACTS_BLOCK, VISUALS_OWNER_TEXT, artifactsOffered, buildSystemPrompt, CITATION_RULES, COMPACT_PROMPT, FULL_PROMPT, firstNameOf, formatNow, promptFor, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
+import { ARTIFACTS_BLOCK, VISUALS_OWNER_TEXT, artifactsOffered, buildSystemPrompt, CITATION_RULES, FULL_PROMPT, firstNameOf, formatNow, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
 import { wireMessages } from '../functions/_lib/ai/wire';
 
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
 const full = modelById(MODELS, 'groq:openai/gpt-oss-120b')!;
 const fast = modelById(MODELS, 'nvidia:nvidia/nemotron-3.5-bolt-e4b')!;
-// No approved model has a window this small any more (ALLaM 2 7B had 8,000 characters).
+// A small window and a short reply limit (no approved model is this small).
 const tiny = { ...full, maxContextChars: 8_000, maxOutput: 1_024, tier: 'fast' as const };
 
 describe('buildSystemPrompt', () => {
@@ -19,9 +19,10 @@ describe('buildSystemPrompt', () => {
     expect(buildSystemPrompt({ spec: full, vars, artifacts: false })).toMatchSnapshot();
   });
 
-  it('compact prompt only for a very small window, without artifacts', () => {
-    const p = buildSystemPrompt({ spec: tiny, vars: { ...vars, modelName: 'ALLaM 2 7B' }, artifacts: true });
-    expect(p).toMatchSnapshot();
+  it('a small model gets the full prompt too, but no artifacts when it cannot write a whole file', () => {
+    const p = buildSystemPrompt({ spec: tiny, vars: { ...vars, modelName: 'Tiny 7B' }, artifacts: true });
+    expect(p.startsWith(FULL_PROMPT.slice(0, 40))).toBe(true);
+    expect(p).toContain('running on Tiny 7B from Groq');
     expect(p).not.toContain('# Visuals');
   });
 
@@ -29,15 +30,10 @@ describe('buildSystemPrompt', () => {
     const p = buildSystemPrompt({ spec: fast, vars: { ...vars, modelName: 'Nemotron 3.5 Bolt' }, artifacts: true });
     expect(p.startsWith(FULL_PROMPT.slice(0, 40))).toBe(true);
     expect(p).toContain(ARTIFACTS_BLOCK);
-    for (const m of MODELS) {
-      if (m.maxContextChars >= 24_000) expect(promptFor(m), m.id).toBe('full');
-      else expect(promptFor(m), m.id).toBe('compact');
-    }
     const chatModels = MODELS.filter((m) => m.group && m.group !== 'more' && m.maxOutput >= 4_096);
     expect(chatModels.filter((m) => !artifactsOffered(m)).map((m) => m.id)).toEqual([]);
     expect(fast.tier).toBe('fast');
     expect(artifactsOffered({ ...full, flags: { ...full.flags, artifacts: false } })).toBe(false);
-    expect(COMPACT_PROMPT.length).toBeLessThan(1_000);
   });
 
   it('artifacts come with the owner\'s visuals prompt, verbatim, then the sandbox\'s rules', () => {

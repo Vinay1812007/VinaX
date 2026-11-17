@@ -238,7 +238,7 @@ export function localStorageUsageBytes(): number {
 export function runMigrations(): void {
   const v = getLocal<number>(KEYS.schemaVersion, 0);
   if (v === CURRENT_SCHEMA_VERSION) return;
-  // v1 → v2: tarang.* → vinax.* key rename. Handled by earlyMigrations.ts
-  // (must run before store rehydration); here we only record the version.
+  // v1 → v2 was the tarang.* → vinax.* key rename; no install can still
+  // carry those keys, so here we only record the version.
   setLocal(KEYS.schemaVersion, CURRENT_SCHEMA_VERSION);
 }

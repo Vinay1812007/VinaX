@@ -1,7 +1,7 @@
 {
   "name": "VinaX",
   "short_name": "VinaX",
-  "description": "Free music in 12 Indian languages. One Google sign-in, no subscription.",
+  "description": "Free music in 12 Indian languages. Sign in with Google or email, no subscription.",
   "id": "/",
   "scope": "/",
   "start_url": "/",

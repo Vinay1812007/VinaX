@@ -680,7 +680,7 @@
 .vx-lp-smart-text .m { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 .vx-lp-smart-text .n { margin-top: 2px; color: rgb(var(--tide-400)); font-size: 12.5px; font-weight: 650; }
 
-/* Link rows (Backup Center, Move to a new device, Listen Together). */
+/* Link rows (Backup Center, Listen Together). */
 .vx-lp-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-inline: -8px; }
 .vx-lp-link {
   display: flex;

@@ -47,7 +47,6 @@ import { attributeSong, installHomeOutcomeTracking, loadHomeSignals, noteBlockTa
 import { blockForTap } from '@/features/home/homeTaps';
 import { genreAffinityStrength } from '@/features/home/genreAffinity';
 import { resetShelfLedger, setShelfBlockOrder } from '@/features/home/shelfLedger';
-import { resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { personalMessage } from '@/features/home/personalMessage';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { useContinueListening, useTrendingNow } from '@/features/home/useHomeShelves';
@@ -268,7 +267,6 @@ function SignedInHome() {
     recordServed(heroSongs.map(songKey));
     useDiscoveryStore.getState().refresh();
     invalidateRecommendationCache();
-    resetShelfDeduper();
     resetShelfLedger();
     // 9.1.0 — `fewerRepeats` runs this one generation under the strict
     // repetition rule (features/home/homeRefresh.ts).

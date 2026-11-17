@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOCK_SNAP_S, CORRECTION_COOLDOWN_MS, decideCorrection, Flight, HostClock, hostIsAway, NUDGE_MAX, NUDGE_START_S, NUDGE_STOP_S, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, type LocalPlayer } from './sync';
+import { CLOCK_SNAP_S, CORRECTION_COOLDOWN_MS, decideCorrection, HostClock, hostIsAway, NUDGE_MAX, NUDGE_START_S, NUDGE_STOP_S, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, type LocalPlayer } from './sync';
 
 const T0 = Date.parse('2026-10-05T10:00:00.000Z');
 
@@ -136,13 +136,12 @@ describe('HostClock (server-clock projection)', () => {
     expect(c.isPlaying).toBe(true);
   });
 
-  it('falls back to the old anchor against a pre-10.0 server (no `now`)', () => {
+  it('skips an answer without the server\'s clock (no `now`)', () => {
     const c = new HostClock();
-    const stamp = new Date(T0).toISOString();
-    c.ingest({ position: 5, playing: true, updated_at: stamp, receivedAt: 0 });
-    // Same stamp again: the anchor must not move.
-    c.ingest({ position: 5, playing: true, updated_at: stamp, receivedAt: 2000 });
-    expect(c.positionAt(2000)).toBeCloseTo(7.35, 5);
+    c.ingest({ position: 5, playing: true, updated_at: new Date(T0).toISOString(), receivedAt: 0 });
+    expect(c.ready).toBe(false);
+    expect(c.serverNow(0)).toBeNull();
+    expect(c.pushed({ position: 5, playing: true, at: T0, songId: 'a' })).toBe(false);
   });
 });
 
@@ -362,24 +361,6 @@ describe('SeekLead', () => {
     expect(l.seconds).toBe(2);
     l.learn(-30);
     expect(l.seconds).toBe(2);
-  });
-});
-
-describe('Flight', () => {
-  it('is zero until measured, then the middle of the last five trips', () => {
-    const f = new Flight();
-    expect(f.ms).toBe(0);
-    f.add(900); // a cold connection
-    f.add(60);
-    f.add(80);
-    expect(f.ms).toBe(80);
-    f.add(70);
-    f.add(75);
-    f.add(65);
-    expect(f.ms).toBe(70);
-    f.add(-5);
-    f.add(Number.NaN);
-    expect(f.ms).toBe(70);
   });
 });
 

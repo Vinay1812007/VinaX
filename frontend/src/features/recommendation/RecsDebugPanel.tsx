@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRecsDebugStore, recsDebugEnabled } from '@/store/recsDebugStore';
 import { exposureStats } from '@/services/recommendation/exposure';
 import { pct, summarise } from './diagnostics';
+import { trendsConnected } from '@/features/home/useAppConfig';
 
 /**
  * v6.4.0 / v7.0.0 — development-only recommendation debug view: every queue
@@ -28,11 +29,16 @@ interface ServiceHealth {
 }
 
 /**
- * The evidence service (verified charts), asked only when the panel is opened.
+ * The evidence service (verified charts), asked only when the panel is opened
+ * and only while the Worker's client config says a trend source is connected.
  * Public, read-only and cheap.
  */
 async function readServiceHealth(): Promise<ServiceHealth[]> {
   const out: ServiceHealth[] = [];
+  if (!trendsConnected()) {
+    out.push({ label: 'trends', state: 'not connected', note: 'no trend source is connected (client config)' });
+    return out;
+  }
   try {
     const res = await fetch('/api/trends?limit=1', { headers: { accept: 'application/json' } });
     const body = (await res.json()) as { sources?: Array<{ label?: string; status?: string; lastSuccessAt?: string | null }> } | null;

@@ -77,7 +77,7 @@ function byKind(scored: ScoredCandidate): Map<ReasonKind, number> {
   return out;
 }
 
-/** What each scorer key is documented to move (README.md (Recommendations on the device), the Worker's REC_WEIGHT_TERMS). */
+/** What each scorer key is documented to move (README.md (Recommendations on the device)). */
 const SCORER_KEYS: Partial<Record<RecommendationWeightKey, ReasonKind[]>> = {
   mood: ['mood'],
   vibe: ['vibe'],

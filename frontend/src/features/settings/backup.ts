@@ -794,7 +794,7 @@ export const categoryById = (id: string): BackupCategory | undefined => BACKUP_C
 /** What a backup deliberately leaves out — shown next to the export button. */
 export const BACKUP_EXCLUSIONS: ReadonlyArray<{ label: string; why: string }> = [
   { label: 'Downloaded audio and download paths', why: 'Files live on the device that saved them; paths mean nothing elsewhere.' },
-  { label: 'Device identity and the service-issued token', why: 'Identity is per install. Use "Move to a new device" to carry it across.' },
+  { label: 'Device identity and the service-issued token', why: 'Identity is per install. Sign in with the same account on the new device instead.' },
   { label: 'Listen Together host keys', why: 'Credentials for rooms you host on this device.' },
   { label: 'Usage-sharing consent', why: 'Asked again per device; sharing stays off after a restore until you turn it on.' },
   { label: 'Queue, playback position and caches', why: 'Session state and cached shelves are rebuilt on the next open.' },
@@ -963,8 +963,7 @@ export interface ApplyOptions {
   categories?: readonly BackupCategoryId[];
   /**
    * Extra raw writes (`null` removes) appended to the SAME all-or-nothing
-   * batch, after the categories — the device handoff uses it so identity keys
-   * and the backup land together or not at all.
+   * batch, after the categories, so they land with the backup or not at all.
    */
   extraEntries?: ReadonlyArray<readonly [key: string, raw: string | null]>;
 }
@@ -1141,57 +1140,4 @@ export function backupMeta(): BackupMeta {
 
 export function recordBackupEvent(patch: BackupMeta): void {
   setLocal(BACKUP_META_KEY, { ...backupMeta(), ...patch });
-}
-
-// --------------------------------------------------------------- transfer --
-/**
- * "Move to a new device" (encrypted, one-use QR handoff) is the ONE path that
- * deliberately carries device identity: the service-issued token, install id,
- * confirmed username and usage-sharing choice travel so the new phone IS the
- * old one as far as the service is concerned. A plain backup file never
- * includes these (see BACKUP_EXCLUSIONS).
- */
-const TRANSFER_KEYS = [KEYS.signedDeviceId, KEYS.deviceId, KEYS.userHandle, KEYS.analyticsConsent] as const;
-
-export interface TransferPayload extends BackupFile {
-  transfer: Record<string, unknown>;
-}
-
-export function createTransferPayload(): TransferPayload {
-  const transfer: Record<string, unknown> = {};
-  for (const key of TRANSFER_KEYS) {
-    const v = readKey({ key });
-    if (v !== undefined) transfer[key] = v;
-  }
-  return { ...createBackup(), transfer };
-}
-
-/** Restore a handoff payload: the backup (replace mode) plus the identity keys, all-or-nothing. */
-export function applyTransferPayload(json: string): ApplyResult | { ok: false; error: string } {
-  const parsed = parseBackup(json);
-  if (!parsed.ok) return parsed;
-  if (parsed.rejected.length) return { ok: false, error: `${parsed.rejected[0].label}: ${parsed.rejected[0].error}` };
-  let transfer: Record<string, unknown> = {};
-  try {
-    const raw = JSON.parse(json) as { transfer?: unknown };
-    if (isObj(raw.transfer)) transfer = raw.transfer;
-  } catch {
-    /* parseBackup already accepted the JSON */
-  }
-  // Identity keys ride in the SAME batch as the backup: a quota error on the
-  // last key must not leave a restored library under the wrong device identity.
-  const entries: Array<readonly [string, string | null]> = [];
-  for (const key of TRANSFER_KEYS) {
-    const v = transfer[key];
-    if (key === KEYS.userHandle) {
-      const h = str(v);
-      if (h && USERNAME_RE.test(h)) {
-        entries.push([key, JSON.stringify(h)]);
-        entries.push([KEYS.userHandlePending, null]);
-      }
-      continue;
-    }
-    if (typeof v === 'string' || typeof v === 'boolean') entries.push([key, JSON.stringify(v)]);
-  }
-  return applyBackup(parsed, { mode: 'replace', extraEntries: entries });
 }

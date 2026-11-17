@@ -18,7 +18,7 @@
  * fast" and the guest "a little slow". Four small delays all leaned the same
  * way, and nothing corrected a gap under a full second:
  *   - a host push was sent with the position it had when it LEFT the phone,
- *     but stamped when it arrived (`Flight` now measures that trip);
+ *     but stamped when it arrived (1.12.11 below closes that);
  *   - a guest counted the server's database time as network flight (`took`);
  *   - a seek landed late by however long the stream took to refill
  *     (`SeekLead` learns it and aims that far ahead);
@@ -46,7 +46,7 @@ export interface PollSnapshot {
   position: number;
   playing: boolean;
   updated_at: string;
-  /** Server clock (ms) when it answered. Absent on a Worker older than 10.0. */
+  /** Server clock (ms) when it answered. An answer without it is not read. */
   now?: number;
   /** How long (ms) the server spent after reading `now` before it answered.
    *  Absent on a Worker older than 1.12.10. */
@@ -108,7 +108,7 @@ export class ServerClock {
     return this.samples.length > 0;
   }
 
-  /** Returns false for an answer with no server clock (a Worker older than 10.0). */
+  /** Returns false for an answer with no server clock. */
   add(r: ClockReading, at: number = r.receivedAt ?? performance.now()): boolean {
     if (typeof r.now !== 'number' || !Number.isFinite(r.now)) return false;
     const rtt = Math.max(0, r.rttMs ?? 0);
@@ -146,10 +146,6 @@ export class HostClock {
   private lastAt = 0;
   private playing = false;
   private song: string | null = null;
-  // Pre-10.0 Worker (no server clock): anchored on this device's clock.
-  private legacy = false;
-  private base = 0;
-  private baseAt = 0;
 
   /** True once a poll has been read: `positionAt` means something. */
   get ready(): boolean {
@@ -166,24 +162,12 @@ export class HostClock {
   }
 
   ingest(p: PollSnapshot, at: number = p.receivedAt ?? performance.now()): void {
-    const songId = p.songId ?? null;
-    if (this.server.add(p, at)) {
-      this.legacy = false;
-      const pushed = Date.parse(p.updated_at);
-      const pushedAt = Number.isFinite(pushed) ? pushed : (p.now as number);
-      this.reading(p.position, p.playing, pushedAt, songId, p.updated_at !== this.stamp);
-      this.stamp = p.updated_at;
-      return;
-    }
-    // Pre-10.0 Worker: the old behaviour, so a stale deploy still works.
-    this.legacy = true;
-    this.playing = p.playing;
-    this.song = songId;
-    if (p.updated_at !== this.stamp) {
-      this.stamp = p.updated_at;
-      this.base = p.position + (p.playing ? 0.35 : 0);
-      this.baseAt = at;
-    }
+    // An answer without the server's clock cannot place the host: skip it.
+    if (!this.server.add(p, at)) return;
+    const pushed = Date.parse(p.updated_at);
+    const pushedAt = Number.isFinite(pushed) ? pushed : (p.now as number);
+    this.reading(p.position, p.playing, pushedAt, p.songId ?? null, p.updated_at !== this.stamp);
+    this.stamp = p.updated_at;
   }
 
   /** One reading of the host's playhead: `position` at server moment `pushedAt`. */
@@ -217,7 +201,7 @@ export class HostClock {
    * this device the server's clock; returns false otherwise.
    */
   pushed(p: { position: number; playing: boolean; at: number; songId: string | null }): boolean {
-    if (!this.server.ready || this.legacy || !Number.isFinite(p.at) || !Number.isFinite(p.position)) return false;
+    if (!this.server.ready || !Number.isFinite(p.at) || !Number.isFinite(p.position)) return false;
     this.reading(Math.max(0, p.position), p.playing, p.at, p.songId, true);
     if (this.stamp === '') this.stamp = 'live';
     return true;
@@ -231,12 +215,11 @@ export class HostClock {
 
   /** The server's clock (ms) now, or null before the first poll. */
   serverNow(at: number = performance.now()): number | null {
-    return this.server.ready && !this.legacy ? this.server.at(at) : null;
+    return this.server.ready ? this.server.at(at) : null;
   }
 
   /** Host position (seconds) at `at` (a performance.now() reading). */
   positionAt(at: number = performance.now()): number {
-    if (this.legacy) return Math.max(0, this.base + (this.playing ? Math.max(0, at - this.baseAt) / 1000 : 0));
     const elapsed = this.playing ? Math.max(0, this.server.at(at) - this.anchorAt) / 1000 : 0;
     return Math.max(0, this.anchor + elapsed);
   }
@@ -248,26 +231,6 @@ export interface LocalPlayer {
   isBuffering: boolean;
   currentTime: number;
   duration: number;
-}
-
-/**
- * How long something takes to cross the network, from the last few trips:
- * the median, so one slow request (a cold connection) does not count.
- */
-export class Flight {
-  private samples: number[] = [];
-
-  add(ms: number): void {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    this.samples = [...this.samples, Math.min(ms, 1500)].slice(-5);
-  }
-
-  /** Milliseconds; 0 until something has been measured. */
-  get ms(): number {
-    if (!this.samples.length) return 0;
-    const sorted = [...this.samples].sort((a, b) => a - b);
-    return sorted[Math.floor((sorted.length - 1) / 2)];
-  }
 }
 
 /** Start nudging the speed once the guest is this far off (seconds). Two

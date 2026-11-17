@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { pickVariant } from './useExperiment';
-import { applyWeightOverrides, resetWeightOverrides } from '@/services/recommendation/weights';
 import {
   activeRecVariants,
   claimExposure,
   decideRecVariant,
-  EXP_REC_CONFIG,
   EXP_REC_NEXT_SONGS,
   exposureOf,
   loadRecExperiments,
@@ -116,23 +114,5 @@ describe('exposure', () => {
     setRecExperimentConfig(config([{ name: 'control', pct: 100 }]), 'device-1');
     expect(decideRecVariant(EXP_REC_NEXT_SONGS, NOW)).toBe('control');
     expect(claimExposure(1, { now: NOW })).toEqual({ [EXP_REC_NEXT_SONGS]: 'control' });
-  });
-});
-
-describe('the owner tuning rollout', () => {
-  afterEach(() => resetWeightOverrides());
-
-  it('an applied weight override shapes every continuation: rec-config is its variant, or all', () => {
-    expect(claimExposure(1, { now: NOW })).toEqual({});
-    applyWeightOverrides({ mood: 0.2 }, { version: 7, variant: 'warmer' });
-    expect(activeRecVariants()).toEqual({ [EXP_REC_CONFIG]: 'warmer' });
-    expect(claimExposure(2, { now: NOW })).toEqual({ [EXP_REC_CONFIG]: 'warmer' });
-    applyWeightOverrides({ mood: 0.2 }, { version: 8, variant: null });
-    expect(claimExposure(3, { now: NOW })).toEqual({ [EXP_REC_CONFIG]: 'all' });
-    // An override with no valid key is not applied: nothing to report.
-    applyWeightOverrides({ nonsense: 1 }, { version: 9, variant: 'x' });
-    expect(claimExposure(4, { now: NOW })).toEqual({});
-    // A served continuation keeps the rollout it was planned under.
-    expect(exposureOf(2)).toEqual({ [EXP_REC_CONFIG]: 'warmer' });
   });
 });

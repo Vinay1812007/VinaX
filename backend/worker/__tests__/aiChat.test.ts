@@ -58,7 +58,7 @@ async function post(body: unknown, opts: { sub?: string | null; env?: Record<str
 }
 
 const settle = async () => { await Promise.all(pending); pending = []; };
-const ask = (text: string, extra: Record<string, unknown> = {}) => ({ conversationId: null, content: [{ type: 'text', text }], mode: 'auto', timezone: 'Asia/Kolkata', locale: 'en-IN', passthrough: true, ...extra });
+const ask = (text: string, extra: Record<string, unknown> = {}) => ({ conversationId: null, content: [{ type: 'text', text }], mode: 'auto', timezone: 'Asia/Kolkata', locale: 'en-IN', ...extra });
 
 const existing = () => ({
   ai_conversations: [{ id: CONV, account_id: '1001', title: 'Ragas', starred: false, model_pref: 'auto', active_leaf_id: A1, created_at: '2026-10-30T10:00:00Z', updated_at: '2026-10-30T10:00:00Z', deleted_at: null }],
@@ -339,33 +339,16 @@ describe('failover and failures', () => {
     expect(fake.rows('ai_messages').filter((m) => m.role === 'assistant')).toEqual([]);
   });
 
-  it('an older page (no passthrough) gets named thinking and text events, and nothing raw', async () => {
+  it('the reply comes as the provider\'s own lines, never as named text events', async () => {
     const fake = seed();
-    const res = await post(ask('Tell me about raga Yaman', { passthrough: undefined }));
+    const res = await post(ask('Tell me about raga Yaman'));
     const raw = await res.clone().text();
-    expect(raw).not.toContain('data: {"choices"');
+    expect(raw).toContain('data: {"choices"');
+    expect(raw).not.toContain('event: text');
     const events = await readEvents(res);
     await settle();
-    expect(events.map((e) => e.event).filter((n) => n === 'thinking' || n === 'text').length).toBeGreaterThan(1);
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Yaman is an evening raga.');
     expect(fake.rows('ai_messages')[1]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'Yaman is an evening raga.' }], stop_reason: 'end' });
-  });
-
-  it('an older page that stops a reply still has its partial text saved here, as aborted', async () => {
-    const enc = new TextEncoder();
-    const fake = seed({}, (_url, init) => new Response(new ReadableStream<Uint8Array>({
-      start(c) {
-        c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"Half an ans"}}]}\n\n'));
-        init?.signal?.addEventListener('abort', () => c.error(new Error('aborted')));
-      },
-    }), { status: 200 }));
-    const res = await post(ask('Tell me about raga Yaman', { passthrough: undefined }));
-    const reader = res.body!.getReader();
-    let seen = '';
-    while (!seen.includes('event: text')) seen += new TextDecoder().decode((await reader.read()).value);
-    await reader.cancel();
-    await settle();
-    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ stop_reason: 'aborted', content: [{ type: 'text', text: 'Half an ans' }] });
   });
 
   it('an error frame before any text fails over in Auto', async () => {
@@ -667,12 +650,11 @@ describe('thinking levels', () => {
     expect(metaOf(events).route).toBeUndefined();
   });
 
-  it('older pages: extendedThinking true still means Extended', async () => {
-    const { sent } = capture();
+  it('the old extendedThinking flag is no longer read: without a level the choice is Auto', async () => {
+    capture();
     const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true })));
     await settle();
-    expect(sent[0].body).toMatchObject({ reasoning_effort: 'high' });
-    expect(metaOf(events).thinking.choice).toBe('extended');
+    expect(metaOf(events).thinking.choice).toBe('auto');
   });
 
   it('a model with no switch is asked unchanged at Standard', async () => {

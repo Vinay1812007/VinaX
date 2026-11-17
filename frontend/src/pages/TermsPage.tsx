@@ -25,10 +25,11 @@ export default function TermsPage() {
         </p>
         <H>Your account</H>
         <p>
-          You sign in with your Google account; VinaX never sees or stores a password. Your library, playlists,
+          You sign in with your Google account, or with your email and a password. VinaX stores a password only as a
+          one-way hash and never sees your Google password. Your library, playlists,
           history, taste profile and settings are kept with your account so they follow you to every device, and you
-          can delete the account at any time in Settings → Profile. Don&rsquo;t share your Google account to give
-          others access. See the <Link to="/privacy">Privacy page</Link> for exactly what is stored.
+          can delete the account at any time in Settings → Profile. Don&rsquo;t share your Google account or your
+          password to give others access. See the <Link to="/privacy">Privacy page</Link> for exactly what is stored.
         </p>
         <H>Availability</H>
         <p>

@@ -212,7 +212,7 @@ describe('files in a chat', () => {
     upstream = (url) => (url.includes('generativelanguage') ? sseResponse('data: {"candidates":[{"content":{"parts":[{"text":"A red square."}]},"finishReason":"STOP"}]}\n\n') : new Response('{}', { status: 500 }));
     seed({ ai_attachments: [att({ id: IMG, kind: 'image', mime: 'image/png', name: 'red.png', storage_path: '1001/new/red', size: PNG.length })] });
     storage.objects.set('1001/new/red', { bytes: PNG, mime: 'image/png', length: null });
-    const { events } = await send({ content: [{ type: 'attachment', id: IMG }, { type: 'text', text: 'What is this?' }], passthrough: true });
+    const { events } = await send({ content: [{ type: 'attachment', id: IMG }, { type: 'text', text: 'What is this?' }] });
     const names = events.map((e) => e.event);
     expect(events.find((e) => e.event === 'progress')?.data).toEqual({ step: 'reading', count: 1, names: ['red.png'] });
     expect(names.indexOf('progress')).toBeLessThan(names.indexOf('done'));

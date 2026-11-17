@@ -17,10 +17,8 @@ import {
   MAX_BACKUP_BYTES,
   RESTORE_UNDO_KEY,
   applyBackup,
-  applyTransferPayload,
   backupMeta,
   createBackup,
-  createTransferPayload,
   keepUndo,
   parseBackup,
   readUndo,
@@ -347,23 +345,6 @@ describe('saved items: removals travel with the sync (1.11)', () => {
   });
 });
 
-describe('device handoff payload', () => {
-  it('carries identity keys that a plain backup never does, and restores them', () => {
-    const payload = createTransferPayload();
-    expect(payload.transfer[KEYS.signedDeviceId]).toBe('abc.sig');
-    expect(payload.transfer[KEYS.userHandle]).toBe('vinay_k');
-    expect(payload.transfer[KEYS.roomHostTokens]).toBeUndefined();
-    const json = JSON.stringify(payload);
-    localStorage.clear();
-    const res = applyTransferPayload(json);
-    expect(res.ok).toBe(true);
-    expect(get(KEYS.signedDeviceId)).toBe('abc.sig');
-    expect(get(KEYS.userHandle)).toBe('vinay_k');
-    expect(get(KEYS.userHandlePending)).toBeNull();
-    expect(get(KEYS.analyticsConsent)).toBe(true);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Audit regressions
 // ---------------------------------------------------------------------------
@@ -646,18 +627,18 @@ describe('undo snapshot', () => {
   });
 });
 
-describe('device handoff is one atomic write', () => {
-  it('a storage failure on an identity key rolls the backup back as well', () => {
-    const json = JSON.stringify(createTransferPayload());
+describe('extra entries are one atomic write', () => {
+  it('a storage failure on an extra entry rolls the backup back as well', () => {
+    const parsed = parseOk(serializeBackup(createBackup(['history'])));
     localStorage.clear();
     set(KEYS.library, { state: { favorites: [song('keep')] }, version: 0 });
     const snap = snapshotAll();
     const original = Storage.prototype.setItem;
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
-      if (k === KEYS.signedDeviceId) throw new DOMException('quota', 'QuotaExceededError');
+      if (k === 'vinax.extra') throw new DOMException('quota', 'QuotaExceededError');
       return original.call(this, k, v);
     });
-    const res = applyTransferPayload(json);
+    const res = applyBackup(parsed, { mode: 'replace', extraEntries: [['vinax.extra', '"x"']] });
     vi.restoreAllMocks();
     expect(res.ok).toBe(false);
     expect(snapshotAll()).toBe(snap);

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { SongRow, TrackListHead } from '@/components/SongRow';
@@ -10,11 +11,18 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
 import { useWeeklyMix, isoWeekKey } from '@/features/weekly/useWeeklyMix';
+import { useShelfSafety } from '@/features/home/useShelfSafety';
 
 export default function WeeklyMixPage() {
   usePageTitle('Your Week');
   const navigate = useNavigate();
-  const { data: songs = [], isLoading, isError, refetch } = useWeeklyMix();
+  const { data: cached, isLoading, isError, refetch } = useWeeklyMix();
+  // The week is cached until Monday, so a song hidden, an artist set to
+  // "Never play", a language muted or Kid mode turned on mid-week would still
+  // show here. Filter at render with the listener's current settings; Play,
+  // Shuffle and Save use the same filtered list.
+  const isSafe = useShelfSafety();
+  const songs = useMemo(() => (cached ?? []).filter(isSafe), [cached, isSafe]);
 
   const play = (shuffle: boolean) => {
     if (!songs.length) return;

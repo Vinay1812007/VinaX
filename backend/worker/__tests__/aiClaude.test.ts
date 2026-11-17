@@ -227,7 +227,7 @@ async function chat(sub: string, body: Record<string, unknown>): Promise<Respons
   const request = new Request('https://www.vinaxmusic.online/api/ai/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': `203.0.113.${++ip % 250}`, authorization: `Bearer ${token}` },
-    body: JSON.stringify({ conversationId: null, content: [{ type: 'text', text: 'Namaste' }], timezone: 'Asia/Kolkata', locale: 'en-IN', passthrough: true, ...body }),
+    body: JSON.stringify({ conversationId: null, content: [{ type: 'text', text: 'Namaste' }], timezone: 'Asia/Kolkata', locale: 'en-IN', ...body }),
   });
   return postChat({ request, env: ENV as never, waitUntil: (p) => { pending.push(p); } });
 }

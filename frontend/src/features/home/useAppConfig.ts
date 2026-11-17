@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { isNativePlatform } from '@/services/native';
-import { applyWeightOverrides, resetWeightOverrides } from '@/services/recommendation/weights';
 
 /**
  * Client read side of the admin-published app config (/api/appconfig).
@@ -84,6 +83,8 @@ export interface ClientConfig {
   minBuild: number | null;
   /** Console rebuild: the oldest version allowed per platform (suggest or force the update). */
   versionPolicy?: VersionPolicy;
+  /** True only while the Worker has a trend source connected to /api/trends. */
+  trendsConnected?: boolean;
 }
 
 export interface Greeting { text: string; parts?: Partial<Record<'morning' | 'afternoon' | 'evening' | 'night', string>>; withName?: boolean }
@@ -93,29 +94,18 @@ export interface VersionRule { minVersion: string; mode: 'suggest' | 'force' }
 export interface VersionPolicy { android?: VersionRule; web?: VersionRule; ios?: VersionRule; message?: string }
 
 /**
- * 7.2.0 — the owner's recommendation weight overrides ride the same bundle
- * (`recConfig`). The module that decides whether the rollout targets this
- * device loads only when a config is published; with none, the defaults
- * stand and nothing extra loads. The newest call wins: a decision that
- * arrives after a later sync is dropped.
+ * Whether the Worker has a trend source connected (`trendsConnected` in the
+ * client bundle). Off by default, and while the bundle has not loaded: the
+ * app then never asks /api/trends and never loads the trends client
+ * (services/trends). Read without React by the recommender's trend signal.
  */
-let recRollout: Promise<typeof import('@/services/recommendation/remoteWeights')> | null = null;
-let recSyncSeq = 0;
-export function syncRecConfig(raw: unknown, deviceId?: string): Promise<void> {
-  const seq = ++recSyncSeq;
-  if (raw == null) {
-    resetWeightOverrides();
-    return Promise.resolve();
-  }
-  if (!recRollout) recRollout = import('@/services/recommendation/remoteWeights');
-  return recRollout
-    .then((m) => {
-      if (seq !== recSyncSeq) return;
-      const d = m.decideRecRollout(raw, deviceId);
-      if (d.apply) applyWeightOverrides(d.overrides, { version: d.version, variant: d.variant });
-      else resetWeightOverrides();
-    })
-    .catch(() => { recRollout = null; });
+let trendsOn = false;
+export function trendsConnected(): boolean {
+  return trendsOn;
+}
+/** Set from the client bundle; also a test hook. */
+export function setTrendsConnected(on: boolean): void {
+  trendsOn = on;
 }
 
 export function useClientConfig(): ClientConfig | null {
@@ -135,8 +125,9 @@ export function useClientConfig(): ClientConfig | null {
     queryFn: async (): Promise<ClientConfig | null> => {
       const r = await fetch(`${BASE}/api/appconfig?key=client`);
       if (!r.ok) return null;
-      const j = (await r.json()) as Partial<ClientConfig> & { recConfig?: unknown };
-      void syncRecConfig(j.recConfig ?? null);
+      const j = (await r.json()) as Partial<ClientConfig>;
+      const trends = j.trendsConnected === true;
+      setTrendsConnected(trends);
       return {
         homeLayout: j.homeLayout,
         greeting: j.greeting ?? null,
@@ -150,6 +141,7 @@ export function useClientConfig(): ClientConfig | null {
         aiQuick: Array.isArray(j.aiQuick) ? j.aiQuick : [],
         faq: Array.isArray(j.faq) ? j.faq : [],
         minBuild: typeof j.minBuild === 'number' ? j.minBuild : null,
+        trendsConnected: trends,
         ...(j.versionPolicy && typeof j.versionPolicy === 'object' ? { versionPolicy: j.versionPolicy } : {}),
       };
     },

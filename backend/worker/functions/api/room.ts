@@ -410,9 +410,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       // 1.14 — the jam's settings, as the host's app last said them.
       ...(await jamUpdate(code, host.room, body)),
     });
-    // `took`: the host subtracts it from the round trip to learn how long its
-    // pushes spend on the way here, and sends the next position that far ahead.
-    // `stamps`: this server honours `at`, so the host may rely on it.
+    // `took` and `stamps` are only for installed apps up to 1.16.2: they
+    // send `at` once `stamps` says it is honoured, and lead by the measured
+    // trip until then. Today's app always sends `at` and reads neither.
     return json({ ok: r.ok, took: Math.max(0, Date.now() - arrived), stamps: true });
   }
 

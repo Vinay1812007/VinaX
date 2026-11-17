@@ -38,7 +38,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'GITHUB_TOKEN', group: 'Releases', required: false, note: 'APK release proxy + Releases & CI panel' },
   { name: 'GITHUB_REPO', group: 'Releases', required: false, note: 'owner/repo for releases' },
   { name: 'ASSETS_HOST', group: 'Edge', required: true, note: 'Pages origin the Worker proxies' },
-  { name: 'HANDOFF', group: 'Edge', required: true, note: 'KV namespace for device handoff' },
+  { name: 'HANDOFF', group: 'Edge', required: true, note: 'KV namespace for the IndexNow list and Android push reports (the old device-handoff name)' },
   { name: 'NOTIFY_MIN_GAP_HOURS', group: 'Push', required: false, note: 'push frequency cap' },
   // VinaX AI (README.md (VinaX AI)): any one provider is enough for the chat to work.
   { name: 'GROQ_API_KEY', group: 'VinaX AI', required: false, note: 'Groq chat models (Auto default), dictation (Whisper) and Read aloud (Orpheus)' },
@@ -80,7 +80,7 @@ export const PLAIN: Record<string, string> = {
   GITHUB_TOKEN: 'App releases access',
   GITHUB_REPO: 'App releases location',
   ASSETS_HOST: 'Website files location',
-  HANDOFF: 'Device hand-off storage',
+  HANDOFF: 'Small edge storage (search-engine pings, push reports)',
   NOTIFY_MIN_GAP_HOURS: 'Old notification limit',
   GROQ_API_KEY: 'AI provider: Groq',
   GEMINI_API_KEY: 'AI provider: Google Gemini',

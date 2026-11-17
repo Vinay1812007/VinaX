@@ -6,6 +6,10 @@
  * 14.0 schema keeps no trend tables, so there is never a source or an item: the answer is the "not connected" shape the Charts page already
  * handles (it shows the catalogue charts only). Public, no listener data,
  * cached five minutes.
+ *
+ * Current apps do not call this route: they ask it only while the client
+ * config says `trendsConnected` (TRENDS_CONNECTED in _lib/clientConfig.ts,
+ * false). It stays for installed apps that have not updated.
  */
 
 const CORS: Record<string, string> = {

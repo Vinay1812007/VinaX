@@ -876,20 +876,6 @@ html:not(.light) .theme-ico-moon { transform: translateY(0) rotate(0deg); opacit
 .vx-eq i:nth-child(3) { animation-delay: 0.34s; }
 
 /* ============================================================================
-   Living blobs — the AuroraBackground layer.
-   ========================================================================= */
-.vx-blob {
-  position: absolute;
-  border-radius: var(--radius-pill);
-  will-change: transform;
-  pointer-events: none;
-}
-.vx-blob-a { animation: vxBlob 18s ease-in-out infinite; }
-.vx-blob-b { animation: vxBlobRev 22s ease-in-out infinite; }
-.vx-blob-c { animation: vxBlob 26s ease-in-out infinite reverse; }
-.vx-blob-d { animation: vxBlobRev 30s ease-in-out infinite; }
-
-/* ============================================================================
    Home hero + editorial surfaces.
    ========================================================================= */
 .vx-hero-wash { /* Home page hero radial-gradient wash — opacity trimmed in light. */ }
@@ -1035,8 +1021,6 @@ html:not(.light) .theme-ico-moon { transform: translateY(0) rotate(0deg); opacit
   content-visibility: auto;
   contain-intrinsic-size: auto 0px auto 300px;
 }
-.animate-aurora-a,
-.animate-aurora-b,
 .animate-marquee { will-change: transform; }
 
 /* Cosmetic deterrence (production only — set by JS). Inputs stay editable
@@ -1148,18 +1132,6 @@ html.device-tv :focus-visible {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-@keyframes pulse-bar {
-  0%, 100% { transform: scaleY(0.4); }
-  50% { transform: scaleY(1); }
-}
-@keyframes aurora-a {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(8vw, 6vh) scale(1.15); }
-}
-@keyframes aurora-b {
-  0%, 100% { transform: translate(0, 0) scale(1.1); }
-  50% { transform: translate(-6vw, -8vh) scale(0.95); }
-}
 @keyframes aurora-drift {
   0%   { transform: translate3d(-3%, -2%, 0) scale(1.05); }
   50%  { transform: translate3d(3%, 2%, 0) scale(1.13); }
@@ -1210,16 +1182,6 @@ html.device-tv :focus-visible {
   0%, 100% { transform: scaleY(0.35); }
   50% { transform: scaleY(1); }
 }
-@keyframes vxBlob {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(4vw, -6vw) scale(1.1); }
-  66% { transform: translate(-3vw, 3vw) scale(0.92); }
-}
-@keyframes vxBlobRev {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-4vw, 6vw) scale(1.16); }
-  66% { transform: translate(3vw, -3vw) scale(0.86); }
-}
 @keyframes vx-bounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -1252,8 +1214,7 @@ html.reduce-motion *::after {
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal, .hero-animated, .animate-marquee, .animate-fade-up, .skeleton,
-  .animate-pulse-bar, .vx-stagger > *, .vx-blob-a, .vx-blob-b, .vx-blob-c,
-  .vx-blob-d, .vx-eq i, .karaoke-fill, .skeleton::after, .skeleton-art::before,
+  .vx-stagger > *, .vx-eq i, .karaoke-fill, .skeleton::after, .skeleton-art::before,
   .vx-cursor-shine,
   .np-mini.np-changed, .np-mini[data-buffering='true'] .np-mini-thumb::after,
   .vx-dock-active {
@@ -1273,9 +1234,6 @@ html.reduce-motion *::after {
     transform: none;
   }
   .theme-ico { transition: opacity 0.2s ease; }
-  /* The aurora blobs were only demoted (will-change) — actually STOP them
-     for OS-level reduced-motion users (delta audit P2-23). */
-  .animate-aurora-a, .animate-aurora-b { animation: none !important; will-change: auto; }
   /* Synced-lyric lines: no transform/filter glide — a plain opacity step. */
   [data-line] { transition: opacity 0.2s ease !important; transform: none !important; filter: none !important; }
 }

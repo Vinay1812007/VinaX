@@ -21,7 +21,8 @@ export interface LadderSignals {
   threadChars: number;
   hasImages: boolean;
   hasPdf: boolean;
-  extendedThinking: boolean;
+  /** A hard question at Extended or Maximum thinking (chat.ts). */
+  deep: boolean;
 }
 
 export const LONG_THREAD_CHARS = 150_000;
@@ -42,7 +43,7 @@ export function isSmallTalk(text: string): boolean {
 export function pickLadder(s: LadderSignals): LadderName {
   if (s.hasImages) return 'vision';
   if (s.hasPdf || s.threadChars > LONG_THREAD_CHARS) return 'long';
-  if (s.extendedThinking) return 'deep';
+  if (s.deep) return 'deep';
   if (hasCodeCues(s.text)) return 'code';
   if (isSmallTalk(s.text)) return 'fast';
   return 'default';

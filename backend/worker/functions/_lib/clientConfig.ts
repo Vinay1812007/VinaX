@@ -10,7 +10,6 @@
  * _lib/settings.ts. Besides the client bundle this file sanitises the other
  * public config answers: banners, flags and site mode.
  */
-import type { ExperimentVariant } from './experiments';
 
 export const CLIENT_KEYS = [
   'home-layout',
@@ -19,93 +18,13 @@ export const CLIENT_KEYS = [
 ] as const;
 
 /**
- * 7.2.0 — recommendation weight overrides. Written ONLY by the validated,
- * versioned route api/admin/recconfig.ts (never by the generic appconfig
- * POST, so it is deliberately not in CLIENT_KEYS / ALLOWED_KEYS), read into
- * the public `client` bundle as `recConfig`.
+ * Whether a trend source is connected to GET /api/trends (api/trends.ts).
+ * None is today: that route always answers empty, so the app is told nothing
+ * (no `trendsConnected` in the bundle) and never asks it. Set this to true
+ * when a trend pipeline feeds the route again; apps then show Public charts
+ * and use the trend signal.
  */
-export const REC_CONFIG_KEY = 'rec-config';
-export const REC_CONFIG_HISTORY_KEY = 'rec-config-history';
-/** Everything the public `client` bundle reads in its one query. */
-export const CLIENT_READ_KEYS = [...CLIENT_KEYS, REC_CONFIG_KEY] as const;
-
-/**
- * The scorer's default weights — a mirror of
- * frontend/src/services/recommendation/weights.ts (SCORING_WEIGHTS_VERSION
- * 1.3.0: same values as 1.2.0, and since 9.0 every key is read by the
- * scorer), pinned by __tests__/recConfig.test.ts, which reads that file.
- */
-export const REC_WEIGHT_DEFAULTS = {
-  mood: 0.16, vibe: 0.1, language: 0.12, dialect: 0.08, genre: 0.1, energy: 0.1, tempo: 0.08,
-  artistAffinity: 0.14, history: 0.1, likes: 0.1, skips: 0.12, session: 0.12, discovery: 0.07,
-  popularity: 0.05, freshness: 0.04, diversity: 0.2, songAffinity: 0.12, dayOfWeek: 0.04,
-  novelty: 0.16, artistFatigue: 0.04, intentArtist: 0.18, intentLanguage: 0.08, intentEnergy: 0.3,
-  intentSkippedSong: 0.4,
-} as const;
-export type RecWeightKey = keyof typeof REC_WEIGHT_DEFAULTS;
-export type RecOverrides = Partial<Record<RecWeightKey, number>>;
-
-/** Safe range for every override: half to double its default (same rule on the device). */
-export const REC_WEIGHT_MIN_FACTOR = 0.5;
-export const REC_WEIGHT_MAX_FACTOR = 2;
-const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
-
-export function isRecWeightKey(k: string): k is RecWeightKey {
-  return Object.prototype.hasOwnProperty.call(REC_WEIGHT_DEFAULTS, k);
-}
-
-export function recWeightBounds(key: RecWeightKey): { min: number; max: number } {
-  const d = REC_WEIGHT_DEFAULTS[key];
-  return { min: round4(d * REC_WEIGHT_MIN_FACTOR), max: round4(d * REC_WEIGHT_MAX_FACTOR) };
-}
-
-export function clampRecWeight(key: RecWeightKey, v: number): number {
-  const { min, max } = recWeightBounds(key);
-  return round4(Math.min(max, Math.max(min, v)));
-}
-
-/** Known keys with finite numbers only, each clamped; anything else is dropped. */
-export function sanitizeRecOverrides(raw: unknown): RecOverrides {
-  const out: RecOverrides = {};
-  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
-  if (!o) return out;
-  for (const [k, v] of Object.entries(o)) {
-    if (!isRecWeightKey(k) || typeof v !== 'number' || !Number.isFinite(v)) continue;
-    out[k] = clampRecWeight(k, v);
-  }
-  return out;
-}
-
-export type PublicRecRollout =
-  | { mode: 'all' }
-  | { mode: 'experiment'; experimentKey: string; variant: string; variants?: ExperimentVariant[] };
-export interface PublicRecConfig {
-  version: number;
-  overrides: RecOverrides;
-  rollout: PublicRecRollout;
-}
-export const EXPERIMENT_KEY_RE = /^[a-z0-9-]{1,40}$/;
-
-/**
- * What listeners' apps receive: version, clamped overrides and who is
- * targeted. Null when nothing should change on any device (rollout off, no
- * valid override, malformed row). Notes, evaluations and authors stay admin-only.
- */
-export function publicRecConfig(raw: unknown): PublicRecConfig | null {
-  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
-  if (!r || !Number.isInteger(r.version) || (r.version as number) < 1) return null;
-  const overrides = sanitizeRecOverrides(r.overrides);
-  if (!Object.keys(overrides).length) return null;
-  const ro = r.rollout && typeof r.rollout === 'object' ? (r.rollout as Record<string, unknown>) : null;
-  if (ro?.mode === 'all') return { version: r.version as number, overrides, rollout: { mode: 'all' } };
-  if (ro?.mode === 'experiment') {
-    const experimentKey = typeof ro.experimentKey === 'string' ? ro.experimentKey : '';
-    const variant = typeof ro.variant === 'string' ? ro.variant.trim().slice(0, 24) : '';
-    if (!EXPERIMENT_KEY_RE.test(experimentKey) || !variant) return null;
-    return { version: r.version as number, overrides, rollout: { mode: 'experiment', experimentKey, variant } };
-  }
-  return null;
-}
+export const TRENDS_CONNECTED: boolean = false;
 
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -139,8 +58,8 @@ export interface ClientConfig {
   minBuild: number | null;
   /** Console rebuild: the oldest version allowed per platform, and whether to suggest or force the update. */
   versionPolicy?: VersionPolicy;
-  /** 7.2.0 — present only while a weight override targets someone (see publicRecConfig). */
-  recConfig?: PublicRecConfig;
+  /** Present (true) only while a trend source is connected (TRENDS_CONNECTED). */
+  trendsConnected?: true;
 }
 
 export interface GreetingParts { morning?: string; afternoon?: string; evening?: string; night?: string }
@@ -242,8 +161,7 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const keys = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
   const cleanKeys = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((k): k is string => typeof k === 'string' && keys.includes(k)))] : [];
   const homeLayout = home ? { title: str(home.title, 60), description: str(home.description, 160), order: cleanKeys(home.order), hidden: cleanKeys(home.hidden).slice(0, 12) } : undefined;
-  const recConfig = publicRecConfig(raw[REC_CONFIG_KEY]);
-  return { greeting, broadcast, synonyms, ...(Object.keys(searchPins).length ? { searchPins } : {}), disabledSources, sourceOrder, languageOrder, hiddenLanguages, faq, minBuild, ...(versionPolicy ? { versionPolicy } : {}), ...(maintenance ? { maintenance } : {}), ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
+  return { greeting, broadcast, synonyms, ...(Object.keys(searchPins).length ? { searchPins } : {}), disabledSources, sourceOrder, languageOrder, hiddenLanguages, faq, minBuild, ...(versionPolicy ? { versionPolicy } : {}), ...(maintenance ? { maintenance } : {}), ...(homeLayout ? { homeLayout } : {}), ...(TRENDS_CONNECTED ? { trendsConnected: true as const } : {}) };
 }
 
 // ------------------------------------------------- version 11 — search pins

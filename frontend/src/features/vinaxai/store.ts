@@ -51,15 +51,14 @@ function enqueue(ev: StreamEvent): void {
 /** Which model answers: the composer's choice, or an explicit one (Retry with…). */
 export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
 
-function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'thinking' | 'extendedThinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal' | 'incognito'> {
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'thinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal' | 'incognito'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
   const prefs = usePrefs.getState();
   const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
   const personal = personalOf(prefs);
   const incognito = useChatStore.getState().incognito;
-  // `extendedThinking` too, for a Worker older than the levels.
-  return { ...pick, thinking: prefs.thinking, extendedThinking: prefs.thinking === 'extended' || prefs.thinking === 'max', webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}), ...(incognito ? { incognito: true } : {}) };
+  return { ...pick, thinking: prefs.thinking, webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}), ...(incognito ? { incognito: true } : {}) };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */

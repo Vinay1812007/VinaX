@@ -119,10 +119,10 @@ export function specAtLevel<T extends ModelSpec>(spec: T, level: ThinkingLevel):
   return { ...spec, params: { ...(spec.params ?? {}), ...(extra ?? {}) }, ...(output ? { maxOutput: output } : {}) };
 }
 
-/** The composer's choice from a request body; the old `extendedThinking: true` means Extended. */
-export function parseThinking(raw: unknown, extendedThinking: unknown): ThinkingChoice {
+/** The composer's choice from a request body; anything else is Auto. */
+export function parseThinking(raw: unknown): ThinkingChoice {
   if (raw === 'auto' || (typeof raw === 'string' && (THINKING_LEVELS as readonly string[]).includes(raw))) return raw as ThinkingChoice;
-  return extendedThinking === true ? 'extended' : 'auto';
+  return 'auto';
 }
 
 export type TaskKind = 'chat' | 'code' | 'math' | 'analysis' | 'writing' | 'vision' | 'document';

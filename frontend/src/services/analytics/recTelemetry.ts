@@ -29,8 +29,7 @@ import { consented, trackStructured, type TelemetryMeta } from './telemetry';
  *
  * `latencyMs` is the queue-ready latency — from the plan call to a queueable
  * order. `exp` is the continuation's exposure map
- * (features/experiments/recExperiment.ts), including an applied owner
- * tuning rollout under `rec-config`.
+ * (features/experiments/recExperiment.ts).
  *
  * Volume. A token bucket (REC_BUCKET events, one more every REC_REFILL_MS)
  * feeds a small outbox; beyond REC_OUTBOX_CAP waiting events, or

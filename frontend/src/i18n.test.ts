@@ -20,7 +20,7 @@ describe('1.12 — app language', () => {
     expect(keys.length).toBeGreaterThan(100);
     for (const d of [TE, HI, TA]) for (const [k, v] of Object.entries(d)) expect(v.trim(), k).not.toBe('');
     // The song menu, the Settings sections and the common section titles are in.
-    for (const k of ['Add to queue', 'Play next', 'Playback', 'Your data', 'Recently played', 'Show all', 'Badges']) expect(keys).toContain(k);
+    for (const k of ['Add to queue', 'Play next', 'Playback', 'Your data', 'Recently played', 'Show all', 'Listening calendar']) expect(keys).toContain(k);
   });
 
   it('extended strings arrive once the dictionary is fetched, and keep the first-load words', async () => {

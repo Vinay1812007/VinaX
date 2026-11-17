@@ -18,6 +18,8 @@ const fetchVerifiedTrends = vi.fn<(opts: unknown) => Promise<TrendsSnapshot | nu
 const getSong = vi.fn();
 const playQueue = vi.fn();
 let online = true;
+/** The Worker's client config: `trendsConnected` gates the whole Public charts section. */
+let trendsOn = true;
 
 vi.mock('@/services/trends/client', () => ({ fetchVerifiedTrends: (opts: unknown) => fetchVerifiedTrends(opts) }));
 // 1.3 — the catalogue feeds miss by default (the backup source does not know them), so the search lists show.
@@ -41,6 +43,10 @@ vi.mock('@/services/api', () => ({
   getFeaturedPlaylists: (...a: unknown[]) => getFeaturedPlaylists(...a),
 }));
 vi.mock('@/hooks/useOnlineStatus', () => ({ useOnlineStatus: () => online }));
+vi.mock('@/features/home/useAppConfig', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/home/useAppConfig')>()),
+  useClientConfig: () => ({ trendsConnected: trendsOn }),
+}));
 vi.mock('@/features/location/useRegion', () => ({ useRegion: () => ({ country: 'IN', regionLabel: null, source: 'manual' }) }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: (sel: (s: { playQueue: typeof playQueue }) => unknown) => sel({ playQueue }) }));
 vi.mock('@/store/historyStore', () => ({ useHistoryStore: (sel: (s: { entries: unknown[] }) => unknown) => sel({ entries: [] }) }));
@@ -94,6 +100,7 @@ const noUnverifiedClaims = () => {
 
 beforeEach(() => {
   online = true;
+  trendsOn = true;
   fetchVerifiedTrends.mockReset();
   getSong.mockReset();
   playQueue.mockReset();
@@ -106,6 +113,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChartsPage', () => {
+  it('while the client config has no trend source connected, never asks /api/trends', async () => {
+    trendsOn = false;
+    fetchVerifiedTrends.mockResolvedValue({ generatedAt: iso(0), sources: [chartSource], items: [trend({})] });
+    mount();
+    expect(await screen.findByRole('heading', { name: 'Top Charts' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Public charts' })).toBeNull();
+    expect(screen.queryByText('Chuttamalle')).toBeNull();
+    expect(fetchVerifiedTrends).not.toHaveBeenCalled();
+  });
+
   it('without a connected chart, shows no empty chart box, and Top Charts leads the page', async () => {
     fetchVerifiedTrends.mockResolvedValue({ generatedAt: iso(0), sources: [{ ...chartSource, status: 'not_configured', lastSuccessAt: null }, shortVideo, { ...editorialSource, status: 'not_configured', lastSuccessAt: null }], items: [] });
     mount();

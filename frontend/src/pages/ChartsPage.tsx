@@ -37,6 +37,7 @@ import {
 } from '@/features/home/useCatalogFeeds';
 import type { Album, Playlist, Song } from '@/types';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
+import { useClientConfig } from '@/features/home/useAppConfig';
 import '@/styles/pages/browse.css';
 import { songLine } from '@/utils/songLine';
 import { movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
@@ -47,8 +48,10 @@ import { movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView }
  * then the songs of the Trending Today chart, ranked. (The old "Popular in
  * the catalogue" list was a keyword search and surfaced songs merely named
  * "trending"; it is gone.) "Public charts" (services/trends) still shows
- * first when a chart source is connected; the catalogue's trending and new
- * lists and the moods / hubs column follow.
+ * first when a chart source is connected — only while the Worker's client
+ * config says `trendsConnected`, so with none connected no /api/trends
+ * request is made and the trends client never loads. The catalogue's
+ * trending and new lists and the moods / hubs column follow.
  */
 
 const MOODS: Array<{ id: string; label: string; to: string }> = [
@@ -386,6 +389,7 @@ export default function ChartsPage() {
   const regionInfo = useRegion();
   const country = (regionInfo?.country ?? '').toUpperCase();
   const region = /^[A-Z]{2}$/.test(country) ? country : 'IN';
+  const trendsOn = useClientConfig()?.trendsConnected === true;
   const playsCount = useHistoryStore((s) => s.entries.length);
   const [charts, setCharts] = useState<Playlist[]>([]);
 
@@ -396,7 +400,7 @@ export default function ChartsPage() {
       <div className="vx-chart-wrap">
       <div className="vx-chart-layout">
         <div className="min-w-0">
-          <VerifiedCharts region={region} />
+          {trendsOn && <VerifiedCharts region={region} />}
 
           <TopCharts onCharts={setCharts} />
 

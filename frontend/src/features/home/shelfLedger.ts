@@ -47,8 +47,7 @@ export function claimShelf(block: string, seq: number, songs: Song[], floor = SH
     if (ci < bi || (ci === bi && c.seq < seq)) earlier.push(c.ids);
   }
   // v7.1.0 — a song is claimed by catalogue id AND by canonical identity, so the film
-  // cut, the remaster and the lofi flip of one song never fill three shelves. (7.0 added
-  // this to dedupeShelves.ts, which Home does not use — this ledger is what Home uses.)
+  // cut, the remaster and the lofi flip of one song never fill three shelves.
   const own = new Set<string>();
   const repeats: Song[] = [];
   const out = songs.filter((song) => {

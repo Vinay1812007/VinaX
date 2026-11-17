@@ -23,12 +23,6 @@
  * continuation's `exp` map. A plan that was discarded before it was served
  * (the queue moved on) exposes nobody: its decisions expire.
  *
- * The owner's recommendation-tuning rollout (published weight overrides,
- * services/recommendation/weights.ts) is reported the same way under
- * `rec-config`: its variant name, or 'all' for a rollout to everyone. It
- * shapes every continuation planned while it is applied, so every served
- * continuation in that time carries it.
- *
  * Nothing here reaches the network except the config read, and nothing is
  * sent from here at all: the `exp` map rides the consent-gated
  * recommendation events (services/analytics/recTelemetry.ts).
@@ -36,12 +30,9 @@
 import { pickVariant, inAudience, type ExperimentAudience } from './useExperiment';
 import { installId } from '@/services/identity/installId';
 import { isNativePlatform } from '@/services/native';
-import { activeWeightOverride } from '@/services/recommendation/weights';
 
 /** The next-song experiment slot. Create it in the owner console under exactly this key. */
 export const EXP_REC_NEXT_SONGS = 'rec-next-songs';
-/** The owner's recommendation-tuning rollout (weight overrides), when one is applied on this device. */
-export const EXP_REC_CONFIG = 'rec-config';
 /** Recommendation experiments this build can read. A key not listed here is never assigned, so never exposed. */
 export const REC_EXPERIMENT_KEYS: readonly string[] = [EXP_REC_NEXT_SONGS];
 
@@ -103,16 +94,9 @@ export function recVariant(key: string): string {
   return assigned.get(key) ?? 'control';
 }
 
-/** The tuning rollout applied on this device right now, as an `exp` entry ({} on the default weights). */
-function rolloutEntry(): Record<string, string> {
-  const override = activeWeightOverride();
-  if (!override) return {};
-  return { [EXP_REC_CONFIG]: (override.variant && cleanName(override.variant)) || 'all' };
-}
-
-/** Every recommendation experiment this device is assigned to (key → variant), plus an applied tuning rollout. Assignment, not exposure. */
+/** Every recommendation experiment this device is assigned to (key → variant). Assignment, not exposure. */
 export function activeRecVariants(): Record<string, string> {
-  return { ...Object.fromEntries(assigned), ...rolloutEntry() };
+  return Object.fromEntries(assigned);
 }
 
 /**
@@ -131,8 +115,7 @@ export function decideRecVariant(key: string, now: number = Date.now()): string 
 
 /**
  * A continuation was served (it entered the queue): the decisions made while
- * planning it become its exposure, with the tuning rollout applied at that
- * moment. A reserve top-up comes from the latest plan, so it carries that
+ * planning it become its exposure. A reserve top-up comes from the latest plan, so it carries that
  * plan's exposure. Returns the continuation's `exp`.
  */
 export function claimExposure(batch: number, opts: { reserve?: boolean; now?: number } = {}): Record<string, string> {
@@ -141,7 +124,7 @@ export function claimExposure(batch: number, opts: { reserve?: boolean; now?: nu
   if (opts.reserve) {
     exp = { ...lastPlanExposure };
   } else {
-    exp = rolloutEntry();
+    exp = {};
     for (const [key, d] of pending) if (now - d.at <= PENDING_DECISION_TTL_MS) exp[key] = d.variant;
     pending.clear();
     lastPlanExposure = exp;

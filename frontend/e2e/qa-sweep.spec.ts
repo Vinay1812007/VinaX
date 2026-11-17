@@ -16,7 +16,7 @@ const ROUTES = [
   '/made-for-you', '/radio', '/weekly', '/mixes', '/search',
   '/search/tum%20hi%20ho', '/library', '/favorites', '/history', '/queue',
   '/now-playing', '/languages', '/explore', '/movies', '/moods', '/regions',
-  '/taste-profile', '/settings', '/handoff', '/cache-info', '/about',
+  '/taste-profile', '/settings', '/cache-info', '/about',
   '/privacy', '/terms', '/contact', '/dmca', '/help', '/stats', '/offline',
   '/together', '/karaoke', '/download', '/drive', '/disco',
   '/hindi-songs', '/telugu-songs',

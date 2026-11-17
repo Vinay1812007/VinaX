@@ -76,7 +76,7 @@ export default function FeedbackSheet({ onClose, initialKind = 'idea' }: { onClo
         <div className="vx-fb-done" role="status">
           <p className="vx-fb-done-title">{kind === 'bug' ? 'Thanks — we’re on it.' : 'Thanks for the idea!'}</p>
           <p className="vx-fb-done-sub">
-            {account ? 'If we have a question or news about it, it reaches you as a VinaX notification.' : 'Sign in with Google if you’d like a reply as a VinaX notification.'}
+            {account ? 'If we have a question or news about it, it reaches you as a VinaX notification.' : 'Sign in if you’d like a reply as a VinaX notification.'}
           </p>
           <div className="vx-fb-actions">
             <button type="button" className="vx-fb-btn is-quiet" onClick={() => { setSent(false); setMessage(''); }}>Send another</button>
