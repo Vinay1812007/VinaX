@@ -15,7 +15,10 @@ vi.mock('../functions/api/status', () => ({
   },
 }));
 
-import { alertRulesOf, firingRules, runAlerts, type AlertSignals } from '../functions/_lib/alerts';
+import { alertRulesOf, firingRules, jobTroubles, runAlerts, type AlertSignals } from '../functions/_lib/alerts';
+import { jobSettings, JOBS, type RecentRun, type RecentRuns } from '../functions/_lib/jobSpecs';
+import { runScheduled } from '../functions/_lib/jobs';
+import { resetUsageMemo, CF_GRAPHQL_URL } from '../functions/_lib/cfAnalytics';
 import * as route from '../functions/api/admin/alerts';
 import * as settingsRoute from '../functions/api/admin/settings';
 import { issueAdminSession, resetAdminMemo } from '../functions/_lib/adminAuth';
@@ -30,7 +33,7 @@ const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
 const errors = (n: number, minAgo: number) => Array.from({ length: n }, () => ({ kind: 'error', at: ago(minAgo) }));
 const plays = (n: number, minAgo: number) => Array.from({ length: n }, () => ({ kind: 'play', at: ago(minAgo) }));
 
-function seed(extra: Record<string, Array<Record<string, unknown>>> = {}): FakeDb {
+function seed(extra: Record<string, Array<Record<string, unknown>>> = {}, other?: Parameters<typeof fakeDb>[1]): FakeDb {
   return fakeDb({
     admins: [
       { email: 'boss@example.com', name: 'Boss', role: 'owner', created_at: '1' },
@@ -45,7 +48,7 @@ function seed(extra: Record<string, Array<Record<string, unknown>>> = {}): FakeD
     feedback: [],
     notifications: [],
     ...extra,
-  });
+  }, other);
 }
 const rulesRow = (value: unknown) => ({ key: 'alert-rules', value, updated_at: 't', updated_by: 'boss@example.com' });
 
@@ -60,14 +63,14 @@ const call = async (h: unknown, r: Request, env: Record<string, unknown> = ENV) 
   return { status: res.status, body: (await res.json().catch(() => null)) as Record<string, unknown> | null };
 };
 
-beforeEach(() => { resetSettingsMemo(); resetAdminMemo(); _resetRateLimitsForTests(); probe.down.clear(); probe.calls.length = 0; });
+beforeEach(() => { resetSettingsMemo(); resetAdminMemo(); _resetRateLimitsForTests(); resetUsageMemo(); probe.down.clear(); probe.calls.length = 0; });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('the alert-rules setting', () => {
   it('unset means on, owners only, the default thresholds', () => {
     expect(alertRulesOf(null)).toEqual({
       enabled: true, who: 'owners', quiet: { enabled: false, start: '23:00', end: '07:00' }, cooldownMinutes: 60,
-      rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 }, siteDown: { on: true }, noPlays: { on: true, minutes: 60, onlyIfUsualPlays: true }, newFeedback: { on: true, minCount: 1 } },
+      rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 }, siteDown: { on: true }, noPlays: { on: true, minutes: 60, onlyIfUsualPlays: true }, newFeedback: { on: true, minCount: 1 }, jobsFailing: { on: true }, quotaHigh: { on: true, percent: 80 } },
     });
   });
 
@@ -107,7 +110,7 @@ describe('which rules fire', () => {
     const f = firingRules(R, { ...base, probes: { website: false, api: true, catalog: false } });
     expect(f.map((x) => x.rule)).toEqual(['siteDown']);
     expect(f[0].body).toContain('The website and Music search are not answering');
-    expect(f[0].link).toBe('/admin/#/health/checks');
+    expect(f[0].link).toBe('/admin/#/server-checks');
     expect(fired({ probes: { website: null, api: true, catalog: true } })).toEqual([]);
   });
 
@@ -135,7 +138,7 @@ describe('the alerts job', () => {
     expect(out.devices).toBe(1);
     const rows = fake.rows('notifications');
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ kind: 'system', title: 'App errors are rising', link: '/admin/#/health/errors', sent_by: 'schedule', status: 'sent', fcm_total: 1, dedupe_key: `alert:errorsSpike:60:${Math.floor(NOW / 3_600_000)}` });
+    expect(rows[0]).toMatchObject({ kind: 'system', title: 'App errors are rising', link: '/admin/#/app-errors', sent_by: 'schedule', status: 'sent', fcm_total: 1, dedupe_key: `alert:errorsSpike:60:${Math.floor(NOW / 3_600_000)}` });
     expect(String(rows[0].body)).toContain('12 errors in the last hour (3 the hour before)');
     expect(fake.rows('push_devices').every((d) => d.last_pushed_at === null)).toBe(true);
     expect(fake.calls.filter((c) => c.table === 'push_devices' && c.method === 'GET').every((c) => c.query.includes('account_id=in.(%22111%22)'))).toBe(true);
@@ -252,5 +255,133 @@ describe('GET/POST /api/admin/alerts', () => {
     expect((r.body?.result as { firing: string[] }).firing).toContain('errorsSpike');
     expect(fake.rows('notifications')[0]).toMatchObject({ created_by: 'owner' });
     expect((await call(route.onRequestPost, req('/api/admin/alerts', 'owner-pass', { action: 'nope' }))).status).toBe(400);
+  });
+});
+
+describe('jobsFailing', () => {
+  const cfg = jobSettings(null);
+  const run = (min: number, ok: boolean | null, error?: string): RecentRun => ({ started_at: ago(min), ok, summary: error ? { error } : {} });
+  const runs = (o: Record<string, RecentRun[]>): RecentRuns => new Map(Object.entries(o)) as RecentRuns;
+
+  it('a job whose last two finished runs failed, or that is running late; never the alerts job', () => {
+    const t = jobTroubles(cfg, runs({
+      housekeeping: [run(5, null), run(65, false, 'housekeeping: a step failed'), run(125, false)], // one still running, two failed before it
+      'status-tick': [run(80, true)], // every 30 min: late after 75
+      'scheduled-notifications': [run(3, false), run(8, true)], // one failure is not enough
+      indexnow: [], // never ran: new, not late
+      alerts: [run(2, false), run(7, false)],
+    }), NOW);
+    expect(t).toEqual([
+      { job: 'status-tick', label: 'Status check', kind: 'late', error: null, lastAt: ago(80), every: 30 },
+      { job: 'housekeeping', label: 'Clean-up', kind: 'failing', error: 'housekeeping: a step failed', lastAt: ago(5), every: 60 },
+    ]);
+  });
+
+  it('a switched-off job is not judged, and a job whose runs could not be read is left out', () => {
+    const off = jobSettings({ housekeeping: { enabled: false } });
+    expect(jobTroubles(off, runs({ housekeeping: [run(500, false), run(560, false)] }), NOW)).toEqual([]);
+    expect(jobTroubles(cfg, runs({}), NOW)).toEqual([]);
+  });
+
+  it('says which job and why, and opens Scheduled Jobs', () => {
+    const base: AlertSignals = { errorsLastHour: 0, errorsHourBefore: 0, playsRecent: 10, playsYesterday: 10, newFeedback: 0, probes: {}, now: NOW };
+    const one = firingRules(alertRulesOf(null), { ...base, jobs: [{ job: 'housekeeping', label: 'Clean-up', kind: 'failing', error: 'housekeeping: a step failed', lastAt: ago(5), every: 60 }] });
+    expect(one).toEqual([{ rule: 'jobsFailing', title: 'Clean-up is failing', body: 'Clean-up failed twice in a row (housekeeping: a step failed). Tap to see the scheduled jobs.', link: '/admin/#/scheduled-jobs' }]);
+    const late = firingRules(alertRulesOf(null), { ...base, jobs: [{ job: 'status-tick', label: 'Status check', kind: 'late', error: null, lastAt: ago(180), every: 30 }] });
+    expect(late[0]).toMatchObject({ title: 'Status check has stopped running', body: 'Status check has not run for 3 hours (it runs every 30 minutes). Tap to see the scheduled jobs.' });
+    const two = firingRules(alertRulesOf(null), { ...base, jobs: [late[0] && { job: 'status-tick', label: 'Status check', kind: 'late', error: null, lastAt: ago(180), every: 30 }, { job: 'indexnow', label: 'Search engine updates', kind: 'failing', error: null, lastAt: ago(10), every: 360 }] });
+    expect(two[0].title).toBe('Scheduled jobs need a look');
+    expect(two[0].body).toContain('; Search engine updates failed twice in a row.');
+    expect(firingRules(alertRulesOf({ rules: { jobsFailing: { on: false } } }), { ...base, jobs: [{ job: 'indexnow', label: 'x', kind: 'failing', error: null, lastAt: null, every: 360 }] })).toEqual([]);
+  });
+
+  it('the job reads job_runs itself on Check now, and reuses the scheduler\'s runs from the cron', async () => {
+    const quietRules = rulesRow({ rules: { errorsSpike: { on: false }, noPlays: { on: false }, newFeedback: { on: false }, siteDown: { on: false } } });
+    const fake = seed({
+      settings: [quietRules],
+      job_runs: [
+        { job: 'housekeeping', started_at: ago(10), ok: false, summary: { error: 'housekeeping: a step failed' } },
+        { job: 'housekeeping', started_at: ago(70), ok: false, summary: { error: 'housekeeping: a step failed' } },
+      ],
+    });
+    const out = await runAlerts(ENV, NOW, 'owner');
+    expect(out.checked).toEqual(['jobsFailing']); // quotaHigh needs the meter's keys
+    expect(out.sent.map((x) => x.rule)).toEqual(['jobsFailing']);
+    expect(fake.rows('notifications')[0]).toMatchObject({ title: 'Clean-up is failing', link: '/admin/#/scheduled-jobs' });
+    const reads = fake.calls.filter((c) => c.table === 'job_runs');
+    expect(reads.length).toBe(7); // every job but the alerts job
+    expect(reads.some((c) => c.query.includes('job=eq.alerts'))).toBe(false);
+
+    resetSettingsMemo();
+    const again = seed({ settings: [quietRules] });
+    const fromCron = await runAlerts(ENV, NOW, 'schedule', { settings: jobSettings(null), recentRuns: new Map([['outreach', [run(10, false), run(70, false)]]]) as RecentRuns });
+    expect(fromCron.firing).toEqual(['jobsFailing']);
+    expect(again.calls.some((c) => c.table === 'job_runs')).toBe(false);
+  });
+});
+
+describe('jobsFailing from the cron', () => {
+  it('judges the runs the scheduler already read: no second read of job_runs', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const recent = JOBS.filter((j) => j.id !== 'alerts' && j.id !== 'housekeeping').map((j) => ({ job: j.id, started_at: ago(1), ok: true, summary: {} }));
+    const fake = seed({
+      settings: [rulesRow({ rules: { errorsSpike: { on: false }, noPlays: { on: false }, newFeedback: { on: false }, siteDown: { on: false } } })],
+      job_runs: [...recent, { job: 'housekeeping', started_at: ago(20), ok: false, summary: { error: 'housekeeping: a step failed' } }, { job: 'housekeeping', started_at: ago(80), ok: false, summary: {} }],
+    });
+    const out = await runScheduled(ENV, NOW);
+    expect(out.map((r) => r.job)).toEqual(['alerts']); // nothing else is due
+    expect(out[0].summary).toMatchObject({ firing: ['jobsFailing'] });
+    expect(fake.calls.filter((c) => c.table === 'job_runs' && c.method === 'GET')).toHaveLength(JOBS.length);
+    expect(fake.rows('notifications').map((r) => r.title)).toEqual(['Clean-up is failing']);
+  });
+});
+
+describe('quotaHigh', () => {
+  const METER = { CF_ANALYTICS_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc123' };
+  const graphql = (requests: number) => (url: string) => (url === CF_GRAPHQL_URL
+    ? new Response(JSON.stringify({ data: { viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests, errors: 0, subrequests: 0 }, dimensions: { scriptName: 'vinax-api', status: 'success' } }] }] } }, errors: null }), { status: 200, headers: { 'content-type': 'application/json' } })
+    : new Response('ok'));
+  const onlyQuota = rulesRow({ rules: { errorsSpike: { on: false }, noPlays: { on: false }, newFeedback: { on: false }, siteDown: { on: false }, jobsFailing: { on: false } } });
+  const base: AlertSignals = { errorsLastHour: 0, errorsHourBefore: 0, playsRecent: 10, playsYesterday: 10, newFeedback: 0, probes: {} };
+
+  it('fires at the chosen share of the daily allowance', () => {
+    expect(firingRules(alertRulesOf(null), { ...base, requests: { used: 79_999, allowance: 100_000 } })).toEqual([]);
+    const f = firingRules(alertRulesOf(null), { ...base, requests: { used: 85_000, allowance: 100_000 } });
+    expect(f).toEqual([{ rule: 'quotaHigh', title: 'Daily server requests running low', body: '85% of today\'s 1,00,000 server requests are used (85,000). At 100% the app stops working until 05:30 India time. Tap to see the server checks.', link: '/admin/#/server-checks' }]);
+    expect(firingRules(alertRulesOf({ rules: { quotaHigh: { percent: 90 } } }), { ...base, requests: { used: 85_000, allowance: 100_000 } })).toEqual([]);
+    expect(alertRulesOf({ rules: { quotaHigh: { percent: 83 } } }).rules.quotaHigh).toEqual({ on: true, percent: 80 });
+    expect(firingRules(alertRulesOf(null), { ...base, requests: null })).toEqual([]);
+  });
+
+  it('alerts once per UTC day, even in quiet hours, and is not judged without the keys', async () => {
+    const fake = seed({ settings: [rulesRow({ quiet: { enabled: true, start: '11:00', end: '12:00' }, rules: { errorsSpike: { on: false }, noPlays: { on: false }, newFeedback: { on: false }, siteDown: { on: false }, jobsFailing: { on: false } } })] }, graphql(85_000));
+    const out = await runAlerts({ ...ENV, ...METER }, NOW);
+    expect(out.checked).toEqual(['quotaHigh']);
+    expect(out.sent.map((x) => x.rule)).toEqual(['quotaHigh']); // quiet hours do not hold it
+    expect(fake.rows('notifications')[0]).toMatchObject({ dedupe_key: 'alert:quotaHigh:day:2026-11-04', link: '/admin/#/server-checks' });
+    // Three hours later (past the 60-minute cooldown), the same UTC day: held.
+    resetUsageMemo();
+    const later = await runAlerts({ ...ENV, ...METER }, NOW + 3 * 3_600_000);
+    expect(later.held).toEqual([{ rule: 'quotaHigh', reason: 'cooldown' }]);
+    expect(fake.rows('notifications')).toHaveLength(1);
+    // The next UTC day it may go out again.
+    resetUsageMemo();
+    const tomorrow = await runAlerts({ ...ENV, ...METER }, NOW + 24 * 3_600_000);
+    expect(tomorrow.sent.map((x) => x.rule)).toEqual(['quotaHigh']);
+    expect(fake.rows('notifications')[1]).toMatchObject({ dedupe_key: 'alert:quotaHigh:day:2026-11-05' });
+  });
+
+  it('without the keys it is not checked and Cloudflare is never asked', async () => {
+    const fake = seed({ settings: [onlyQuota] }, graphql(99_000));
+    const out = await runAlerts(ENV, NOW);
+    expect(out.checked).toEqual([]);
+    expect(fake.other.some((o) => o.url === CF_GRAPHQL_URL)).toBe(false);
+  });
+
+  it('the console page learns whether the meter is set up', async () => {
+    seed();
+    expect((await call(route.onRequestGet, req('/api/admin/alerts'))).body?.meter).toEqual({ ready: false });
+    expect((await call(route.onRequestGet, req('/api/admin/alerts'), { ...ENV, ...METER })).body?.meter).toEqual({ ready: true });
   });
 });

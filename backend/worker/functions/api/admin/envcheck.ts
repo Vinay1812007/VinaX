@@ -40,6 +40,9 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'ASSETS_HOST', group: 'Edge', required: true, note: 'Pages origin the Worker proxies' },
   { name: 'HANDOFF', group: 'Edge', required: true, note: 'KV namespace for the IndexNow list and Android push reports (the old device-handoff name)' },
   { name: 'NOTIFY_MIN_GAP_HOURS', group: 'Push', required: false, note: 'push frequency cap' },
+  // The daily request meter (_lib/cfAnalytics.ts): Server Checks, the Dashboard and Smart Alerts' quotaHigh. Both or nothing.
+  { name: 'CF_ANALYTICS_TOKEN', group: 'Monitoring', required: false, note: 'Cloudflare API token with only Account > Account Analytics > Read: today\'s Worker requests against the 100,000 a day allowance' },
+  { name: 'CF_ACCOUNT_ID', group: 'Monitoring', required: false, note: 'the Cloudflare account id the Worker runs on (Workers dashboard, right-hand column); with CF_ANALYTICS_TOKEN' },
   // VinaX AI (README.md (VinaX AI)): any one provider is enough for the chat to work.
   { name: 'GROQ_API_KEY', group: 'VinaX AI', required: false, note: 'Groq chat models (Auto default), dictation (Whisper) and Read aloud (Orpheus)' },
   { name: 'GEMINI_API_KEY', group: 'VinaX AI', required: false, note: 'Gemini chat models (images, long documents), Live voice, and the voice fallbacks' },
@@ -82,6 +85,8 @@ export const PLAIN: Record<string, string> = {
   ASSETS_HOST: 'Website files location',
   HANDOFF: 'Small edge storage (search-engine pings, push reports)',
   NOTIFY_MIN_GAP_HOURS: 'Old notification limit',
+  CF_ANALYTICS_TOKEN: 'Daily request meter (Cloudflare analytics key)',
+  CF_ACCOUNT_ID: 'Daily request meter (Cloudflare account)',
   GROQ_API_KEY: 'AI provider: Groq',
   GEMINI_API_KEY: 'AI provider: Google Gemini',
   OPENROUTER_API_KEY: 'AI provider: OpenRouter',

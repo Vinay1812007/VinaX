@@ -10,7 +10,8 @@
  *                                           · retire_push_devices · VinaX AI chats deleted more than a
  *                                           day ago
  *   alerts                   every run      Smart Alerts: errors rising, site down, no plays, new
- *                                           feedback → one push to the admins' phones (_lib/alerts.ts)
+ *                                           feedback, a job failing or late, the daily request allowance
+ *                                           running low → one push to the admins' phones (_lib/alerts.ts)
  *   scheduled-notifications  every run      send notifications whose scheduled time has come
  *   indexnow                 every 6 hours  tell Bing and the other IndexNow engines about new pages
  *                                           in the sitemaps (_lib/indexnow.ts)
@@ -38,59 +39,10 @@ import { runIndexNow, type IndexNowEnv } from './indexnow';
 import { runWeeklySummary } from './weeklySummary';
 import { runOutreach } from './outreach';
 import { runModelCheck } from './ai/modelCheck';
+import { isDue, jobSettings, JOBS, type JobContext, type JobId, type RecentRun, type RecentRuns } from './jobSpecs';
 
-export type JobId = 'status-tick' | 'housekeeping' | 'alerts' | 'scheduled-notifications' | 'indexnow' | 'weekly-summary' | 'outreach' | 'ai-model-check';
-
-export interface JobSpec {
-  id: JobId;
-  label: string;
-  /** What the job does, in plain words (the console shows it). */
-  about: string;
-  /** Default minutes between runs. */
-  every: number;
-  /** The choices the console offers, in minutes. */
-  choices: readonly number[];
-}
-
-export const JOBS: readonly JobSpec[] = [
-  { id: 'status-tick', label: 'Status check', about: 'Checks that the website, the app and the music sources answer, and records it for the public status page.', every: 30, choices: [30, 60, 180, 360] },
-  { id: 'housekeeping', label: 'Clean-up', about: 'Closes empty Listen Together rooms, removes data older than the Data & Privacy periods, and forgets phones that stopped receiving notifications.', every: 60, choices: [60, 180, 360, 720, 1440] },
-  // Before the scheduled sends: a large scheduled audience must not spend the run's requests first.
-  { id: 'alerts', label: 'Smart Alerts', about: 'Looks for problems (app errors rising, the site not answering, no songs played, new feedback) and alerts admins on their phones.', every: 5, choices: [5, 10, 15, 30] },
-  { id: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose scheduled time has come.', every: 5, choices: [5, 15, 30, 60] },
-  { id: 'indexnow', label: 'Search engine updates', about: 'Tells Bing and the other IndexNow search engines about new pages on the website, so they are found sooner.', every: 360, choices: [180, 360, 720, 1440] },
-  { id: 'weekly-summary', label: 'Weekly summary email', about: 'Every Monday from 9 AM India time, emails the owner last week’s numbers: listening, active and new people, top songs, At risk, errors. Sends once a week; switch the email itself in Notification Rules.', every: 60, choices: [30, 60] },
-  { id: 'outreach', label: 'Automatic notifications', about: 'Sends the automatic notifications that are due: the Sunday-evening weekly recap, win-back nudges to regular listeners who went quiet, and new releases from each person’s favourite artists. Each kind has its own switch in Notification Rules; quiet hours and the per-person cap apply.', every: 60, choices: [30, 60, 180] },
-  { id: 'ai-model-check', label: 'VinaX AI model check', about: 'Once a day, sends one tiny message to each paused VinaX AI model. One that answers quickly is back in the model menu (picked by hand only, never in Auto); one that fails stays paused.', every: 1440, choices: [720, 1440] },
-] as const;
-
-/** The owner's choices for one job, after checking them. */
-export interface JobSetting { enabled: boolean; every: number }
-
-/** The `jobs` setting for every job, with defaults and only allowed values. */
-export function jobSettings(raw: unknown): Record<JobId, JobSetting> {
-  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const out = {} as Record<JobId, JobSetting>;
-  for (const j of JOBS) {
-    const v = src[j.id] && typeof src[j.id] === 'object' ? (src[j.id] as Record<string, unknown>) : {};
-    const every = typeof v.every === 'number' && j.choices.includes(v.every) ? v.every : j.every;
-    out[j.id] = { enabled: v.enabled !== false, every };
-  }
-  return out;
-}
-
-/** Minutes after which a job with no newer run counts as late. */
-export const lateAfter = (every: number): number => Math.max(every * 2 + 15, 45);
-
-/** Is the job due: on, and its last run started `every` minutes ago or more (2 minutes' grace). */
-export function isDue(cfg: JobSetting, lastStartedAt: string | null, at: number): boolean {
-  if (!cfg.enabled) return false;
-  if (!lastStartedAt) return true;
-  const age = (at - Date.parse(lastStartedAt)) / 60_000;
-  return !Number.isFinite(age) || age >= cfg.every - 2;
-}
-
-export const isJobId = (v: unknown): v is JobId => JOBS.some((j) => j.id === v);
+export { isDue, isJobId, isOverdue, jobSettings, JOBS, lateAfter } from './jobSpecs';
+export type { JobContext, JobId, JobSetting, JobSpec, RecentRun, RecentRuns } from './jobSpecs';
 
 export interface JobResult {
   job: JobId;
@@ -171,14 +123,14 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
 
 
 /** Smart Alerts; a run that could not judge (history or admins unreadable) is a failed run. */
-async function alertsJob(env: DbEnv, now: number): Promise<Record<string, unknown>> {
-  const r = await runAlerts(env as never, now);
+async function alertsJob(env: DbEnv, now: number, jobs?: JobContext): Promise<Record<string, unknown>> {
+  const r = await runAlerts(env as never, now, 'schedule', jobs);
   if (r.error) throw new Error(`alerts: ${r.error}`);
   return { ...r };
 }
 
 /** Run one job now, recording the run. Never throws. */
-export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<JobResult> {
+export async function runJob(env: DbEnv, job: JobId, now = Date.now(), jobs?: JobContext): Promise<JobResult> {
   const startedAt = new Date(now).toISOString();
   const started = await db.insert<{ id: number }>(env, 'job_runs', { job, started_at: startedAt }, { returning: true });
   const runId = started.ok ? started.rows[0]?.id : undefined;
@@ -188,7 +140,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
     summary =
       job === 'status-tick' ? await statusTick(env, now)
           : job === 'scheduled-notifications' ? { ...(await runScheduledNotifications(env as never, now)) }
-            : job === 'alerts' ? await alertsJob(env, now)
+            : job === 'alerts' ? await alertsJob(env, now, jobs)
             : job === 'indexnow' ? await runIndexNow(env as IndexNowEnv)
             : job === 'weekly-summary' ? await runWeeklySummary(env as never, now)
             : job === 'outreach' ? await runOutreach(env as never, now)
@@ -215,20 +167,31 @@ export async function runScheduled(env: DbEnv, scheduledTime: number): Promise<J
     }
     return [];
   }
-  // The owner's on/off and frequency choices, and when each job last started.
-  // Each job's own last start (one small read per job, so a frequent job
-  // never pushes a rare one out of view). A job whose read fails is not run:
-  // better a skipped tick than running everything every 5 minutes.
+  // The owner's on/off and frequency choices, and each job's newest runs.
+  // Each job's own read (one small read per job, so a frequent job never
+  // pushes a rare one out of view). A job whose read fails is not run:
+  // better a skipped tick than running everything every 5 minutes. Three
+  // runs, not one: Smart Alerts judges "failed twice in a row" from them
+  // without reading again (the free plan allows 50 subrequests a run).
   const [cfgRaw, ...lastRuns] = await Promise.all([
     setting(env, 'jobs'),
-    ...JOBS.map((j) => db.select<{ started_at: string }>(env, 'job_runs', q().eq('job', j.id).select('started_at').order('started_at', 'desc').limit(1))),
+    ...JOBS.map((j) => db.select<RecentRun>(env, 'job_runs', q().eq('job', j.id).select('started_at,ok,summary').order('started_at', 'desc').limit(3))),
   ]);
   const cfg = jobSettings(cfgRaw);
-  const out: JobResult[] = [];
+  const recentRuns: RecentRuns = new Map();
   for (const [i, j] of JOBS.entries()) {
-    const r = lastRuns[i] as Awaited<ReturnType<typeof db.select<{ started_at: string }>>>;
-    if (!r.ok) continue;
-    if (isDue(cfg[j.id], r.rows[0]?.started_at ?? null, scheduledTime)) out.push(await runJob(env, j.id, Date.now()));
+    const r = lastRuns[i] as Awaited<ReturnType<typeof db.select<RecentRun>>>;
+    if (r.ok) recentRuns.set(j.id, r.rows);
+  }
+  const out: JobResult[] = [];
+  for (const j of JOBS) {
+    const runs = recentRuns.get(j.id);
+    if (!runs) continue;
+    if (!isDue(cfg[j.id], runs[0]?.started_at ?? null, scheduledTime)) continue;
+    const result = await runJob(env, j.id, Date.now(), { recentRuns, settings: cfg });
+    // A job that ran in this tick counts with its new run (Smart Alerts runs after Status check and Clean-up).
+    recentRuns.set(j.id, [{ started_at: result.startedAt, ok: result.ok, summary: result.summary }, ...runs].slice(0, 3));
+    out.push(result);
   }
   return out;
 }

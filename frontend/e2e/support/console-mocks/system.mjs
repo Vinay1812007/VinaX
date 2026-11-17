@@ -34,6 +34,15 @@ export default {
       { name: 'Song search', path: '/api/cat/search', ok: false, status: 502, ms: 3000, note: 'The music source did not answer in time' },
     ],
   }),
+  'GET /api/admin/quota': () => {
+    const start = new Date(); start.setUTCHours(0, 0, 0, 0);
+    return {
+      configured: true, requests: 41_250, errors: 310, subrequests: 88_000, allowance: 100_000, share: 0.4125, level: 'ok', cached: true,
+      since: start.toISOString(), resetsAt: new Date(start.getTime() + 86400000).toISOString(), checkedAt: ago(4),
+      byScript: [{ script: 'vinax-api', requests: 41_250, errors: 310 }],
+      byStatus: [{ status: 'success', requests: 40_900 }, { status: 'scriptThrewException', requests: 300 }, { status: 'clientDisconnected', requests: 50 }],
+    };
+  },
   'GET /api/admin/musicapi': () => ({ checkedAt: new Date().toISOString(), mirrors: [{ id: 'vinax-cat', ok: true, songs: 10, ms: 340 }, { id: 'direct', ok: true, songs: 0, ms: 900 }, { id: 'x', label: 'saavn.sumit.co', ok: false, ms: 10000, note: 'No answer' }] }),
   'GET /api/admin/ai': () => ({
     settings: { enabled: false, testers: ['1', '2'] },
@@ -62,6 +71,8 @@ export default {
       { name: 'SUPABASE_URL', label: 'Database address', group: 'Database', required: true, set: true, note: 'database project URL' },
       { name: 'SUPABASE_SERVICE_ROLE_KEY', label: 'Database key', group: 'Database', required: true, set: true, note: 'server only' },
       { name: 'FCM_SERVICE_ACCOUNT', label: 'Android notifications', group: 'Push', required: false, set: false, note: 'Android push' },
+      { name: 'CF_ANALYTICS_TOKEN', label: 'Daily request meter (Cloudflare analytics key)', group: 'Monitoring', required: false, set: true, note: 'Cloudflare API token with only Account Analytics: Read' },
+      { name: 'CF_ACCOUNT_ID', label: 'Daily request meter (Cloudflare account)', group: 'Monitoring', required: false, set: true, note: 'the Cloudflare account id the Worker runs on' },
       { name: 'GEMINI_API_KEY', label: 'AI provider: Google Gemini', group: 'VinaX AI', required: false, set: true, note: 'Gemini chat models' },
     ],
   }),
@@ -116,7 +127,7 @@ export default {
     configured: true, saved: true, updatedAt: ago(60 * 24),
     rules: {
       enabled: true, who: 'editors', quiet: { enabled: true, start: '23:00', end: '07:00' }, cooldownMinutes: 60,
-      rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 }, siteDown: { on: true }, noPlays: { on: true, minutes: 60, onlyIfUsualPlays: true }, newFeedback: { on: false, minCount: 1 } },
+      rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 }, siteDown: { on: true }, noPlays: { on: true, minutes: 60, onlyIfUsualPlays: true }, newFeedback: { on: false, minCount: 1 }, jobsFailing: { on: true }, quotaHigh: { on: true, percent: 80 } },
     },
     recipients: [
       { email: 'owner@example.com', name: 'Asha Rao', role: 'owner', gets: true, phones: 1 },
@@ -125,6 +136,7 @@ export default {
     ],
     me: { email: 'owner@example.com', via: 'google', phones: 1 },
     push: { web: true, fcm: true },
+    meter: { ready: true },
     recent: [
       { id: 41, at: ago(35), rule: 'errorsSpike', title: 'App errors are rising', body: '42 errors in the last hour (9 the hour before). Tap to see what is going wrong.', devices: 2, sent: 2, failed: 0 },
       { id: 40, at: ago(60 * 26), rule: 'siteDown', title: 'VinaX may be down', body: 'Music search is not answering. Tap to see the server checks.', devices: 2, sent: 1, failed: 1 },

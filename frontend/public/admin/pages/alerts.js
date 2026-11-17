@@ -2,11 +2,12 @@
  * The server checks for trouble every few minutes (the `alerts` job) and
  * sends ONE short alert per problem to the admins' own phones: app errors
  * rising, the site or music search not answering, no songs played, new
- * feedback. This page shows whether it is on, who gets the alerts and
+ * feedback, a scheduled job failing or late, the day's server requests
+ * running low (needs the request meter's keys). This page shows whether it is on, who gets the alerts and
  * whether their phone is linked, the rules (Owners edit them: the
  * `alert-rules` setting, saved through /api/admin/settings), a test alert,
  * Check now, and the recent alerts.
- *   GET  /api/admin/alerts                    → rules, recipients, me, push, recent, job, signals
+ *   GET  /api/admin/alerts                    → rules, recipients, me, push, meter, recent, job, signals
  *   POST /api/admin/alerts { action: 'test' }  → a test to your own phone (editor)
  *   POST /api/admin/alerts { action: 'check' } → check now (owner)
  */
@@ -18,7 +19,9 @@
     { id: 'errorsSpike', title: 'App errors rising', desc: 'When the app suddenly reports many more errors than the hour before.' },
     { id: 'siteDown', title: 'Site or music search not answering', desc: 'When the website or music search stops answering. Sent even during quiet hours.' },
     { id: 'noPlays', title: 'No songs played', desc: 'When nobody plays a song for a while — playback may be broken.' },
-    { id: 'newFeedback', title: 'New feedback', desc: 'When new feedback messages arrive from the app.' }
+    { id: 'newFeedback', title: 'New feedback', desc: 'When new feedback messages arrive from the app.' },
+    { id: 'jobsFailing', title: 'Scheduled job failing', desc: 'When a background job (clean-up, status check, scheduled notifications…) fails twice in a row or stops running.' },
+    { id: 'quotaHigh', title: 'Daily server requests running low', desc: 'When today’s server requests pass a share of the free plan’s daily allowance. At most once a day, and sent even during quiet hours.' }
   ];
   var RULE_NAME = {}; RULES.forEach(function (r) { RULE_NAME[r.id] = r.title; });
   var WHO = [
@@ -33,6 +36,7 @@
   var MIN_ERRORS = [5, 10, 20, 50, 100, 250];
   var FACTORS = [1.5, 2, 3, 5];
   var MIN_FEEDBACK = [1, 3, 5, 10, 25];
+  var QUOTA_PERCENTS = [50, 70, 80, 90, 95];
 
   function span(m) {
     m = num(m);
@@ -52,6 +56,7 @@
   function fromRules(raw) {
     var r = obj(raw), q = obj(r.quiet), rules = obj(r.rules);
     var es = obj(rules.errorsSpike), sd = obj(rules.siteDown), np = obj(rules.noPlays), nf = obj(rules.newFeedback);
+    var jf = obj(rules.jobsFailing), qh = obj(rules.quotaHigh);
     return {
       enabled: r.enabled !== false,
       who: r.who === 'editors' || r.who === 'all' ? r.who : 'owners',
@@ -61,7 +66,9 @@
         errorsSpike: { on: es.on !== false, minErrors: num(es.minErrors) > 0 ? num(es.minErrors) : 10, factor: num(es.factor) >= 1 ? num(es.factor) : 2 },
         siteDown: { on: sd.on !== false },
         noPlays: { on: np.on !== false, minutes: MINUTES.indexOf(num(np.minutes)) >= 0 ? num(np.minutes) : 60, onlyIfUsualPlays: np.onlyIfUsualPlays !== false },
-        newFeedback: { on: nf.on !== false, minCount: num(nf.minCount) > 0 ? num(nf.minCount) : 1 }
+        newFeedback: { on: nf.on !== false, minCount: num(nf.minCount) > 0 ? num(nf.minCount) : 1 },
+        jobsFailing: { on: jf.on !== false },
+        quotaHigh: { on: qh.on !== false, percent: QUOTA_PERCENTS.indexOf(num(qh.percent)) >= 0 ? num(qh.percent) : 80 }
       }
     };
   }
@@ -74,8 +81,8 @@
 
   VX.page({
     id: 'alerts', title: 'Smart Alerts', group: 'Overview', icon: 'bell', order: 5, noAuto: true,
-    desc: 'Alerts on your phone when something goes wrong: errors rising, the site not answering, no plays, new feedback.',
-    keywords: 'alerts alarm warn notify phone push errors down outage feedback monitoring',
+    desc: 'Alerts on your phone when something goes wrong: errors rising, the site not answering, no plays, new feedback, a job failing, requests running low.',
+    keywords: 'alerts alarm warn notify phone push errors down outage feedback monitoring jobs quota requests',
     render: function (host, ctx) {
       return ui.load(host, function () { return VX.api.get('/api/admin/alerts', null, { fresh: true }); }, function (d) {
         var gate = ui.gate(d, ctx);
@@ -122,7 +129,7 @@
       h('div.grid.alerts-grid',
         actionsCard(d, ctx, me),
         peopleCard(people, rules)),
-      rulesCard(rules, owner, ctx, d.saved === true),
+      rulesCard(rules, owner, ctx, d.saved === true, obj(d.meter).ready === true),
       recentCard(arr(d.recent))
     ];
   }
@@ -199,7 +206,7 @@
 
   /* -------------------------------------------------------------- rules */
 
-  function rulesCard(stored, owner, ctx, saved) {
+  function rulesCard(stored, owner, ctx, saved, meterReady) {
     var m = VX.st ? VX.st.clone(stored) : JSON.parse(JSON.stringify(stored));
     var start = JSON.stringify(m);
     var err = h('p.form-error', { role: 'alert' });
@@ -242,7 +249,12 @@
         dd('Nothing played for', MINUTES, r.noPlays.minutes, span, function (v) { r.noPlays.minutes = v; }),
         ui.checkbox('Only when people were listening at this time yesterday (avoids night-time alerts)', r.noPlays.onlyIfUsualPlays, function (on) { r.noPlays.onlyIfUsualPlays = on; changed(); }, { disabled: !owner })),
       newFeedback: h('div.alert-rule-opts',
-        dd('At least', MIN_FEEDBACK, r.newFeedback.minCount, function (v) { return fmt.plural(v, 'new message'); }, function (v) { r.newFeedback.minCount = v; }))
+        dd('At least', MIN_FEEDBACK, r.newFeedback.minCount, function (v) { return fmt.plural(v, 'new message'); }, function (v) { r.newFeedback.minCount = v; })),
+      jobsFailing: null,
+      quotaHigh: h('div.alert-rule-opts',
+        dd('When used reaches', QUOTA_PERCENTS, r.quotaHigh.percent, function (v) { return v + '% of the day’s requests'; }, function (v) { r.quotaHigh.percent = v; }),
+        meterReady ? null : h('p.muted.small', 'Needs the daily request meter’s two keys. Server Checks shows how to add them. ',
+          ctx.go ? h('a', { href: '#/server-checks', onclick: function (e) { e.preventDefault(); ctx.go('server-checks'); } }, 'Open Server Checks') : null))
     };
 
     VX.mount(form,
@@ -257,7 +269,7 @@
       })),
       dd('Do not repeat the same alert for', COOLDOWNS, m.cooldownMinutes, span, function (v) { m.cooldownMinutes = v; }),
       h('div',
-        ui.switchRow('Quiet hours', 'No alerts during these hours (India time), except when the site or music search is not answering.', m.quiet.enabled, function (on) { m.quiet.enabled = on; quietTimes.hidden = !on; changed(); }, { disabled: !owner }),
+        ui.switchRow('Quiet hours', 'No alerts during these hours (India time), except when the site or music search is not answering or the day’s server requests are running low.', m.quiet.enabled, function (on) { m.quiet.enabled = on; quietTimes.hidden = !on; changed(); }, { disabled: !owner }),
         quietTimes));
 
     return ui.card({
@@ -280,7 +292,7 @@
         var devices = num(r.devices), sent = num(r.sent);
         var reach = !devices ? 'No phone was linked' : 'Reached ' + fmt.num(sent) + ' of ' + fmt.plural(devices, 'phone');
         return h('li',
-          h('span.alert-dot', ui.dot(r.rule === 'siteDown' ? 'bad' : r.rule === 'newFeedback' ? 'info' : 'warn')),
+          h('span.alert-dot', ui.dot(r.rule === 'siteDown' || r.rule === 'quotaHigh' ? 'bad' : r.rule === 'newFeedback' ? 'info' : 'warn')),
           h('div.alert-main',
             h('div.alert-title', h('strong', r.title || 'Alert'), r.rule ? ui.pill(RULE_NAME[r.rule] || 'Alert', null) : null),
             r.body ? h('p.muted', r.body) : null,

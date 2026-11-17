@@ -13,7 +13,7 @@ import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
 import { intIn } from '../../_lib/edge';
-import { isJobId, jobSettings, JOBS, lateAfter, retentionOf, runJob } from '../../_lib/jobs';
+import { isJobId, isOverdue, jobSettings, JOBS, retentionOf, runJob } from '../../_lib/jobs';
 import { setting, writeSetting } from '../../_lib/settings';
 import { SCHEMA_WANTED } from './session';
 
@@ -115,7 +115,7 @@ export const onRequestGet = adminGet(async ({ env }) => {
     return {
       job: j.id, label: j.label, about: j.about, enabled: c.enabled, every: c.every, defaultEvery: j.every, choices: j.choices,
       lastAt: last?.started_at ?? null, finishedAt: last?.finished_at ?? null, ok: last?.ok ?? null, summary: last?.summary ?? null,
-      ageMin, overdue: c.enabled && ageMin !== null && ageMin > lateAfter(c.every), neverRan: last === null,
+      ageMin, overdue: isOverdue(c, last?.started_at ?? null, now), neverRan: last === null,
     };
   });
   return adminJson({

@@ -9,6 +9,14 @@
  *                 when the same window yesterday had at least USUAL_PLAYS plays
  *   newFeedback   at least minCount new (unread) feedback messages since the last
  *                 feedback alert (at most the last day)
+ *   jobsFailing   a switched-on scheduled job whose last two finished runs failed, or
+ *                 that is running late (its last run started more than lateAfter(every)
+ *                 minutes ago, as the Scheduled Jobs page says). The alerts job itself is
+ *                 not judged: it cannot report its own failure. From the cron, the runs
+ *                 `runScheduled` already read are reused (no extra reads)
+ *   quotaHigh     the account's Worker requests since 00:00 UTC reached `percent` of the
+ *                 free plan's daily allowance (_lib/cfAnalytics.ts; needs CF_ANALYTICS_TOKEN
+ *                 and CF_ACCOUNT_ID, otherwise not judged). At most once per UTC day
  *
  * Who: `who` picks the admins (owners · owners and editors · every admin,
  * plus ADMIN_OWNER_EMAILS); each one's phones are the push devices of the
@@ -16,14 +24,17 @@
  * whose phone is not linked gets nothing — the console page says so.
  *
  * Repeats: every alert is a `notifications` row (kind 'system', sent_by
- * 'schedule') whose dedupe_key is `alert:<rule>:<cooldown>:<bucket>`. A rule
- * that alerted less than `cooldownMinutes` ago is held; the unique key makes
- * two overlapping runs send at most one. The row carries the delivery
- * receipt, so the console's Recent alerts reads it back.
+ * 'schedule') whose dedupe_key is `alert:<rule>:<cooldown>:<bucket>`
+ * (quotaHigh: `alert:quotaHigh:day:<YYYY-MM-DD>`, UTC). A rule that alerted
+ * less than `cooldownMinutes` ago (quotaHigh: today, UTC) is held; the unique
+ * key makes two overlapping runs send at most one. The row carries the
+ * delivery receipt, so the console's Recent alerts reads it back.
  *
- * Quiet hours (India time, optional) hold every rule except siteDown, which
- * always goes out. A held rule is not recorded, so it alerts when the quiet
- * hours end if the problem is still there.
+ * Quiet hours (India time, optional) hold every rule except siteDown and
+ * quotaHigh, which always go out (the allowance resets at 05:30 India time,
+ * so a warning held until morning would come too late). A held rule is not
+ * recorded, so it alerts when the quiet hours end if the problem is still
+ * there.
  *
  * Alerts do not count toward the listener frequency cap (`fanOut` with
  * countTowardCap: false). Never throws.
@@ -34,9 +45,11 @@ import { db, dbConfigured, q, type DbEnv, type Rows, type Value } from './db';
 import { devicesOfEmail, fanOut, quietNow, recordReceipt, type DeviceRow, type PushEnv, type PushRules } from './pushSend';
 import { setting } from './settings';
 import { probeAll } from '../api/status';
+import { analyticsConfigured, readRequestUsage, utcDay, type CfAnalyticsEnv } from './cfAnalytics';
+import { isOverdue, jobSettings, JOBS, type JobContext, type JobId, type JobSetting, type RecentRun, type RecentRuns } from './jobSpecs';
 
-export type AlertRuleId = 'errorsSpike' | 'siteDown' | 'noPlays' | 'newFeedback';
-export const ALERT_RULES: readonly AlertRuleId[] = ['errorsSpike', 'siteDown', 'noPlays', 'newFeedback'];
+export type AlertRuleId = 'errorsSpike' | 'siteDown' | 'noPlays' | 'newFeedback' | 'jobsFailing' | 'quotaHigh';
+export const ALERT_RULES: readonly AlertRuleId[] = ['errorsSpike', 'siteDown', 'noPlays', 'newFeedback', 'jobsFailing', 'quotaHigh'];
 export type AlertWho = 'owners' | 'editors' | 'all';
 
 export interface AlertRules {
@@ -51,11 +64,17 @@ export interface AlertRules {
     siteDown: { on: boolean };
     noPlays: { on: boolean; minutes: number; onlyIfUsualPlays: boolean };
     newFeedback: { on: boolean; minCount: number };
+    jobsFailing: { on: boolean };
+    /** Alert when today's requests reach this percent of the daily allowance. */
+    quotaHigh: { on: boolean; percent: number };
   };
 }
 
 export const COOLDOWN_CHOICES: readonly number[] = [15, 30, 60, 120, 240, 720, 1440];
 export const NO_PLAYS_CHOICES: readonly number[] = [30, 60, 120, 180, 360];
+export const QUOTA_PERCENT_CHOICES: readonly number[] = [50, 70, 80, 90, 95];
+/** Rules that go out even during quiet hours. */
+const IGNORES_QUIET: ReadonlySet<AlertRuleId> = new Set(['siteDown', 'quotaHigh']);
 /** "Usual plays": the same window yesterday had at least this many. */
 export const USUAL_PLAYS = 3;
 /** The components a siteDown alert watches (the API probe is the Worker itself). */
@@ -74,6 +93,7 @@ export function alertRulesOf(raw: unknown): AlertRules {
   const quiet = obj(r.quiet);
   const rules = obj(r.rules);
   const es = obj(rules.errorsSpike), sd = obj(rules.siteDown), np = obj(rules.noPlays), nf = obj(rules.newFeedback);
+  const jf = obj(rules.jobsFailing), qh = obj(rules.quotaHigh);
   const factor = typeof es.factor === 'number' && Number.isFinite(es.factor) ? Math.min(20, Math.max(1, Math.round(es.factor * 2) / 2)) : 2;
   return {
     enabled: r.enabled !== false,
@@ -89,6 +109,8 @@ export function alertRulesOf(raw: unknown): AlertRules {
       siteDown: { on: sd.on !== false },
       noPlays: { on: np.on !== false, minutes: typeof np.minutes === 'number' && NO_PLAYS_CHOICES.includes(np.minutes) ? np.minutes : 60, onlyIfUsualPlays: np.onlyIfUsualPlays !== false },
       newFeedback: { on: nf.on !== false, minCount: int(nf.minCount, 1, 1000, 1) },
+      jobsFailing: { on: jf.on !== false },
+      quotaHigh: { on: qh.on !== false, percent: typeof qh.percent === 'number' && QUOTA_PERCENT_CHOICES.includes(qh.percent) ? qh.percent : 80 },
     },
   };
 }
@@ -115,6 +137,74 @@ export interface AlertSignals {
   newFeedback: number | null;
   /** Watched component → answering (null = not checked). */
   probes: Record<string, boolean | null>;
+  /** When the signals were read (job lateness is said from it). */
+  now?: number;
+  /** Jobs failing or late (null = not judged). Optional: older callers leave it out. */
+  jobs?: JobTrouble[] | null;
+  /** Today's Worker requests and the daily allowance (null = not judged). */
+  requests?: { used: number; allowance: number } | null;
+}
+
+/** A scheduled job that needs a look. */
+export interface JobTrouble {
+  job: JobId;
+  label: string;
+  kind: 'failing' | 'late';
+  /** The last run's error, when it failed. */
+  error: string | null;
+  lastAt: string | null;
+  every: number;
+}
+
+/**
+ * Which switched-on jobs (not the alerts job) failed their last two finished
+ * runs or are running late (pure). A job with no runs at all is new, not late.
+ */
+export function jobTroubles(settings: Record<JobId, JobSetting>, runs: RecentRuns, now: number): JobTrouble[] {
+  const out: JobTrouble[] = [];
+  for (const j of JOBS) {
+    if (j.id === 'alerts') continue;
+    const cfg = settings[j.id];
+    const list = runs.get(j.id);
+    if (!cfg?.enabled || !list) continue;
+    const lastAt = list[0]?.started_at ?? null;
+    // A run still going (ok is null) is neither a failure nor a success yet.
+    const finished = list.filter((r) => r.ok === true || r.ok === false).slice(0, 2);
+    if (finished.length === 2 && finished.every((r) => r.ok === false)) {
+      const err = obj(finished[0].summary).error;
+      out.push({ job: j.id, label: j.label, kind: 'failing', error: typeof err === 'string' && err ? err.slice(0, 120) : null, lastAt, every: cfg.every });
+    } else if (isOverdue(cfg, lastAt, now)) {
+      out.push({ job: j.id, label: j.label, kind: 'late', error: null, lastAt, every: cfg.every });
+    }
+  }
+  return out;
+}
+
+/** Each job's newest three runs (one small read per job). null when a read fails. */
+async function readRecentRuns(env: DbEnv): Promise<RecentRuns | null> {
+  const ids = JOBS.map((j) => j.id).filter((id) => id !== 'alerts');
+  const reads = await Promise.all(ids.map((id) => db.select<RecentRun>(env, 'job_runs', q().eq('job', id).select('started_at,ok,summary').order('started_at', 'desc').limit(3))));
+  const out: RecentRuns = new Map();
+  for (const [i, r] of reads.entries()) {
+    if (!r.ok) return null;
+    out.set(ids[i], r.rows);
+  }
+  return out;
+}
+
+async function readJobTroubles(env: DbEnv, now: number, jobs?: JobContext): Promise<JobTrouble[] | null> {
+  try {
+    if (jobs) return jobTroubles(jobs.settings, jobs.recentRuns, now);
+    const [raw, runs] = await Promise.all([setting(env, 'jobs'), readRecentRuns(env)]);
+    return runs ? jobTroubles(jobSettings(raw), runs, now) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readRequests(env: CfAnalyticsEnv, now: number): Promise<{ used: number; allowance: number } | null> {
+  const r = await readRequestUsage(env, now);
+  return r.ok ? { used: r.usage.requests, allowance: r.usage.allowance } : null;
 }
 
 const HOUR = 3_600_000;
@@ -140,20 +230,22 @@ async function readProbes(now: number): Promise<Record<string, boolean | null>> 
 }
 
 /** Read only what the switched-on rules need. Failed reads are null (that rule is not judged). */
-export async function readSignals(env: DbEnv, rules: AlertRules, now: number, lastFeedbackAlert: string | null): Promise<AlertSignals> {
+export async function readSignals(env: DbEnv & CfAnalyticsEnv, rules: AlertRules, now: number, lastFeedbackAlert: string | null, jobs?: JobContext): Promise<AlertSignals> {
   const r = rules.rules;
   const npMs = r.noPlays.minutes * 60_000;
   const fbSince = Math.max(lastFeedbackAlert ? Date.parse(lastFeedbackAlert) || 0 : 0, now - 24 * HOUR);
   const none = Promise.resolve(null);
-  const [errorsLastHour, errorsHourBefore, playsRecent, playsYesterday, newFeedback, probes] = await Promise.all([
+  const [errorsLastHour, errorsHourBefore, playsRecent, playsYesterday, newFeedback, probes, jobTrouble, requests] = await Promise.all([
     r.errorsSpike.on ? orNull(db.count(env, 'events', q().eq('kind', 'error').gte('at', iso(now - HOUR)))) : none,
     r.errorsSpike.on ? orNull(db.count(env, 'events', q().eq('kind', 'error').gte('at', iso(now - 2 * HOUR)).lt('at', iso(now - HOUR)))) : none,
     r.noPlays.on ? orNull(db.count(env, 'events', q().eq('kind', 'play').gte('at', iso(now - npMs)))) : none,
     r.noPlays.on && r.noPlays.onlyIfUsualPlays ? orNull(db.count(env, 'events', q().eq('kind', 'play').gte('at', iso(now - 24 * HOUR - npMs)).lt('at', iso(now - 24 * HOUR)))) : none,
     r.newFeedback.on ? orNull(db.count(env, 'feedback', q().eq('status', 'new').gt('at', iso(fbSince)))) : none,
     r.siteDown.on ? readProbes(now) : Promise.resolve({} as Record<string, boolean | null>),
+    r.jobsFailing.on ? readJobTroubles(env, now, jobs) : none,
+    r.quotaHigh.on && analyticsConfigured(env) ? readRequests(env, now) : none,
   ]);
-  return { errorsLastHour, errorsHourBefore, playsRecent, playsYesterday, newFeedback, probes };
+  return { errorsLastHour, errorsHourBefore, playsRecent, playsYesterday, newFeedback, probes, jobs: jobTrouble, requests, now };
 }
 
 /* ------------------------------------------------------------------- rules */
@@ -176,26 +268,54 @@ export function firingRules(rules: AlertRules, s: AlertSignals): Firing[] {
   if (r.errorsSpike.on && s.errorsLastHour != null && s.errorsHourBefore != null) {
     const e = s.errorsLastHour, before = s.errorsHourBefore;
     if (e >= r.errorsSpike.minErrors && e > r.errorsSpike.factor * before) {
-      out.push({ rule: 'errorsSpike', title: 'App errors are rising', body: `${n(e, 'error')} in the last hour (${before} the hour before). Tap to see what is going wrong.`, link: '/admin/#/health/errors' });
+      out.push({ rule: 'errorsSpike', title: 'App errors are rising', body: `${n(e, 'error')} in the last hour (${before} the hour before). Tap to see what is going wrong.`, link: '/admin/#/app-errors' });
     }
   }
   if (r.siteDown.on) {
     const down = WATCHED.filter((c) => s.probes[c] === false);
     if (down.length) {
       const names = down.map((c) => COMPONENT_NAME[c]);
-      out.push({ rule: 'siteDown', title: 'VinaX may be down', body: `${names.join(' and ')} ${down.length === 1 ? 'is' : 'are'} not answering. Tap to see the server checks.`, link: '/admin/#/health/checks' });
+      out.push({ rule: 'siteDown', title: 'VinaX may be down', body: `${names.join(' and ')} ${down.length === 1 ? 'is' : 'are'} not answering. Tap to see the server checks.`, link: '/admin/#/server-checks' });
     }
   }
   if (r.noPlays.on && s.playsRecent === 0) {
     const usual = s.playsYesterday ?? 0;
     if (!r.noPlays.onlyIfUsualPlays || (s.playsYesterday != null && usual >= USUAL_PLAYS)) {
-      out.push({ rule: 'noPlays', title: 'No songs played', body: `Nobody played a song in the last ${mins(r.noPlays.minutes)}${r.noPlays.onlyIfUsualPlays ? ` (${usual} at this time yesterday)` : ''}. Playback may be broken.`, link: '/admin/#/live/now' });
+      out.push({ rule: 'noPlays', title: 'No songs played', body: `Nobody played a song in the last ${mins(r.noPlays.minutes)}${r.noPlays.onlyIfUsualPlays ? ` (${usual} at this time yesterday)` : ''}. Playback may be broken.`, link: '/admin/#/listening-now' });
     }
   }
   if (r.newFeedback.on && s.newFeedback != null && s.newFeedback >= r.newFeedback.minCount) {
     out.push({ rule: 'newFeedback', title: 'New feedback', body: `${n(s.newFeedback, 'new feedback message')} to read.`, link: '/admin/#/feedback' });
   }
+  if (r.jobsFailing.on && s.jobs && s.jobs.length) {
+    const t = s.jobs;
+    const title = t.length > 1 ? 'Scheduled jobs need a look' : t[0].kind === 'failing' ? `${t[0].label} is failing` : `${t[0].label} has stopped running`;
+    const parts = t.slice(0, 3).map((x) => (x.kind === 'failing'
+      ? `${x.label} failed twice in a row${x.error ? ` (${x.error.slice(0, 80)})` : ''}`
+      : `${x.label} has not run for ${x.lastAt ? since(x.lastAt, s.now) : 'a while'} (it runs every ${mins(x.every)})`));
+    if (t.length > 3) parts.push(`${n(t.length - 3, 'more job')}`);
+    out.push({ rule: 'jobsFailing', title, body: `${parts.join('; ')}. Tap to see the scheduled jobs.`, link: '/admin/#/scheduled-jobs' });
+  }
+  if (r.quotaHigh.on && s.requests && s.requests.allowance > 0) {
+    const { used, allowance } = s.requests;
+    const pct = Math.floor((used / allowance) * 100);
+    if (pct >= r.quotaHigh.percent) {
+      out.push({
+        rule: 'quotaHigh', title: 'Daily server requests running low',
+        body: `${pct}% of today's ${allowance.toLocaleString('en-IN')} server requests are used (${used.toLocaleString('en-IN')}). At 100% the app stops working until 05:30 India time. Tap to see the server checks.`,
+        link: '/admin/#/server-checks',
+      });
+    }
+  }
   return out;
+}
+
+/** "3 hours", "40 minutes": how long ago `at` was. */
+function since(at: string, now: number | undefined): string {
+  const m = Math.max(1, Math.round(((now ?? Date.now()) - Date.parse(at)) / 60_000));
+  if (m < 120) return `${m} minutes`;
+  const h = Math.round(m / 60);
+  return h < 48 ? n(h, 'hour') : n(Math.round(h / 24), 'day');
 }
 
 /* -------------------------------------------------------------- recipients */
@@ -276,29 +396,34 @@ const WHO_LABEL: Record<AlertWho, string> = { owners: 'Smart Alerts · owners', 
  * Judge every switched-on rule and alert the chosen admins once per firing
  * rule. `actor` is who asked (the console's Check now); the job is 'schedule'.
  */
-export async function runAlerts(env: PushEnv & AdminSessionEnv, now = Date.now(), actor = 'schedule'): Promise<AlertRunSummary> {
+export async function runAlerts(env: PushEnv & AdminSessionEnv & CfAnalyticsEnv, now = Date.now(), actor = 'schedule', jobs?: JobContext): Promise<AlertRunSummary> {
   const summary: AlertRunSummary = { on: false, checked: [], firing: [], sent: [], held: [], recipients: 0, devices: 0 };
   if (!dbConfigured(env)) return { ...summary, error: 'not_configured' };
   try {
     const rules = await alertRules(env);
     summary.on = rules.enabled;
     if (!rules.enabled) return summary;
-    summary.checked = ALERT_RULES.filter((id) => rules.rules[id].on);
+    // quotaHigh is judged only when the request meter is set up.
+    summary.checked = ALERT_RULES.filter((id) => rules.rules[id].on && (id !== 'quotaHigh' || analyticsConfigured(env)));
     if (!summary.checked.length) return summary;
     const last = await lastAlerts(env);
     // Without the alert history a repeat cannot be ruled out: better skip a run than alert every 5 minutes.
     if (!last) return { ...summary, error: 'history_unreadable' };
-    const signals = await readSignals(env, rules, now, last.get('newFeedback') ?? null);
+    const signals = await readSignals(env, rules, now, last.get('newFeedback') ?? null, jobs);
     const firing = firingRules(rules, signals);
     summary.firing = firing.map((f) => f.rule);
     if (!firing.length) return summary;
 
     const cooldownMs = rules.cooldownMinutes * 60_000;
+    const today = utcDay(now);
     const quiet = alertQuiet(rules, now);
     const due = firing.filter((f) => {
       const at = last.get(f.rule);
-      if (at && now - Date.parse(at) < cooldownMs) { summary.held.push({ rule: f.rule, reason: 'cooldown' }); return false; }
-      if (quiet && f.rule !== 'siteDown') { summary.held.push({ rule: f.rule, reason: 'quiet_hours' }); return false; }
+      const atMs = at ? Date.parse(at) : NaN;
+      // quotaHigh: once per UTC day (the day the allowance counts), whatever the cooldown.
+      const recent = Number.isFinite(atMs) && (f.rule === 'quotaHigh' ? utcDay(atMs) === today : now - atMs < cooldownMs);
+      if (recent) { summary.held.push({ rule: f.rule, reason: 'cooldown' }); return false; }
+      if (quiet && !IGNORES_QUIET.has(f.rule)) { summary.held.push({ rule: f.rule, reason: 'quiet_hours' }); return false; }
       return true;
     });
     if (!due.length) return summary;
@@ -314,7 +439,7 @@ export async function runAlerts(env: PushEnv & AdminSessionEnv, now = Date.now()
       // The row first: its unique dedupe key is what stops a second run sending the same alert.
       const made = await db.insert<{ id: number }>(env, 'notifications', {
         kind: 'system', title: f.title, body: f.body, link: f.link, status: 'sent', sent_by: 'schedule', created_by: actor,
-        dedupe_key: `alert:${f.rule}:${rules.cooldownMinutes}:${bucket}`,
+        dedupe_key: f.rule === 'quotaHigh' ? `alert:quotaHigh:day:${today}` : `alert:${f.rule}:${rules.cooldownMinutes}:${bucket}`,
         audience: { label: WHO_LABEL[rules.who], alert: f.rule, admins: people.length },
         web_total: devices.filter((d) => d.channel === 'web').length, fcm_total: devices.filter((d) => d.channel === 'fcm').length,
         at: new Date(now).toISOString(),

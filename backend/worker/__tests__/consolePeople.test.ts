@@ -72,14 +72,17 @@ describe('Dashboard (overview)', () => {
     expect(res.status).toBe(200);
     expect(body?.days).toBe(30);
     expect(body?.kpis).toEqual(kpis);
-    const att = body?.attention as Array<{ id: string; level: string; text: string; page: string; tab?: string }>;
-    expect(att.map((a) => `${a.level}:${a.page}/${a.tab}`)).toEqual(['bad:health/errors', 'warn:feedback/new', 'warn:notifications/setup', 'info:live/rooms']);
+    const att = body?.attention as Array<{ id: string; level: string; text: string; page: string; tab?: string; params?: Record<string, string> }>;
+    // Today's page ids, not old addresses (the console's REDIRECTS stay only for links already sent).
+    expect(att.map((a) => `${a.level}:${a.page}`)).toEqual(['bad:app-errors', 'warn:feedback', 'warn:notification-setup', 'info:listen-together']);
+    expect(att.every((a) => a.tab === undefined)).toBe(true);
+    expect(att[1].params).toEqual({ status: 'new' });
     expect(att[0].text).toBe('35 app errors in the last 24 hours — more than double the day before.');
     expect(att.every((a) => !/listener|device only|fcm/i.test(a.text))).toBe(true);
   });
 
   it('clamps the range and asks for the database update when the schema is behind', () => {
-    expect(overview.attentionFor({}, { version: 7 })[0]).toMatchObject({ id: 'schema-old', page: 'database', tab: 'maintenance' });
+    expect(overview.attentionFor({}, { version: 7 })[0]).toMatchObject({ id: 'schema-old', page: 'db-maintenance' });
     expect(overview.attentionFor({}, null)[0]).toMatchObject({ id: 'schema-missing', level: 'bad' });
   });
 });

@@ -94,10 +94,11 @@ export default {
       platforms: [{ platform: 'android', users: 9, listeners: 9, accounts: 9 }, { platform: 'web', users: 5, listeners: 5, accounts: 5 }, { platform: 'ios', users: 1, listeners: 1, accounts: 1 }],
       versions: [],
       attention: [
-        { id: 'errors', level: 'bad', text: '35 app errors in the last 24 hours.', action: 'View errors', page: 'health', tab: 'errors' },
-        { id: 'feedback', level: 'warn', text: '2 new feedback messages waiting to be read.', action: 'Read feedback', page: 'feedback', tab: 'new' },
-        { id: 'push', level: 'warn', text: 'No phones are set up for notifications yet.', action: 'Set up', page: 'notifications', tab: 'setup' },
-        { id: 'rooms', level: 'info', text: '1 Listen Together room open right now.', action: 'See rooms', page: 'live', tab: 'rooms' },
+        { id: 'requests', level: 'warn', text: "84% of today's 1,00,000 server requests are used. At 100% the app stops working until 05:30 India time.", action: 'See requests', page: 'server-checks' },
+        { id: 'errors', level: 'bad', text: '35 app errors in the last 24 hours.', action: 'View errors', page: 'app-errors' },
+        { id: 'feedback', level: 'warn', text: '2 new feedback messages waiting to be read.', action: 'Read feedback', page: 'feedback', params: { status: 'new' } },
+        { id: 'push', level: 'warn', text: 'No phones are set up for notifications yet.', action: 'Set up', page: 'notification-setup' },
+        { id: 'rooms', level: 'info', text: '1 Listen Together room open right now.', action: 'See rooms', page: 'listen-together' },
       ],
       checkedAt: new Date().toISOString(),
     };

@@ -1,7 +1,8 @@
 /* VinaX console — App Health (console rebuild).
  * Is everything working? Tabs:
  *   errors           App Errors: what went wrong in the app, grouped, with a status per problem (/api/admin/errors)
- *   checks           Server Checks: the website and the services the app calls (/api/admin/edge)
+ *   checks           Server Checks: today's server requests against the free plan's daily allowance
+ *                    (/api/admin/quota), then the website and the services the app calls (/api/admin/edge)
  *   sources          Music Sources: each music source checked with a one-song search (/api/admin/musicapi)
  *   ai               AI Assistant: VinaX AI's providers and models (/api/admin/ai)
  *   versions         App Versions: releases and builds (/api/admin/releases)
@@ -16,8 +17,8 @@
       desc: 'Problems people hit in the app, grouped so the same problem shows once. Set a status as you work on each one.',
       keywords: 'errors crashes problems bugs reports' },
     { id: 'server-checks', title: 'Server Checks', icon: 'pulse', render: renderChecks,
-      desc: 'The website and every service the app calls, checked from the server right now.',
-      keywords: 'status up down outage services website' },
+      desc: 'Today’s server requests, and the website and every service the app calls, checked from the server right now.',
+      keywords: 'status up down outage services website requests quota allowance limit 1027' },
     { id: 'music-sources', title: 'Music Sources', icon: 'music', render: renderSources,
       desc: 'Where songs come from. Each source is checked with a one-song search.',
       keywords: 'music api catalogue sources search working' },
@@ -196,10 +197,16 @@
 
   /* ------------------------------------------------------- Server Checks */
 
-  function renderChecks(host) {
+  function renderChecks(host, ctx) {
     var body = h('div');
-    host.appendChild(h('div.toolbar', ui.button('Check again', { kind: 'primary', icon: 'refresh', onClick: function () { return load(); } }), ui.muted('About 25 quick checks of the live site. Allowed a few times a minute.')));
+    var meter = h('div.request-meter');
+    host.appendChild(meter);
+    host.appendChild(h('div.toolbar', ui.button('Check again', { kind: 'primary', icon: 'refresh', onClick: function () { loadMeter(); return load(); } }), ui.muted('About 25 quick checks of the live site. Allowed a few times a minute.')));
     host.appendChild(body);
+    function loadMeter() {
+      return ui.load(meter, function () { return VX.api.get('/api/admin/quota', null, { fresh: true, timeout: 20000 }); }, function (d) { return meterCard(d, ctx); }, { skeleton: 3 });
+    }
+    loadMeter();
     function load() {
       return ui.load(body, function () { return VX.api.get('/api/admin/edge', null, { fresh: true, timeout: 40000 }); }, function (d) {
         var shell = obj(d.shell), assets = arr(d.assets), eps = arr(d.endpoints);
@@ -241,6 +248,65 @@
     }
     return load();
   }
+
+  /* ---------------------------------------------- Daily request meter */
+
+  // What each outcome Cloudflare counts means, in plain words.
+  var OUTCOME = {
+    success: 'Answered', scriptThrewException: 'Failed in the server code', exceededResources: 'Ran out of time or memory',
+    exceededCpu: 'Ran out of time', exceededMemory: 'Ran out of memory', clientDisconnected: 'The person left before the answer',
+    internalError: 'Failed inside Cloudflare', responseStreamDisconnected: 'Answer cut off', loadSheddingRejected: 'Turned away by Cloudflare', unknown: 'Unknown'
+  };
+  var METER_KEYS = ['CF_ANALYTICS_TOKEN', 'CF_ACCOUNT_ID'];
+
+  /** The meter, or its setup card when the two keys are not set. Exported for tests as VX.health.meterCard. */
+  function meterCard(d, ctx) {
+    d = obj(d);
+    var allowance = num(d.allowance) || 100000;
+    if (d.configured === false) {
+      var missing = arr(d.missing).length ? arr(d.missing) : METER_KEYS;
+      return ui.card({
+        title: 'Daily request meter is not set up', tone: 'warn',
+        body: [
+          h('p', 'The free plan allows ' + fmt.num(allowance) + ' server requests a day. When they run out, everything in the app that needs the server stops working until 05:30 India time. Add two keys to see today’s count here, on the Dashboard and in Smart Alerts.'),
+          h('ol.steps', { style: { 'margin-top': '10px' } },
+            h('li', 'In Cloudflare, open My Profile › API Tokens › Create Token › Custom token, and give it only ', h('strong', 'Account › Account Analytics › Read'), '.'),
+            h('li', 'Set the Worker keys ', h('code.mono', 'CF_ANALYTICS_TOKEN'), ' (that token) and ', h('code.mono', 'CF_ACCOUNT_ID'), ' (the account id on the Workers page).'),
+            h('li', 'Come back to this page. The count shows on the next check.')),
+          h('pre.json', { style: { 'margin-top': '10px' } }, missing.map(function (k) { return 'npx wrangler secret put ' + k + ' --config worker/wrangler.toml'; }).join('\n')),
+          ctx && ctx.go ? h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('See API Keys Status', { kind: 'ghost', small: true, icon: 'key', onClick: function () { ctx.go('api-keys'); } })) : null
+        ]
+      });
+    }
+    var used = num(d.requests), share = allowance ? used / allowance : 0;
+    // The server says the level (_lib/cfAnalytics.ts usageLevel); the same thresholds when it does not.
+    var level = d.level === 'ok' || d.level === 'warn' || d.level === 'bad' ? d.level : share >= 0.95 ? 'bad' : share >= 0.8 ? 'warn' : 'ok';
+    var left = Math.max(0, allowance - used);
+    var scripts = arr(d.byScript), outcomes = arr(d.byStatus);
+    var reset = d.resetsAt ? fmt.time(d.resetsAt) + ' ' + VX.tzShort() : '05:30 India time';
+    return ui.card({
+      title: 'Server requests today', sub: 'Free plan: ' + fmt.num(allowance) + ' a day, counted from 00:00 UTC', span: 'full',
+      body: [
+        level !== 'ok' ? ui.notice(share >= 1
+          ? 'Today’s requests have run out. Everything that needs the server fails until ' + reset + '.'
+          : fmt.pct(Math.floor(share * 100)) + ' used. At 100% everything that needs the server stops until ' + reset + '. Look for a bot or a page sending too many requests.', level) : null,
+        ui.stats([
+          { label: 'Used today', value: fmt.num(used), sub: 'of ' + fmt.num(allowance), tone: level === 'ok' ? null : level, info: 'Requests every Worker on the Cloudflare account answered since 00:00 UTC. The allowance is for the whole account.' },
+          { label: 'Left today', value: fmt.num(left), sub: fmt.pct(Math.max(0, 100 - Math.floor(share * 100))) + ' of the day’s allowance', info: 'How many more requests can be answered before the day’s allowance runs out.' },
+          { label: 'Ended in an error', value: fmt.num(d.errors), sub: used ? fmt.ratio(num(d.errors) / used) + ' of today’s requests' : null, tone: num(d.errors) ? 'warn' : null, info: 'Requests where the server code failed or ran out of time. They still count toward the allowance.' },
+          { label: 'Starts again', value: reset, sub: d.resetsAt ? fmt.ago(d.resetsAt) : null, info: 'The allowance starts again every day at 00:00 UTC, which is 05:30 India time.' }
+        ]),
+        ui.meter(share, level, 'Server requests used today'),
+        h('p.muted.small', { style: { 'margin-top': '6px' } }, fmt.pct(Math.floor(share * 100)) + ' used · updated ' + (d.checkedAt ? fmt.ago(d.checkedAt) : '—') + ' (at most every 10 minutes)'),
+        scripts.length > 1 || outcomes.length ? ui.grid([
+          scripts.length > 1 ? h('div', h('h3.subhead', 'By Worker'), ui.hbars(scripts.map(function (r) { return { label: r.script || 'Unknown', value: num(r.requests), sub: num(r.errors) ? fmt.plural(r.errors, 'error') : null }; }), { limit: 6 })) : null,
+          outcomes.length ? h('div', h('h3.subhead', 'How they ended'), ui.hbars(outcomes.map(function (r) { return { label: OUTCOME[r.status] || fmt.label(r.status), value: num(r.requests) }; }), { limit: 6 })) : null
+        ].filter(Boolean), 2) : null,
+        h('p.muted.small', 'Cloudflare’s count does not say which addresses were asked for. To find a bot or page using up the requests, open the Worker’s Metrics in the Cloudflare dashboard.')
+      ]
+    });
+  }
+  VX.health.meterCard = meterCard;
 
   /* ------------------------------------------------------- Music Sources */
 
@@ -448,7 +514,7 @@
 
   /* ----------------------------------------------------- API Keys Status */
 
-  var GROUP_NAME = { Admin: 'This console', Data: 'Sign-in and privacy', Catalogue: 'Music sources', Database: 'Database', Cron: 'Background jobs', Push: 'Notifications', Releases: 'App releases', Edge: 'Website', 'VinaX AI': 'AI assistant' };
+  var GROUP_NAME = { Admin: 'This console', Data: 'Sign-in and privacy', Catalogue: 'Music sources', Database: 'Database', Cron: 'Background jobs', Push: 'Notifications', Releases: 'App releases', Edge: 'Website', Monitoring: 'Daily request meter', 'VinaX AI': 'AI assistant' };
   function renderKeys(host) {
     return ui.load(host, function () { return VX.api.get('/api/admin/envcheck', null, { fresh: true }); }, function (d) {
       var items = arr(d.items);

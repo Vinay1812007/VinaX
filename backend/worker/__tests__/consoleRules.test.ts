@@ -121,7 +121,7 @@ describe('read-only mode', () => {
 
 describe('scheduler', () => {
   const T = Date.UTC(2026, 10, 3, 10, 0);
-  it('asks for each job’s own last run and skips a job whose read failed', async () => {
+  it('asks for each job’s own last runs and skips a job whose read failed', async () => {
     failTable = 'job_runs';
     const out = await runScheduled(DB, T);
     expect(out).toEqual([]);
@@ -130,7 +130,8 @@ describe('scheduler', () => {
     expect(JOBS.length).toBe(8);
     for (const r of reads) {
       expect(r.url.searchParams.get('job')).toMatch(/^eq\./);
-      expect(r.url.searchParams.get('limit')).toBe('1');
+      // Three, so Smart Alerts can judge "failed twice in a row" without reading again.
+      expect(r.url.searchParams.get('limit')).toBe('3');
     }
   });
 });

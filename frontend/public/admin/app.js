@@ -31,8 +31,8 @@
   /**
    * Old addresses → today's pages. Every tab of the old pages is its own page
    * now, so "page/tab" keys come first; a bare old page id goes to its first
-   * page. Alerts, emails and dashboard notices from the server still use the
-   * old addresses, so these stay.
+   * page. The server links to today's ids now, but alerts already on phones,
+   * bookmarks and shared links still carry the old addresses, so these stay.
    */
   var REDIRECTS = {
     '': 'dashboard', overview: 'dashboard', listeners: 'users', audience: 'users',

@@ -41,10 +41,10 @@ describe('tapped notification links', () => {
     const navigate = vi.fn();
     const open = vi.fn();
     openPushLink('/album/1', navigate, open);
-    openPushLink('/admin/#/health/errors', navigate, open);
+    openPushLink('/admin/#/app-errors', navigate, open);
     openPushLink('//evil.example/x', navigate, open);
     openPushLink('https://evil.example/x', navigate, open);
     expect(navigate.mock.calls).toEqual([['/album/1']]);
-    expect(open.mock.calls).toEqual([['https://www.vinaxmusic.online/admin/#/health/errors']]);
+    expect(open.mock.calls).toEqual([['https://www.vinaxmusic.online/admin/#/app-errors']]);
   });
 });

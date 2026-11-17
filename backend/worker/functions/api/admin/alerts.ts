@@ -7,6 +7,7 @@
  *                                                            phones = linked devices (null when unreadable)
  *        me: { email, via, phones },
  *        push: { web, fcm }                                  which push channels the server can send on
+ *        meter: { ready }                                    the request meter's keys are set (quotaHigh can be judged)
  *        recent: [{ id, at, rule, title, body, devices, sent, failed }]   the last 30 alerts
  *        job: { enabled, every, lastAt, finishedAt, ok, summary, nextAt },
  *        signals: { errorsLastHour, errorsHourBefore, playsLastHour, newFeedback, probes: { website, api, catalog } },
@@ -21,6 +22,7 @@
  */
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost } from '../../_lib/adminRoute';
+import { analyticsConfigured } from '../../_lib/cfAnalytics';
 import { alertRulesOf, listAdmins, recipientDevices, ruleOfKey, runAlerts, whoIncludes, WATCHED } from '../../_lib/alerts';
 import { db, firstFailure, q, since } from '../../_lib/db';
 import { fcmConfigured, type FcmEnv } from '../../_lib/fcm';
@@ -79,6 +81,7 @@ export const onRequestGet = adminGet(async ({ env, me }) => {
     recipients: admins.rows.map((a) => ({ email: a.email, name: a.name, role: a.role, gets: whoIncludes(rules.who, a.role), phones: phones.perEmail.get(a.email) ?? null })),
     me: { email: me.email, via: me.via, phones: myPhones },
     push: { web: pushConfigured(e), fcm: fcmConfigured(e) },
+    meter: { ready: analyticsConfigured(env) },
     recent: recent.rows.map((r) => {
       const devices = (Number(r.web_total) || 0) + (Number(r.fcm_total) || 0);
       const sent = (Number(r.web_sent) || 0) + (Number(r.fcm_sent) || 0);

@@ -140,7 +140,7 @@ describe('page registry', () => {
     expect(pairs.length).toBeGreaterThan(40);
     for (const [, t] of pairs) expect(ids.has(t), t).toBe(true);
     const map = Object.fromEntries(pairs);
-    // Every tab of the old pages, and the server's links (alerts, emails, dashboard notices), still land on a page.
+    // Every tab of the old pages still lands on a page (alerts already on phones and bookmarks carry them).
     expect(map).toMatchObject({
       'health/errors': 'app-errors', 'health/checks': 'server-checks', 'health/keys': 'api-keys',
       'database/changes': 'change-log', 'database/maintenance': 'db-maintenance',
@@ -269,6 +269,28 @@ describe('empty and failing answers', () => {
     const results = await renderAll(() => ({ ok: false, status: 502, data: { error: 'upstream_unavailable' }, error: 'upstream_unavailable', message: 'The server could not answer right now.' }));
     const failures = results.filter((r) => r.error || BAD_TEXT.test(r.text)).map((r) => `${r.where}: ${r.error ? String(r.error) : 'junk text'}`);
     expect(failures).toEqual([]);
+  });
+});
+
+describe('the daily request meter (Server Checks)', () => {
+  const card = (d: unknown): HTMLElement => (window as unknown as { VX: { health: { meterCard: (d: unknown, ctx: unknown) => HTMLElement } } }).VX.health.meterCard(d, makeCtx());
+  it('without its two keys it is a setup card that names them', () => {
+    const t = card({ configured: false, missing: ['CF_ANALYTICS_TOKEN', 'CF_ACCOUNT_ID'], allowance: 100000 }).textContent ?? '';
+    expect(t).toContain('Daily request meter is not set up');
+    expect(t).toContain('CF_ANALYTICS_TOKEN');
+    expect(t).toContain('Account Analytics');
+    expect(t).not.toMatch(BAD_TEXT);
+  });
+  it('shows today’s count against the allowance, and warns from 80%', () => {
+    const ok = card({ configured: true, requests: 41250, errors: 0, allowance: 100000, resetsAt: '2026-11-18T00:00:00.000Z', checkedAt: new Date().toISOString(), byScript: [{ script: 'vinax-api', requests: 41250, errors: 0 }], byStatus: [{ status: 'success', requests: 41250 }] });
+    expect(ok.textContent).toContain('Server requests today');
+    expect(ok.textContent).toContain('41%');
+    expect(ok.querySelector('.notice')).toBeNull();
+    expect(ok.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('41');
+    const high = card({ configured: true, requests: 86000, allowance: 100000, byScript: [], byStatus: [] });
+    expect(high.querySelector('.notice.warn')?.textContent).toContain('86% used');
+    expect(card({ configured: true, requests: 100500, allowance: 100000 }).querySelector('.notice.bad')?.textContent).toContain('run out');
+    expect(card({ configured: true }).textContent).not.toMatch(BAD_TEXT);
   });
 });
 
