@@ -15,8 +15,8 @@ import type { HistoryEntry } from '@/types';
  *               unfinished one a third of it (30 s floor); an unknown length
  *               counts 180 s when completed and 45 s otherwise.
  *
- * Every total says whether it is exact or an estimate, and every window
- * says whether the 150-play history cap cut it short.
+ * Every total says whether it is exact or an estimate. Whether a window is
+ * fully on record is ./playLog.ts's mergedCoverage.
  */
 export const HISTORY_CAP = 150;
 const UNKNOWN_COMPLETED_SEC = 180;
@@ -72,39 +72,4 @@ export function formatHours(total: Pick<ListeningTotal, 'seconds' | 'estimated'>
   const h = total.seconds / 3600;
   const n = h >= 10 ? String(Math.round(h)) : h.toFixed(1);
   return `${total.estimated ? '≈ ' : ''}${n}h`;
-}
-
-export interface HistoryCoverage {
-  /** History holds its maximum number of plays, so older plays were dropped. */
-  capped: boolean;
-  /** Oldest play still on record. */
-  oldestTs: number | null;
-  /** True when the window `from` is fully inside the retained history. */
-  complete: boolean;
-}
-
-/**
- * Does the retained history cover a window starting at `from`? With the
- * 150-play cap a heavy listener's "last 7 days" or "12 weeks" can start
- * later than it claims; surfaces must say so instead of showing a low
- * number as fact.
- */
-export function historyCoverage(entries: readonly HistoryEntry[], from: number, cap = HISTORY_CAP): HistoryCoverage {
-  let oldestTs: number | null = null;
-  let n = 0;
-  for (const e of entries) {
-    if (typeof e?.ts !== 'number') continue;
-    n += 1;
-    if (oldestTs === null || e.ts < oldestTs) oldestTs = e.ts;
-  }
-  const capped = n >= cap;
-  const complete = !capped || (oldestTs !== null && oldestTs <= from);
-  return { capped, oldestTs, complete };
-}
-
-/** A one-line caveat for an incomplete window, or null when the window is complete. */
-export function coverageNote(cov: HistoryCoverage, windowLabel: string, cap = HISTORY_CAP): string | null {
-  if (cov.complete || cov.oldestTs === null) return null;
-  const since = new Date(cov.oldestTs).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  return `History keeps your last ${cap} plays, so ${windowLabel} only counts listening since ${since}.`;
 }

@@ -21,7 +21,7 @@ import { originOf, type QueueOrigin } from '@/features/queue/origin';
 import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useSettingsStore } from '@/store/settingsStore';
-import { XIcon, QueueIcon, GripIcon, SparkleIcon } from '@/components/Icons';
+import { XIcon, QueueIcon, GripIcon, SparkleIcon, ChevronDownIcon } from '@/components/Icons';
 import type { Song } from '@/types';
 import '@/styles/pages/player.css';
 
@@ -53,6 +53,33 @@ const SORTS = [
   ['old', 'Classics'],
   ['mood', 'Mood arc'],
 ] as const;
+
+/** Played songs start folded away once there are more than this many. */
+export const PLAYED_OPEN_MAX = 5;
+const PLAYED_OPEN_KEY = 'vx-queue-played-open';
+
+/**
+ * Whether "Played" starts open: what the listener last chose in this session,
+ * else open only while the list is short. Storage can throw (private mode).
+ */
+export function playedStartsOpen(count: number): boolean {
+  try {
+    const saved = sessionStorage.getItem(PLAYED_OPEN_KEY);
+    if (saved === '1') return true;
+    if (saved === '0') return false;
+  } catch {
+    /* no session storage: fall back to the length rule */
+  }
+  return count <= PLAYED_OPEN_MAX;
+}
+
+function rememberPlayedOpen(open: boolean): void {
+  try {
+    sessionStorage.setItem(PLAYED_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    /* not remembered, still works */
+  }
+}
 
 /** "1 VinaX pick" / "3 VinaX picks". */
 const picks = (n: number): string => `${n} VinaX ${n === 1 ? 'pick' : 'picks'}`;
@@ -184,6 +211,43 @@ const QueueRow = memo(function QueueRow({
   );
 });
 
+interface PlayedRowProps {
+  song: Song;
+  rowKey: string;
+  onPlay: (rowKey: string) => void;
+}
+
+/**
+ * One "Played" row: tap to play it again (the queue jumps back to it, so the
+ * songs after it become Up next again), and the usual song menu. No grip or
+ * remove: the past is cleared all at once with Clear.
+ */
+const PlayedRow = memo(function PlayedRow({ song: s, rowKey, onPlay }: PlayedRowProps) {
+  const line = songLine(s);
+  return (
+    <li className="vx-queue-row is-played">
+      <div className="vx-queue-row-main">
+        <button type="button" onClick={() => onPlay(rowKey)} className="vx-queue-play" title="Play again">
+          <img
+            src={bestImage(s.images, 96)}
+            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <span className="vx-queue-row-text">
+            <span className="vx-queue-row-title font-bold">{line.title}</span>
+            <span className="vx-queue-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
+          </span>
+        </button>
+        <span className="vx-queue-row-end">
+          <TrackMenu song={s} label={`More options for ${s.title}`} />
+        </span>
+      </div>
+    </li>
+  );
+});
+
 /** Where focus goes after the list re-orders or loses the control that had it. */
 type Refocus = { key: string; target: 'grip' | 'menu' | 'remove' } | { key: null; target: 'heading' } | null;
 
@@ -200,6 +264,9 @@ export default function QueuePage() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const queueContext = usePlayerStore((s) => s.context);
   const shuffle = usePlayerStore((s) => s.shuffle);
+  // Listen Together guest: the queue here is the room's, one song at a time,
+  // and a tap would leave the room's song — so no "Played" list.
+  const following = usePlayerStore((s) => s.followMode);
   const song = useCurrentSong();
   const online = useOnlineStatus();
   const reasons = useReasonStore((s) => s.reasons);
@@ -207,7 +274,14 @@ export default function QueuePage() {
   // Index-free keys, numbered over the WHOLE queue so they also survive the
   // playing song advancing. `${id}-${index}` remounted the moved row on every
   // keyboard step (dropping focus) and every row below a removed one.
-  const rowKeys = useMemo(() => occurrenceKeys(queue.map((s) => s.id)).slice(index + 1), [queue, index]);
+  const allKeys = useMemo(() => occurrenceKeys(queue.map((s) => s.id)), [queue]);
+  const rowKeys = useMemo(() => allKeys.slice(index + 1), [allKeys, index]);
+  // The songs already played this session, oldest first, so the list runs on into Now playing.
+  const played = useMemo(() => (following ? [] : queue.slice(0, index)), [queue, index, following]);
+  const playedKeys = useMemo(() => allKeys.slice(0, played.length), [allKeys, played.length]);
+  const playedKeysRef = useRef(playedKeys);
+  playedKeysRef.current = playedKeys;
+  const [playedOpen, setPlayedOpen] = useState(() => playedStartsOpen(index));
   // 7.2 — who queued each upcoming entry. Read from the player's own sets;
   // every ownership change replaces `queue`, so this recomputes with it.
   const origins = useMemo(() => upNext.map((s) => originOf(s.id)), [upNext]);
@@ -320,6 +394,60 @@ export default function QueuePage() {
     const { index: at, playAt } = usePlayerStore.getState();
     playAt(at + 1 + pos);
   }, []);
+
+  /** Play a song from "Played" again: the queue jumps back to it. */
+  const onPlayAgain = useCallback((rowKey: string) => {
+    const at = playedKeysRef.current.indexOf(rowKey);
+    if (at < 0) return;
+    const { queue: q, playAt } = usePlayerStore.getState();
+    const target = q[at];
+    if (!target) return;
+    // The tapped row leaves "Played" (it is Now playing now): keep focus on the page.
+    refocus.current = { key: null, target: 'heading' };
+    playAt(at);
+    // Signed out, playAt only asks for an account: nothing moved, so no refocus either.
+    if (usePlayerStore.getState().index !== at) {
+      refocus.current = null;
+      return;
+    }
+    setAnnouncement(`Playing ${target.title} again`);
+  }, []);
+
+  const togglePlayed = useCallback(() => {
+    setPlayedOpen((open) => {
+      rememberPlayedOpen(!open);
+      return !open;
+    });
+  }, []);
+
+  // Clear the played songs; the playing song and Up next stay. Undo puts them
+  // back while the same song is still playing.
+  const clearPlayedSongs = useCallback(() => {
+    const { queue: q, index: at, clearPlayed } = usePlayerStore.getState();
+    const gone = q.slice(0, at);
+    if (!gone.length) return;
+    const playingId = q[at]?.id;
+    refocus.current = { key: null, target: 'heading' };
+    clearPlayed();
+    setAnnouncement('Cleared the songs you played');
+    // Same words as the store's own confirmation, so this one (with Undo) replaces it.
+    toast(`Cleared ${gone.length} played ${gone.length === 1 ? 'song' : 'songs'}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const now = usePlayerStore.getState();
+          if (now.followMode || !playingId || now.queue[now.index]?.id !== playingId) {
+            toast('Could not put them back — the queue has moved on');
+            return;
+          }
+          usePlayerStore.setState({ queue: [...gone, ...now.queue], index: now.index + gone.length });
+        },
+      },
+      duration: 7000,
+    });
+  }, []);
+  const renderPlayed = useCallback((s: Song, i: number) => <PlayedRow song={s} rowKey={playedKeys[i]} onPlay={onPlayAgain} />, [playedKeys, onPlayAgain]);
+  const keyOfPlayed = useCallback((_s: Song, i: number) => playedKeys[i], [playedKeys]);
 
   const onKeep = useCallback((rowKey: string) => {
     const pos = rowKeysRef.current.indexOf(rowKey);
@@ -607,6 +735,39 @@ export default function QueuePage() {
           )}
         </div>
       </header>
+
+      {/* 1.16 — Played: what this session already played, folded away when long. */}
+      {played.length > 0 && (
+        <section className="vx-queue-section vx-queue-played" aria-labelledby="vx-queue-played-title">
+          <div className="vx-queue-titlebar">
+            <h2 id="vx-queue-played-title" className="vx-queue-title">
+              <button
+                type="button"
+                onClick={togglePlayed}
+                aria-expanded={playedOpen}
+                aria-controls={playedOpen ? 'vx-queue-played-list' : undefined}
+                className="vx-queue-fold"
+              >
+                Played
+                <ChevronDownIcon className="vx-queue-fold-icon" />
+              </button>
+            </h2>
+            <span className="vx-queue-played-end">
+              <span className="vx-queue-count tabular-nums">
+                {played.length} {played.length === 1 ? 'song' : 'songs'}
+              </span>
+              <button type="button" onClick={clearPlayedSongs} className="vx-queue-btn is-outline" aria-label="Clear played songs">
+                Clear
+              </button>
+            </span>
+          </div>
+          {playedOpen && (
+            <ul id="vx-queue-played-list" className="vx-queue-list">
+              <VirtualChunks items={played} keyOf={keyOfPlayed} renderItem={renderPlayed} rowHeight={ROW_HEIGHT} />
+            </ul>
+          )}
+        </section>
+      )}
 
       {/* now playing */}
       {song && (

@@ -78,6 +78,20 @@ export function isValidSong(s: unknown): s is Song {
   );
 }
 
+/**
+ * 1.16 — what the end of a song does with crossfade (`seconds`, 0 = off):
+ * 'overlap' starts the next song now over this one, 'fade' only fades this
+ * one out (a sleep timer or an A-B loop is running), null plays on. Inside the
+ * last `seconds` of a song longer than twice that, with a next song that is
+ * not a podcast episode (an episode's only audio is the `original` file);
+ * never when `off` (Listen Together, casting, karaoke). Repeat-one passes no `next`.
+ */
+export function crossfadePlan(f: { seconds: number; left: number; duration: number; next: Pick<Song, 'audio'> | null | undefined; off: boolean; fadeOnly: boolean }): 'overlap' | 'fade' | null {
+  if (!(f.seconds > 0) || f.off || !f.next || f.duration <= f.seconds * 2 || f.left > f.seconds) return null;
+  if (!f.next.audio?.some((a) => a.quality !== 'original')) return null; // also a song with no streams yet
+  return f.fadeOnly ? 'fade' : 'overlap';
+}
+
 /** Package D5 — the queue after "clear from here down". Only future rows can
  *  be swept: `from` must sit strictly after the playing index and inside the
  *  queue. Returns null for a no-op (caller leaves state untouched). */

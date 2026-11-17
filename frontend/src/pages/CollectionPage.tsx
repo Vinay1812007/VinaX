@@ -20,6 +20,7 @@ import { canShareText, collectionToText, copyText, shareText } from '@/features/
 import { allTags } from '@/features/library/tags';
 import { TagChips, TagEditor } from '@/features/library/TagEditor';
 import { filterSongs, songCount } from '@/features/library/collectionEdit';
+import { RecommendedSongs } from '@/features/library/RecommendedSongs';
 import type { RemovedEntry } from '@/store/libraryStore';
 import { occurrenceKeys, VirtualChunks } from '@/components/VirtualChunks';
 import type { Song } from '@/types';
@@ -34,6 +35,8 @@ import type { Song } from '@/types';
  * (ids), so a sorted or filtered view never changes the playback order.
  * 9.0 "Encore": the artwork header, a clear search, a selection bar that stays
  * under the top bar while you pick, and a Reorder mode on phones.
+ * Recommended songs at the foot (features/library/RecommendedSongs.tsx): songs
+ * like the ones here, with + to add, plain catalogue lookups.
  */
 export default function CollectionPage() {
   const { id } = useParams();
@@ -466,6 +469,10 @@ export default function CollectionPage() {
           />
         </div>
       )}
+      {/* Spotify-style footer: songs like these, with + to add. Hidden (kept mounted, so
+          Refresh's round survives) while picking or searching. Keyed by playlist: the route
+          keeps this page mounted from one playlist to the next. */}
+      {songs.length > 0 && <RecommendedSongs key={collection.id} collectionId={collection.id} name={collection.name} songs={songs} hidden={selecting || filtering} />}
       <SharePlaylistSheet collection={collection} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );

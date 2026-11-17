@@ -13,7 +13,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/audio/engine', () => ({
-  audioEngine: { load: vi.fn(), preloadNext: vi.fn(), pause: vi.fn(), play: vi.fn(), seek: vi.fn() },
+  audioEngine: { load: vi.fn(), preloadNext: vi.fn(), pause: vi.fn(), play: vi.fn(), seek: vi.fn(), fadeIn: vi.fn(), fadeOut: vi.fn() },
   orderedSources: () => [],
 }));
 vi.mock('@/services/media-session', () => ({
@@ -30,7 +30,7 @@ vi.mock('@/features/queue/TuneChips', () => ({ TuneChips: () => null }));
 import { usePlayerStore } from '@/store/playerStore';
 import { useToastStore } from '@/store/toastStore';
 import { makeSong } from '@/__fixtures__/songs';
-import QueuePage, { defaultQueueName, slotForY } from './QueuePage';
+import QueuePage, { defaultQueueName, PLAYED_OPEN_MAX, playedStartsOpen, slotForY } from './QueuePage';
 import { useLibraryStore } from '@/store/libraryStore';
 
 const dup = makeSong('x', { title: 'Twice' });
@@ -260,5 +260,90 @@ describe('1.15 — Spotify-style queue sections', () => {
     expect(usePlayerStore.getState().queue.some((s) => s.id === 'hand')).toBe(false);
     expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x', 'p1', 'p2']);
     usePlayerStore.setState({ context: null });
+  });
+});
+
+describe('1.16 — Played', () => {
+  const played = [makeSong('h1', { title: 'Old one' }), makeSong('h2', { title: 'Old two' })];
+  const withPast = [...played, makeSong('now'), makeSong('a', { title: 'Alpha' })];
+  const playedTitles = () =>
+    Array.from(document.querySelectorAll('#vx-queue-played-list .vx-queue-row-title')).map((el) => el.textContent);
+  const toggle = () => screen.getByRole('button', { name: 'Played' });
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    usePlayerStore.setState({ queue: withPast, index: 2, isPlaying: false, followMode: false });
+  });
+  afterEach(() => usePlayerStore.setState({ followMode: false }));
+
+  it('lists the songs already played, oldest first, above Now playing', () => {
+    mount();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(playedTitles()).toEqual(['Old one', 'Old two']);
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings.slice(0, 3)).toEqual(['Played', 'Now playing', 'Up next']);
+    // Played rows are not part of Up next: no reorder grip, and Up next still counts one song.
+    expect(screen.queryAllByRole('button', { name: /^Reorder Old/ })).toHaveLength(0);
+    expect(screen.getByText(/^1 song/)).toBeTruthy();
+  });
+
+  it('a tap plays that song again: the queue jumps back and the songs after it are Up next again', () => {
+    mount();
+    fireEvent.click(screen.getAllByTitle('Play again')[0]);
+    expect(usePlayerStore.getState().index).toBe(0);
+    expect(status()).toBe('Playing Old one again');
+    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull(); // nothing before it now
+    expect(handle('Old two')).toHaveLength(1);
+  });
+
+  it('the row menu works on a played song; Add to queue puts it in again', () => {
+    mount();
+    const menu = openMenu('Old two');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Add to queue' }));
+    const q = usePlayerStore.getState().queue.map((s) => s.id);
+    expect(q.slice(0, 3)).toEqual(['h1', 'h2', 'now']);
+    expect(q.slice(3)).toContain('h2');
+    expect(useToastStore.getState().toasts.some((t) => t.message === 'Already in queue')).toBe(false);
+  });
+
+  it('starts folded when long, and remembers the listener’s choice for the session', () => {
+    const many = Array.from({ length: PLAYED_OPEN_MAX + 1 }, (_, i) => makeSong(`old${i}`, { title: `Old ${i}` }));
+    usePlayerStore.setState({ queue: [...many, makeSong('now')], index: many.length });
+    const { unmount } = mount();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById('vx-queue-played-list')).toBeNull();
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(playedTitles()).toHaveLength(many.length);
+    unmount();
+    mount();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(toggle());
+    expect(playedStartsOpen(1)).toBe(false);
+  });
+
+  it('Clear drops the played songs, keeps the playing song current and offers Undo', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear played songs' }));
+    let st = usePlayerStore.getState();
+    expect(st.queue.map((s) => s.id)).toEqual(['now', 'a']);
+    expect(st.index).toBe(0);
+    expect(st.queue[st.index].id).toBe('now');
+    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull();
+    const toasts = useToastStore.getState().toasts;
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('Cleared 2 played songs');
+    expect(toasts.filter((t) => t.message === last.message)).toHaveLength(1);
+    act(() => last.action!.onClick());
+    st = usePlayerStore.getState();
+    expect(st.queue.map((s) => s.id)).toEqual(['h1', 'h2', 'now', 'a']);
+    expect(st.queue[st.index].id).toBe('now');
+  });
+
+  it('is hidden for a Listen Together guest, whose queue is the room’s', () => {
+    usePlayerStore.setState({ followMode: true });
+    mount();
+    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull();
+    expect(screen.queryByText('Old one')).toBeNull();
   });
 });

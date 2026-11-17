@@ -446,6 +446,13 @@
   .vx-ctracks.is-reordering .vx-crow-move { width: 40px; height: 40px; color: rgb(var(--ink-200)); }
 }
 @media (min-width: 768px) { .vx-phone-only.vx-phone-only { display: none; } }
+
+/* "Recommended songs" under a playlist: a SongRow with an always-visible + to add it. */
+.vx-recs .vx-tracklist { transition: opacity var(--dur-base) var(--ease-standard); }
+.vx-recs[aria-busy='true'] .vx-tracklist { opacity: 0.5; }
+.vx-rec-add { border: 1px solid rgb(var(--ink-100) / 0.28); color: rgb(var(--ink-200)); }
+.vx-rec-add:hover { border-color: rgb(var(--ink-100) / 0.6); }
+.vx-recs-empty { margin: 4px 8px 0; }
 .vx-edit-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 520px; margin-top: 14px; }
 
 /* Downloads rows: the same rhythm as a track row. */

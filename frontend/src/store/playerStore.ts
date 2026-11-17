@@ -18,7 +18,8 @@ import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castMime } from '@/services/cast';
 import { bestImage } from '@/utils/images';
-import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
+import { crossfadePlan, isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
+import { useTogether } from '@/services/together/session';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import type { NextSongsPlan } from '@/services/recommendation/engine';
@@ -246,6 +247,8 @@ function saveResume(id: string, sec: number, duration: number): void {
   } catch { /* ignore */ }
 }
 let crossfadeArmed = false;
+/** 1.16 — set while a crossfade hands the end of a song over to the next: how long the next one fades in. */
+let overlapMs = 0;
 let sleepTimer: number | null = null;
 let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
@@ -518,7 +521,8 @@ export const usePlayerStore = create<PlayerState>()(
             }, 800);
           }
         }
-        if (autoplay && useSettingsStore.getState().crossfade) audioEngine.fadeIn(1200);
+        // A crossfade's incoming song rises over the whole overlap; any other start (a skip) gets the short fade.
+        if (autoplay && useSettingsStore.getState().crossfade) audioEngine.fadeIn(overlapMs || 1200);
         updateMediaMetadata(song);
         
         // Cast integration
@@ -792,20 +796,28 @@ export const usePlayerStore = create<PlayerState>()(
               updatePositionState(duration, currentTime, get().rate);
               const playing = get().queue[get().index];
               const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
-              // Crossfade tail: ramp the last seconds toward silence; the next
-              // track fades in on start, giving a smooth overlap-style blend.
-              const { repeat, queue, index } = get();
-              const hasNext = repeat === 'all' || index < queue.length - 1;
-              if (
-                useSettingsStore.getState().crossfade &&
-                !crossfadeArmed &&
-                hasNext &&
-                repeat !== 'one' &&
-                duration > useSettingsStore.getState().crossfadeSeconds * 2 &&
-                duration - currentTime <= useSettingsStore.getState().crossfadeSeconds
-              ) {
+              // 1.16 — crossfade: the last seconds overlap the next song, which
+              // starts now on the preloaded element and rises while this one
+              // falls. Where the engine cannot overlap (iPhone Safari, the sound
+              // chain on) this song only fades out, as before.
+              const { repeat, queue, index, sleepAt: sleeping, sleepAfterTrack, sleepSongsLeft, loopB: looping } = get();
+              const xf = useSettingsStore.getState();
+              const plan = crossfadeArmed ? null : crossfadePlan({
+                seconds: xf.crossfade ? xf.crossfadeSeconds : 0,
+                left: duration - currentTime,
+                duration,
+                next: repeat === 'one' ? null : queue[index + 1] ?? (repeat === 'all' ? queue[0] : null),
+                off: useTogether.getState().mode !== 'idle' || useCastStore.getState().connected || location.pathname.endsWith('/karaoke'),
+                fadeOnly: !!(sleeping || sleepAfterTrack || sleepSongsLeft) || looping != null,
+              });
+              if (plan) {
                 crossfadeArmed = true;
-                audioEngine.fadeOut((duration - currentTime) * 1000);
+                const ms = ((duration - currentTime) * 1000) / (get().rate || 1);
+                if (plan === 'overlap' && audioEngine.overlap(ms)) {
+                  overlapMs = ms;
+                  handleEnded(); // credits the song, then next() starts the incoming one
+                  overlapMs = 0;
+                } else audioEngine.fadeOut(ms);
               }
             },
             onPlayState: (isPlaying) => {
@@ -998,7 +1010,8 @@ export const usePlayerStore = create<PlayerState>()(
           }
           if (roomAsk) return roomAsk(song);
           const { queue } = get();
-          if (queue.some((s) => s.id === song.id)) {
+          // A song already played can go in again; only the playing song and Up next count.
+          if (queue.slice(get().index).some((s) => s.id === song.id)) {
             toast('Already in queue');
             return;
           }
@@ -1019,7 +1032,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         enqueueAll: (songs) => {
-          const existing = new Set(get().queue.map((s) => s.id));
+          const existing = new Set(get().queue.slice(get().index).map((s) => s.id));
           const fresh = stripExplicit(songs).filter((s) => !existing.has(s.id));
           if (!fresh.length) {
             toast('Already in queue');
@@ -1119,8 +1132,11 @@ export const usePlayerStore = create<PlayerState>()(
         clearPlayed: () => {
           const { queue, index } = get();
           if (index <= 0) return;
+          // The playing song becomes the first row, so it stays the current one.
+          // Only the past goes: Up next, its planning and the playhead are untouched.
+          if (lastRemoval) lastRemoval = { ...lastRemoval, at: Math.max(1, lastRemoval.at - index) };
           set({ queue: queue.slice(index), index: 0 });
-          toast(`Removed ${index} played songs`);
+          toast(`Cleared ${index} played ${index === 1 ? 'song' : 'songs'}`);
         },
 
         clearQueue: () => {
@@ -1211,9 +1227,12 @@ export const usePlayerStore = create<PlayerState>()(
                 void appendRecommendations(playing, { urgent: true }).then((added) => {
                   if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== playing.id || !canExtend()) return;
                   if (added || get().index < get().queue.length - 1) {
-                    if (get().queue.length > end) {
-                      set({ index: end, currentTime: 0, duration: 0 });
-                      startTrack(get().queue[end], true, { from: playing });
+                    // The row after the playing song, read now: clearing the
+                    // played songs meanwhile moves it from `end`.
+                    const after = get().index + 1;
+                    if (get().queue.length > after) {
+                      set({ index: after, currentTime: 0, duration: 0 });
+                      startTrack(get().queue[after], true, { from: playing });
                     } else get().next(false);
                     return;
                   }
@@ -1279,7 +1298,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (!r) return false;
           const { queue, index } = get();
           // Only while the same song is playing, and only if the song is not back already.
-          if (!r.anchorId || queue[index]?.id !== r.anchorId || queue.some((s) => s.id === r.song.id)) return false;
+          if (!r.anchorId || queue[index]?.id !== r.anchorId || queue.slice(index).some((s) => s.id === r.song.id)) return false;
           const at = Math.min(Math.max(index + 1, r.at), queue.length);
           invalidateQueue();
           if (r.manual) manualIds.add(r.song.id);

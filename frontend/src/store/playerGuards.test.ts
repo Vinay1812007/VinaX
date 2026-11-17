@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Song } from '@/types';
-import { dedupeSongs, isValidSong, normTitle, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail } from './playerGuards';
+import { crossfadePlan, dedupeSongs, isValidSong, normTitle, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail } from './playerGuards';
 
 const song = (id: string, title: string): Song => ({
   kind: 'song',
@@ -156,5 +156,37 @@ describe('reorderQueue (drag-to-reorder)', () => {
     expect(reorderQueue(q, 0, -1, 2)).toBeNull();
     expect(reorderQueue(q, 0, 1, 5)).toBeNull();
     expect(reorderQueue([], 0, 0, 0)).toBeNull();
+  });
+});
+
+describe('crossfadePlan', () => {
+  const next = { audio: [{ quality: '320kbps', url: 'u' }] } as Pick<Song, 'audio'>;
+  const at = (o: Partial<Parameters<typeof crossfadePlan>[0]> = {}) =>
+    crossfadePlan({ seconds: 5, left: 5, duration: 200, next, off: false, fadeOnly: false, ...o });
+
+  it('overlaps inside the last crossfadeSeconds, not before', () => {
+    expect(at()).toBe('overlap');
+    expect(at({ left: 0.4 })).toBe('overlap');
+    expect(at({ left: 5.1 })).toBeNull();
+    expect(at({ seconds: 12, left: 11 })).toBe('overlap');
+  });
+
+  it('is off at 0 seconds, without a next song (repeat-one passes none) and on songs too short for it', () => {
+    expect(at({ seconds: 0 })).toBeNull();
+    expect(at({ next: null })).toBeNull();
+    expect(at({ next: undefined })).toBeNull();
+    expect(at({ duration: 10 })).toBeNull();
+  });
+
+  it('never before a podcast episode or a song with no streams yet', () => {
+    expect(at({ next: { audio: [{ quality: 'original', url: 'e' }] } as Pick<Song, 'audio'> })).toBeNull();
+    expect(at({ next: { audio: [] } })).toBeNull();
+    expect(at({ next: {} as Pick<Song, 'audio'> })).toBeNull();
+  });
+
+  it('never in Listen Together, casting or karaoke; only a fade with a sleep timer or a loop', () => {
+    expect(at({ off: true })).toBeNull();
+    expect(at({ off: true, fadeOnly: true })).toBeNull();
+    expect(at({ fadeOnly: true })).toBe('fade');
   });
 });

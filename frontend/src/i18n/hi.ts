@@ -27,8 +27,8 @@ const HI: Record<string, string> = {
   'Made for you': 'आपके लिए', 'For you this week': 'इस हफ़्ते आपके लिए', 'Your mixes': 'आपके मिक्स', 'Your library': 'आपकी लाइब्रेरी', 'Your languages': 'आपकी भाषाएँ',
   'Your artists': 'आपके कलाकार', 'Your favourite artists': 'आपके पसंदीदा कलाकार', 'New from your artists': 'आपके कलाकारों से नया', 'Most listened': 'सबसे ज़्यादा सुने',
   'On repeat': 'बार-बार', 'On this day': 'इसी दिन', 'Repeat rewind': 'पुराने पसंदीदा', 'Continue listening': 'सुनना जारी रखें', 'Fresh finds': 'नई खोजें',
-  'Hidden gems': 'छिपे रत्न', 'Popular in your languages': 'आपकी भाषाओं में लोकप्रिय', 'Recently liked': 'हाल में पसंद किए', 'Most played lately': 'हाल में सबसे ज़्यादा चले',
-  'Listening calendar': 'सुनने का कैलेंडर', 'This week’s report': 'इस हफ़्ते की रिपोर्ट', 'Show all': 'सभी देखें',
+  'Hidden gems': 'छिपे रत्न', 'Popular in your languages': 'आपकी भाषाओं में लोकप्रिय', 'Recently liked': 'हाल में पसंद किए', 'Most played': 'सबसे ज़्यादा चले',
+  'Listening calendar': 'सुनने का कैलेंडर', 'This week’s report': 'इस हफ़्ते की रिपोर्ट', 'Show all': 'सभी देखें', 'Recommended songs': 'सुझाए गए गाने',
   'Artists you follow': 'जिन कलाकारों को आप फ़ॉलो करते हैं', 'Your profile': 'आपकी प्रोफ़ाइल', 'Recent likes': 'हाल की पसंद', 'Your taste profile': 'आपकी पसंद की प्रोफ़ाइल',
 };
 export default HI;

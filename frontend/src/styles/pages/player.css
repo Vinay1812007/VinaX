@@ -1093,6 +1093,13 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
   .vx-queue-row .vx-queue-remove { opacity: 0; }
   .vx-queue-row:hover .vx-queue-remove, .vx-queue-row:focus-within .vx-queue-remove { opacity: 1; }
 }
+/* 1.16 — "Played": the session's earlier songs, above Now playing, folded when long. */
+.vx-queue-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: inherit; font: inherit; letter-spacing: inherit; border-radius: 8px; }
+.vx-queue-fold-icon { width: 18px; height: 18px; color: rgb(var(--ink-400)); transform: rotate(-90deg); transition: transform var(--dur-quick) var(--ease-standard); }
+.vx-queue-fold[aria-expanded='true'] .vx-queue-fold-icon { transform: none; }
+.vx-queue-played-end { display: inline-flex; align-items: center; gap: 12px; }
+.vx-queue-row.is-played .vx-queue-row-title { color: rgb(var(--ink-300)); }
+.vx-queue-row.is-played .vx-queue-play img { opacity: 0.75; }
 .vx-queue-shape { margin-top: 32px; }
 .vx-queue-shape .vx-smartq { margin-top: 0; padding: 16px; border-radius: var(--vx-radius-card); }
 @media (max-width: 767px) {

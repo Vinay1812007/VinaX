@@ -110,7 +110,7 @@ class FakeAudio extends EventTarget {
 
 (globalThis as unknown as { Audio: typeof FakeAudio }).Audio = FakeAudio;
 
-const { audioEngine } = await import('./engine');
+const { audioEngine, rampAt } = await import('./engine');
 type Callbacks = Parameters<typeof audioEngine.init>[0];
 
 function callbacks(): { [K in keyof Required<Callbacks>]: ReturnType<typeof vi.fn> } {
@@ -158,16 +158,15 @@ describe('AudioEngine', () => {
     vi.useRealTimers();
   });
 
-  describe('cancelled fades leave no visibility listener behind', () => {
-    it('a cancelled sleep fade does not pause on the next backgrounding', () => {
+  describe('fades', () => {
+    it('a cancelled sleep fade does not pause later', () => {
       const { el } = boot();
       audioEngine.load(track('a', ['u1']), 'high', true);
       const done = vi.fn();
       audioEngine.fadeOutAndPause(8000, done);
       vi.advanceTimersByTime(200);
       audioEngine.setVolume(0.8); // cancels the fade
-      setHidden(true);
-      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(10_000);
       expect(done).not.toHaveBeenCalled();
       expect(el.volume).toBe(0.8);
       expect(el.paused).toBe(false);
@@ -179,8 +178,7 @@ describe('AudioEngine', () => {
       audioEngine.fadeOut(1200);
       vi.advanceTimersByTime(200);
       audioEngine.setVolume(0.8);
-      setHidden(true);
-      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(2000);
       expect(el.volume).toBe(0.8);
     });
 
@@ -191,10 +189,116 @@ describe('AudioEngine', () => {
       audioEngine.fadeOutAndPause(1000, done);
       vi.advanceTimersByTime(1100);
       expect(done).toHaveBeenCalledTimes(1);
-      setHidden(true);
-      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(5000);
       expect(done).toHaveBeenCalledTimes(1);
       expect(el.volume).toBe(1); // restored to the target for the next play
+    });
+
+    it('keeps moving in a hidden tab and ends on time, with coarse ticks (no snap to the target)', () => {
+      const { el } = boot();
+      audioEngine.load(track('a', ['u1']), 'high', true);
+      setHidden(true);
+      audioEngine.fadeOut(4000);
+      expect(el.volume).toBe(1);
+      vi.advanceTimersByTime(2000);
+      expect(el.volume).toBeCloseTo(0.5, 1);
+      vi.advanceTimersByTime(2000);
+      expect(el.volume).toBe(0);
+    });
+  });
+
+  describe('crossfade overlap', () => {
+    /** Song a playing, b preloaded on the second element. */
+    function playingWithPreload(): { a: FakeAudio; pre: FakeAudio; cb: ReturnType<typeof callbacks> } {
+      const { el: a, cb } = boot();
+      audioEngine.load(track('a', ['u1']), 'high', true);
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+      audioEngine.preloadNext('u2');
+      const pre = FakeAudio.instances[1];
+      pre.readyState = 4;
+      return { a, pre, cb };
+    }
+
+    it('plays the next song on the preloaded element while the old one fades out', () => {
+      const { a, pre, cb } = playingWithPreload();
+      a.volume = 0.8;
+      expect(audioEngine.overlap(4000)).toBe(true);
+      audioEngine.load(track('b', ['u2']), 'high', true);
+      expect(pre.loads).toBe(0); // its buffered data is used as is
+      expect(pre.src).toBe('u2');
+      expect(pre.paused).toBe(false);
+      expect(pre.muted).toBe(false);
+      expect(pre.volume).toBe(0);
+      expect(audioEngine.currentSongId).toBe('b');
+      // The old element keeps playing, going down, and no longer reports.
+      vi.advanceTimersByTime(2000);
+      expect(a.paused).toBe(false);
+      expect(a.volume).toBeCloseTo(0.4, 1);
+      cb.onEnded.mockClear();
+      a.emit('ended');
+      expect(cb.onEnded).not.toHaveBeenCalled();
+      // The new one does.
+      pre.emit('timeupdate');
+      expect(cb.onTime).toHaveBeenLastCalledWith(0, 200);
+      vi.advanceTimersByTime(2100);
+      expect(a.paused).toBe(true);
+      expect(a.src).toBe('');
+    });
+
+    it('with timers held (a WebView with the screen off), timeupdate still moves the fade-in and the tail', () => {
+      const { a, pre } = playingWithPreload();
+      audioEngine.overlap(4000);
+      audioEngine.load(track('b', ['u2']), 'high', true);
+      audioEngine.fadeIn(4000);
+      expect(pre.volume).toBe(0);
+      vi.setSystemTime(Date.now() + 2000); // the clock moves, no timer fires
+      pre.emit('timeupdate');
+      expect(pre.volume).toBeCloseTo(0.5, 1);
+      expect(a.volume).toBeCloseTo(0.5, 1);
+      vi.setSystemTime(Date.now() + 2500);
+      pre.emit('timeupdate');
+      expect(pre.volume).toBe(1);
+      expect(a.paused).toBe(true);
+    });
+
+    it('a fresh element when the preload holds another song', () => {
+      const { pre } = playingWithPreload();
+      expect(audioEngine.overlap(4000)).toBe(true);
+      audioEngine.load(track('c', ['u3']), 'high', true);
+      expect(pre.src).toBe('u3');
+      expect(pre.loads).toBe(1);
+    });
+
+    it('a skip or a pause during the overlap stops the old song at once', () => {
+      const { a } = playingWithPreload();
+      audioEngine.overlap(4000);
+      audioEngine.load(track('b', ['u2']), 'high', true);
+      audioEngine.load(track('c', ['u3']), 'high', true); // the listener skipped
+      expect(a.paused).toBe(true);
+      const second = playingWithPreload();
+      audioEngine.overlap(4000);
+      audioEngine.load(track('b', ['u2']), 'high', true);
+      audioEngine.pause();
+      expect(second.a.paused).toBe(true);
+    });
+
+    it('mute reaches the old song too', () => {
+      const { a } = playingWithPreload();
+      audioEngine.overlap(4000);
+      audioEngine.setMuted(true);
+      expect(a.muted).toBe(true);
+    });
+
+    it('refuses, changing nothing, when paused or while the sound chain is on', () => {
+      const { a } = playingWithPreload();
+      audioEngine.pause();
+      expect(audioEngine.overlap(4000)).toBe(false);
+      audioEngine.play();
+      audioEngine.setAnalysisEnabled(true);
+      expect(audioEngine.overlap(4000)).toBe(false);
+      audioEngine.setAnalysisEnabled(false);
+      expect(audioEngine.currentSongId).toBe('a');
+      expect(a.paused).toBe(false);
     });
   });
 
@@ -384,6 +488,17 @@ describe('AudioEngine', () => {
       expect(FakeAudio.instances).toHaveLength(1);
       expect(el.paused).toBe(false);
     });
+  });
+});
+
+describe('rampAt', () => {
+  it('is a straight line from `from` to `to`, clamped to the fade and to 0..1', () => {
+    expect(rampAt(1, 0, 1000, 4000, 1000)).toBe(1);
+    expect(rampAt(1, 0, 1000, 4000, 2000)).toBe(0.75);
+    expect(rampAt(0, 0.8, 0, 5000, 2500)).toBeCloseTo(0.4);
+    expect(rampAt(1, 0, 1000, 4000, 9000)).toBe(0);
+    expect(rampAt(1, 0, 1000, 4000, 0)).toBe(1); // a clock that went backwards
+    expect(rampAt(0, 1.5, 0, 0, 0)).toBe(1); // no length: the target, clamped
   });
 });
 

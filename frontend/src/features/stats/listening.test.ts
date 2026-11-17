@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryEntry, Song } from '@/types';
-import { coverageNote, creditedSeconds, formatHours, formatMinutes, historyCoverage, listeningTotal } from './listening';
+import { creditedSeconds, formatHours, formatMinutes, listeningTotal } from './listening';
 
 const song = (duration: number | null): Song => ({ kind: 'song', id: 'x', title: 'x', subtitle: '', artists: [], album: null, images: [], audio: [], duration, language: null, year: null, explicit: false, hasLyrics: false, playCount: null });
 const play = (o: Partial<HistoryEntry> & { duration?: number | null }): HistoryEntry => ({ song: song(o.duration === undefined ? 240 : o.duration), ts: o.ts ?? 1_000, completed: o.completed ?? false, ...(o.listenedSec !== undefined ? { listenedSec: o.listenedSec } : {}) });
@@ -40,24 +40,5 @@ describe('listeningTotal', () => {
     expect(formatMinutes({ minutes: 2, estimated: false })).toBe('2 min');
     expect(formatHours({ seconds: 3600 * 1.25, estimated: true })).toBe('≈ 1.3h');
     expect(formatHours({ seconds: 3600 * 12, estimated: false })).toBe('12h');
-  });
-});
-
-describe('historyCoverage', () => {
-  it('a history below the cap always covers the window', () => {
-    const cov = historyCoverage([play({ ts: 5_000 })], 1_000);
-    expect(cov).toEqual({ capped: false, oldestTs: 5_000, complete: true });
-    expect(coverageNote(cov, 'this week')).toBeNull();
-  });
-  it('a capped history whose oldest play is inside the window is incomplete', () => {
-    const now = Date.UTC(2026, 8, 16);
-    const entries = Array.from({ length: 150 }, (_, i) => play({ ts: now - i * 3_600_000 })); // ~6 days
-    const weekAgo = now - 7 * 86_400_000;
-    const cov = historyCoverage(entries, weekAgo);
-    expect(cov.capped).toBe(true);
-    expect(cov.complete).toBe(false);
-    expect(coverageNote(cov, 'this week')).toMatch(/last 150 plays, so this week only counts listening since/);
-    // The same 150 plays DO cover a one-day window.
-    expect(historyCoverage(entries, now - 86_400_000).complete).toBe(true);
   });
 });

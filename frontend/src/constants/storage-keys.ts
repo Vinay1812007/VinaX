@@ -47,7 +47,7 @@ export const KEYS = {
   social: `${STORAGE_PREFIX}.social.v1`,
   /** 15.0 — local playlist id → its shared copy (id, invite token, version). */
   sharedPlaylists: `${STORAGE_PREFIX}.shared-playlists.v1`,
-  /** 15.0 — release alerts: seen top-song ids per saved artist, the new ones (features/releases). */
+  /** 15.0 — release alerts: seen song ids per saved artist (newest and top lists), the new ones (features/releases). */
   releases: `${STORAGE_PREFIX}.releases.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,
   roomHostTokens: `${STORAGE_PREFIX}.room-host-tokens.v1`,

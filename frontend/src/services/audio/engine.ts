@@ -24,6 +24,16 @@ export function recoveryAction(srcPlayedOk: boolean, retriedCurrentSrc: boolean)
   return srcPlayedOk && !retriedCurrentSrc ? 'retry-same' : 'advance';
 }
 
+/**
+ * A fade's volume at `now`: a straight line from `from` (at `t0`) to `to`
+ * (`ms` later), clamped. Read from the clock, so the once-a-second timer of a
+ * hidden tab or a phone with the screen off still lands on time.
+ */
+export function rampAt(from: number, to: number, t0: number, ms: number, now: number): number {
+  const t = ms > 0 ? Math.min(1, Math.max(0, (now - t0) / ms)) : 1;
+  return Math.min(1, Math.max(0, from + (to - from) * t));
+}
+
 /** HTMLMediaElement.NETWORK_NO_SOURCE — no usable source on the element. */
 const NETWORK_NO_SOURCE = 3;
 /** HTMLMediaElement.HAVE_FUTURE_DATA — enough is buffered to keep playing. */
@@ -92,16 +102,19 @@ class AudioEngine {
   /** Build a playback element with every listener attached. Listeners are
    *  bound to an AbortController so a replaced element (effects toggle /
    *  bypass) stops reporting the moment it is retired. */
-  private createElement(): HTMLAudioElement {
+  private createElement(el: HTMLAudioElement = new Audio()): HTMLAudioElement {
     this.elAbort?.abort();
     const ac = new AbortController();
     this.elAbort = ac;
     const on = { signal: ac.signal };
-    const el = new Audio();
     this.applySink(el);
     el.preload = 'auto';
     el.addEventListener('timeupdate', () => {
       this.clearStall();
+      // Media events keep coming where timers may be held (a WebView with the
+      // screen off): they move a running fade and crossfade tail on too.
+      this.fadeTick?.();
+      this.tailTick?.();
       // While a recovery seek is still pending the element reports the fresh
       // load's 0:00 — recording that would lose the position on a second hop.
       if (this.pendingSeek === 0) this.lastTime = el.currentTime;
@@ -387,6 +400,11 @@ class AudioEngine {
   /** `startAt` (10.1 Flow previews, a restored queue) starts the song part-way in, once its data loads. */
   load(song: Song, pref: StreamQualityPref, autoplay: boolean, startAt = 0): void {
     if (!this.el) return;
+    // A crossfade's incoming song keeps the outgoing one playing; any other
+    // load (a skip during the overlap) stops it at once.
+    const handoff = this.handoff;
+    this.handoff = false;
+    if (!handoff) this.endTail();
     this.song = song;
     this.pref = pref;
     this.watchConnection();
@@ -415,16 +433,20 @@ class AudioEngine {
       this.el.crossOrigin = 'anonymous';
       this.effectsMod?.clearBypass();
     }
-    this.applySource();
+    this.applySource(handoff);
   }
 
-  private applySource(): void {
+  /** `keep`: the element is the preloaded one; if it already holds this source, its buffered data is used as is. */
+  private applySource(keep = false): void {
     if (!this.el || !this.song) return;
     this.loadToken += 1;
     const token = this.loadToken;
     this.cb?.onBuffering(true);
-    this.el.src = this.sources[this.sourceIdx];
-    this.el.load();
+    const url = this.sources[this.sourceIdx];
+    if (!keep || this.el.src !== url) {
+      this.el.src = url;
+      this.el.load();
+    }
     this.cb?.onSource?.(this.currentBitrate());
     if (this.wantAutoplay) {
       this.armStall();
@@ -582,6 +604,7 @@ class AudioEngine {
     this.lastIntentionalPause = Date.now();
     this.wantAutoplay = false; // a recovery reload must not restart a paused track
     this.lastInterruptionAt = 0; // a deliberate pause outranks a pending auto-resume
+    this.endTail();
     this.el?.pause();
   }
 
@@ -592,8 +615,6 @@ class AudioEngine {
   /** User-intended volume; fades animate el.volume toward this. */
   private targetVolume = 1;
   private fadeTimer: number | null = null;
-  /** The running fade's visibilitychange handler — removed with the fade. */
-  private fadeVisibility: (() => void) | null = null;
 
   setVolume(v: number): void {
     this.targetVolume = Math.min(1, Math.max(0, v));
@@ -602,60 +623,85 @@ class AudioEngine {
   }
 
   private cancelFade(): void {
-    if (this.fadeTimer != null) {
-      window.clearInterval(this.fadeTimer);
-      this.fadeTimer = null;
-    }
-    // A cancelled fade must not leave its listener behind: the next time the
-    // app is backgrounded it would snap the volume and run the fade's `done`.
-    if (this.fadeVisibility) {
-      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.fadeVisibility);
-      this.fadeVisibility = null;
-    }
+    if (this.fadeTimer != null) window.clearInterval(this.fadeTimer);
+    this.fadeTimer = null;
+    this.fadeTick = null;
   }
 
-  /** Ramp el.volume from `from` to `to` over `ms`, then run `done`. */
+  /**
+   * Ramp el.volume from `from` to `to` over `ms`, then run `done`. Each tick
+   * sets the volume the clock says (`rampAt`): a hidden tab or a phone with
+   * the screen off ticks about once a second, and the fade still moves and
+   * ends on time instead of snapping or stalling.
+   */
   private fade(from: number, to: number, ms: number, done?: () => void): void {
     if (!this.el) return;
     this.cancelFade();
-    // Browsers throttle setInterval to ≥1s (and rAF to ~1 fps) in hidden
-    // tabs, so a fade started while the tab is backgrounded would stall
-    // audibly mid-ramp (audit finding M8). Jump straight to the target and
-    // fire `done` on the next microtask instead — the audible outcome is
-    // effectively the same when the user can't hear the tab anyway.
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.el.volume = Math.min(1, Math.max(0, to));
-      queueMicrotask(() => done?.());
-      return;
-    }
-    const steps = Math.max(1, Math.round(ms / 50));
-    let i = 0;
-    this.el.volume = Math.min(1, Math.max(0, from));
-    const target = Math.min(1, Math.max(0, to));
-    // If the tab is hidden mid-fade, browsers throttle setInterval to ≥1s and
-    // the fade stalls audibly. Snap to target and clear the loop the moment
-    // visibility flips to hidden, so a foreground → background transition
-    // during a crossfade tail never leaves the track lingering at half-volume.
-    const onVisibility = (): void => {
-      if (typeof document !== 'undefined' && document.hidden) {
-        this.cancelFade(); // also removes this listener
-        if (this.el) this.el.volume = target;
+    const t0 = Date.now();
+    const tick = (): void => {
+      if (this.el) this.el.volume = rampAt(from, to, t0, ms, Date.now());
+      if (Date.now() - t0 >= ms) {
+        this.cancelFade();
         done?.();
       }
     };
-    if (typeof document !== 'undefined') {
-      this.fadeVisibility = onVisibility;
-      document.addEventListener('visibilitychange', onVisibility);
-    }
-    this.fadeTimer = window.setInterval(() => {
-      i += 1;
-      const t = i / steps;
-      if (this.el) this.el.volume = Math.min(1, Math.max(0, from + (to - from) * t));
-      if (i >= steps) {
-        this.cancelFade(); // also removes the visibility listener
-        done?.();
-      }
-    }, 50);
+    this.fadeTick = tick;
+    this.fadeTimer = window.setInterval(tick, 50);
+    tick();
+  }
+
+  /** The running fade's and crossfade tail's steps, also run on every timeupdate. */
+  private fadeTick: (() => void) | null = null;
+  private tailTick: (() => void) | null = null;
+
+  /** 1.16 — the song going out while a crossfade overlaps it with the next one (it no longer reports to the store). */
+  private tail: HTMLAudioElement | null = null;
+  private tailTimer: number | null = null;
+  /** The next load() is the crossfade's incoming song. */
+  private handoff = false;
+
+  /**
+   * Crossfade: the playing song moves aside and fades out over `ms` while the
+   * next load() starts the next song on another element, the preloaded one
+   * (its data already buffered when it holds that song). Returns false, and
+   * changes nothing, where songs cannot overlap: paused, iPhone Safari (its
+   * el.volume cannot be set), or the Web Audio chain on (sound effects, disco
+   * lights), which hears one element.
+   */
+  overlap(ms: number): boolean {
+    const old = this.el;
+    if (!old || old.paused || iosWeb() || this.effectsOn || this.effectsMod?.isAttached(old)) return false;
+    this.endTail();
+    this.cancelFade();
+    this.clearStall();
+    const el = this.createElement(this.preloadEl ?? undefined); // the old element stops reporting: its end is not the next song's
+    this.preloadEl = null;
+    el.muted = old.muted;
+    el.playbackRate = old.playbackRate;
+    el.volume = 0;
+    this.el = el;
+    this.tail = old;
+    this.handoff = true;
+    const from = old.volume;
+    const t0 = Date.now();
+    this.tailTick = () => {
+      old.volume = rampAt(from, 0, t0, ms, Date.now());
+      if (Date.now() - t0 >= ms) this.endTail();
+    };
+    this.tailTimer = window.setInterval(this.tailTick, 50);
+    return true;
+  }
+
+  private endTail(): void {
+    if (this.tailTimer != null) window.clearInterval(this.tailTimer);
+    this.tailTimer = null;
+    this.tailTick = null;
+    const t = this.tail;
+    this.tail = null;
+    if (!t) return;
+    t.pause();
+    t.removeAttribute('src');
+    t.load();
   }
 
   /** Fade the current track up from silence (crossfade-in on track start). */
@@ -690,6 +736,7 @@ class AudioEngine {
 
   setMuted(m: boolean): void {
     if (this.el) this.el.muted = m;
+    if (this.tail) this.tail.muted = m;
   }
 
   setRate(r: number): void {
@@ -698,7 +745,8 @@ class AudioEngine {
 
   /**
    * Prefetch the likely-next track's audio so track changes feel instant.
-   * Uses a detached, muted element — never plays, never fires callbacks.
+   * Uses a detached, muted element that fires no callbacks until a crossfade
+   * takes it over as the playing element (`overlap`).
    */
   private preloadEl: HTMLAudioElement | null = null;
 
@@ -721,6 +769,7 @@ class AudioEngine {
       el.addEventListener(
         'error',
         () => {
+          if (el !== this.preloadEl) return; // a crossfade made it the playing element: its errors are handled there
           el.removeAttribute('src');
           el.load();
         },
@@ -732,6 +781,8 @@ class AudioEngine {
 
   destroy(): void {
     this.cancelFade();
+    this.endTail();
+    this.handoff = false;
     this.clearStall();
     if (this.preloadEl) {
       this.preloadEl.pause();

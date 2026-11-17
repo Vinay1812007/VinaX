@@ -14,6 +14,7 @@ import { ClockIcon, SearchIcon } from '@/components/Icons';
 import { languageLabel } from '@/constants/languages';
 import type { HistoryEntry } from '@/types';
 import { useSessionState } from '@/hooks/useSessionState';
+import { forgetPlays, PLAY_MATCH_AFTER_MS } from '@/features/stats/forgotten';
 
 function dayLabel(ts: number): string {
   const d = new Date(ts);
@@ -84,6 +85,8 @@ export default function HistoryPage() {
     }
     if (!window.confirm(`Remove ${n} play${n === 1 ? '' : 's'} from ${label}?`)) return;
     clearSince(since);
+    // Your VinaX also reads this device's play log: cleared plays leave it too.
+    forgetPlays({ from: since, to: Date.now() });
     toast(`Cleared ${n} play${n === 1 ? '' : 's'}`);
   };
 
@@ -218,7 +221,11 @@ export default function HistoryPage() {
                   {/* v5.17.0 — remove a single play */}
                   <button
                     type="button"
-                    onClick={() => { removeEntry(entry.ts); toast('Removed from history'); }}
+                    onClick={() => {
+                      removeEntry(entry.ts);
+                      forgetPlays({ from: entry.ts - 5_000, to: entry.ts + PLAY_MATCH_AFTER_MS, songId: entry.song.id });
+                      toast('Removed from history');
+                    }}
                     aria-label={`Remove ${entry.song.title} from history`}
                     title="Remove"
                     className="vx-row-x is-danger"

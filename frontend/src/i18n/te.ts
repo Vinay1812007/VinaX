@@ -31,8 +31,8 @@ const TE: Record<string, string> = {
   'Made for you': 'మీ కోసం', 'For you this week': 'ఈ వారం మీ కోసం', 'Your mixes': 'మీ మిక్స్‌లు', 'Your library': 'మీ లైబ్రరీ', 'Your languages': 'మీ భాషలు',
   'Your artists': 'మీ కళాకారులు', 'Your favourite artists': 'మీకు ఇష్టమైన కళాకారులు', 'New from your artists': 'మీ కళాకారుల కొత్త పాటలు', 'Most listened': 'ఎక్కువగా విన్నవి',
   'On repeat': 'మళ్లీ మళ్లీ', 'On this day': 'ఈ రోజున', 'Repeat rewind': 'పాత ఇష్టాలు', 'Continue listening': 'వినడం కొనసాగించు', 'Fresh finds': 'కొత్త ఆవిష్కరణలు',
-  'Hidden gems': 'దాగిన రత్నాలు', 'Popular in your languages': 'మీ భాషల్లో ప్రసిద్ధం', 'Recently liked': 'ఇటీవల ఇష్టపడినవి', 'Most played lately': 'ఈమధ్య ఎక్కువగా విన్నవి',
-  'Listening calendar': 'వినే క్యాలెండర్', 'This week’s report': 'ఈ వారం నివేదిక', 'Show all': 'అన్నీ చూడు',
+  'Hidden gems': 'దాగిన రత్నాలు', 'Popular in your languages': 'మీ భాషల్లో ప్రసిద్ధం', 'Recently liked': 'ఇటీవల ఇష్టపడినవి', 'Most played': 'ఎక్కువగా విన్నవి',
+  'Listening calendar': 'వినే క్యాలెండర్', 'This week’s report': 'ఈ వారం నివేదిక', 'Show all': 'అన్నీ చూడు', 'Recommended songs': 'సూచించిన పాటలు',
   'Artists you follow': 'మీరు అనుసరించే కళాకారులు', 'Your profile': 'మీ ప్రొఫైల్', 'Recent likes': 'ఇటీవలి ఇష్టాలు', 'Your taste profile': 'మీ రుచి ప్రొఫైల్',
 };
 export default TE;

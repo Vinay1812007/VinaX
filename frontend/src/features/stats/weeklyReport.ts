@@ -1,5 +1,5 @@
 import type { HistoryEntry } from '@/types';
-import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listening';
+import { creditedSeconds } from './listening';
 
 /**
  * v5.17.0 — Weekly report card: this week (rolling 7 days) against the 7 days
@@ -8,8 +8,8 @@ import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listen
  * Minutes follow the shared listening rule (./listening.ts): measured
  * playback when the player recorded it, otherwise a completed play counts in
  * full and an unfinished one a third of the track (30s floor). "New artists"
- * are names that appear in the window and never before it. `coverage` says
- * whether the 150-play history cap cut the two-week comparison short.
+ * are names that appear in the window and never before it. Whether the record
+ * reaches back the full two weeks is the caller's to say (./playLog.ts).
  */
 export interface WeekSummary {
   minutes: number;
@@ -26,8 +26,6 @@ export interface WeeklyReport {
   lastWeek: WeekSummary;
   /** this − last, so positive means "up". */
   delta: { minutes: number; songs: number; newArtists: number };
-  /** Does retained history reach back the full two weeks? */
-  coverage: HistoryCoverage;
 }
 
 const DAY = 86_400_000;
@@ -100,6 +98,5 @@ export function weeklyReport(entries: HistoryEntry[], now = Date.now()): WeeklyR
       songs: thisWeek.songs - lastWeek.songs,
       newArtists: thisWeek.newArtists - lastWeek.newArtists,
     },
-    coverage: historyCoverage(entries, now - 2 * WEEK),
   };
 }

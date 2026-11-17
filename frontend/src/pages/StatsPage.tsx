@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -8,10 +9,17 @@ import { toast } from '@/store/toastStore';
 import { weeklyReport } from '@/features/stats/weeklyReport';
 import { calendarCells } from '@/features/stats/calendar';
 import type { CalendarCell } from '@/features/stats/calendar';
-import { ArtistAvatar, Collage, artistPictures, mostPlayed } from '@/features/stats/artwork';
+import { ArtistAvatar, Collage, artistPictures, mostPlayed, songIndex } from '@/features/stats/artwork';
 import { cn } from '@/utils/cn';
-import type { HistoryEntry } from '@/types';
-import { coverageNote, formatHours, historyCoverage, listeningTotal, HISTORY_CAP } from '@/features/stats/listening';
+import type { Song } from '@/types';
+import { formatHours, listeningTotal } from '@/features/stats/listening';
+import { LOG_LIMIT, STATS_RANGES, inRange, mergePlays, mergedCoverage, mergedCoverageNote, rangeStart, staleClearNote, type MergedPlays, type StatsRange } from '@/features/stats/playLog';
+import { forgetPlays, readForgotten } from '@/features/stats/forgotten';
+import { getRecentEvents, type StoredEvent } from '@/services/storage/idb';
+import { resolveSongs } from '@/features/social/resolve';
+import { useAccount } from '@/components/useAccount';
+import { useSessionState } from '@/hooks/useSessionState';
+import { Chip } from '@/components/Chip';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongRow } from '@/components/SongRow';
@@ -36,11 +44,12 @@ function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
 }
 
 /** v5.17.0 — Weekly report: this week against the seven days before. */
-function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
+function WeeklyReportCard({ merged, synced }: { merged: MergedPlays; synced: boolean }) {
+  const entries = merged.entries;
   const report = useMemo(() => weeklyReport(entries), [entries]);
-  const { thisWeek, lastWeek, delta, coverage } = report;
+  const { thisWeek, lastWeek, delta } = report;
   if (thisWeek.songs === 0 && lastWeek.songs === 0) return null;
-  const note = coverageNote(coverage, 'the comparison');
+  const note = mergedCoverageNote(mergedCoverage(merged, Date.now() - 14 * 86_400_000), 'the comparison', synced);
   const tiles: Array<{ label: string; value: string; delta: number; suffix?: string }> = [
     { label: thisWeek.estimated ? 'Minutes (est.)' : 'Minutes', value: `${thisWeek.estimated ? '≈' : ''}${thisWeek.minutes}`, delta: delta.minutes, suffix: ' min' },
     { label: 'Songs', value: String(thisWeek.songs), delta: delta.songs },
@@ -92,7 +101,8 @@ function cellTitle(c: CalendarCell): string {
 }
 
 /** v5.17.0 — 12-week listening calendar (Monday-first heatmap). */
-function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
+function ListeningCalendar({ merged, synced }: { merged: MergedPlays; synced: boolean }) {
+  const entries = merged.entries;
   const cal = useMemo(() => calendarCells(entries), [entries]);
   const monthLabels = useMemo(() => {
     // Label a column when it starts a new month.
@@ -105,7 +115,7 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
     }
     return out;
   }, [cal]);
-  const coverage = coverageNote(cal.coverage, 'this calendar');
+  const coverage = mergedCoverageNote(mergedCoverage(merged, cal.cells[0]?.ts ?? 0), 'this calendar', synced);
   return (
     <section aria-label="Listening calendar" className="vx-sec-block">
       <SectionHeader
@@ -162,22 +172,58 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
   );
 }
 
+/** This device's play log (IndexedDB), re-read when a new play lands in History. */
+function usePlayLog(newestTs: number): StoredEvent[] | null {
+  const [events, setEvents] = useState<StoredEvent[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void getRecentEvents(LOG_LIMIT).then((ev) => {
+      if (live) setEvents(ev);
+    });
+    return () => {
+      live = false;
+    };
+  }, [newestTs]);
+  return events;
+}
+
 /** Canvas 4a — Your VinaX: on-device analytics, never uploaded. */
 export default function StatsPage() {
   usePageTitle('Your VinaX');
   const entries = useHistoryStore((s) => s.entries);
   const favorites = useLibraryStore((s) => s.favorites);
+  const synced = !!useAccount();
+  const [range, setRange] = useSessionState<StatsRange>('vinax.stats.range.v1', '4w');
+  const rangeInfo = STATS_RANGES.find((r) => r.id === range) ?? STATS_RANGES[0];
+
+  // History (synced, 150 plays) plus this device's longer play log, each play counted once.
+  const events = usePlayLog(entries[0]?.ts ?? 0);
+  const merged = useMemo(
+    () => mergePlays(entries, events ?? [], { known: songIndex(entries, favorites), forgotten: readForgotten() }),
+    [entries, events, favorites],
+  );
+  // A clear made before clears left notes: note it now, so those plays stay hidden once History refills.
+  useEffect(() => {
+    if (!events?.length) return;
+    const note = staleClearNote(entries, events, readForgotten());
+    if (note) forgetPlays(note);
+  }, [entries, events]);
+  const inWindow = useMemo(() => inRange(merged.entries, rangeInfo.id), [merged, rangeInfo.id]);
+  const rangeNote = useMemo(
+    () => mergedCoverageNote(mergedCoverage(merged, rangeStart(rangeInfo.id)), rangeInfo.window, synced),
+    [merged, rangeInfo, synced],
+  );
 
   const stats = useMemo(() => {
     const artistCount = new Map<string, number>();
     const langCount = new Map<string, number>();
     // One shared rule for listening time (features/stats/listening.ts).
-    const total = listeningTotal(entries);
-    for (const e of entries) {
+    const total = listeningTotal(inWindow);
+    for (const e of inWindow) {
       const s = e.song;
       const artist = s.artists?.[0]?.name ?? s.subtitle?.split(',')[0]?.trim() ?? 'Unknown';
       artistCount.set(artist, (artistCount.get(artist) ?? 0) + 1);
-      const lang = s.language ? s.language[0].toUpperCase() + s.language.slice(1) : 'Other';
+      const lang = s.language && s.language !== 'unknown' ? s.language[0].toUpperCase() + s.language.slice(1) : 'Other';
       langCount.set(lang, (langCount.get(lang) ?? 0) + 1);
     }
     const topArtists = [...artistCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -187,21 +233,36 @@ export default function StatsPage() {
     const langRows = rest > 0 ? [...top4, ['Other', rest] as [string, number]] : top4;
     const totalLang = langRows.reduce((n, [, c]) => n + c, 0) || 1;
     return {
-      plays: entries.length,
+      plays: inWindow.length,
       hours: formatHours(total),
       estimated: total.estimated,
-      capped: historyCoverage(entries, -Infinity).capped,
       artists: artistCount.size,
       topArtists,
       maxArtist: topArtists[0]?.[1] ?? 1,
       langs: langRows.map(([name, c]) => ({ name, pct: Math.round((c / totalLang) * 100) })),
     };
-  }, [entries]);
-  const top = useMemo(() => mostPlayed(entries, 5), [entries]);
-  const pictures = useMemo(() => artistPictures([...entries.map((e) => e.song), ...favorites]), [entries, favorites]);
+  }, [inWindow]);
+  const topRaw = useMemo(() => mostPlayed(inWindow, 5), [inWindow]);
+
+  // Plays known only from the log carry no artwork: look those few songs up.
+  const bare = useMemo(() => topRaw.filter((t) => !t.song.images?.length).map((t) => ({ id: t.song.id })), [topRaw]);
+  const art = useQuery({
+    queryKey: ['stats-art', bare.map((b) => b.id).join(',')],
+    queryFn: ({ signal }) => resolveSongs(bare, bare.length, signal),
+    enabled: bare.length > 0,
+    staleTime: 60 * 60_000,
+  });
+  const top = useMemo(() => {
+    const found = new Map<string, Song>((art.data ?? []).map((s) => [s.id, s]));
+    return topRaw.map((t) => ({ ...t, song: found.get(t.song.id) ?? t.song }));
+  }, [topRaw, art.data]);
+  const pictures = useMemo(
+    () => artistPictures([...top.map((t) => t.song), ...merged.entries.map((e) => e.song), ...favorites]),
+    [top, merged, favorites],
+  );
 
   const share = (): void => {
-    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened 🎵 vinaxmusic.online`;
+    const text = `My VinaX, ${rangeInfo.window}: ${stats.plays} plays · ${stats.hours} listened 🎵 vinaxmusic.online`;
     if (navigator.share) {
       void navigator.share({ text }).catch(() => undefined);
     } else {
@@ -209,7 +270,7 @@ export default function StatsPage() {
     }
   };
 
-  if (!entries.length) {
+  if (!merged.entries.length) {
     return (
       <div className="vx-empty-page">
         <span className="vx-empty-icon" aria-hidden>
@@ -223,23 +284,32 @@ export default function StatsPage() {
   }
 
   const kpis: Array<[string, string]> = [
-    [String(stats.plays), stats.capped ? `Last ${HISTORY_CAP} plays` : 'Plays'],
+    [String(stats.plays), 'Plays'],
     [stats.hours, stats.estimated ? 'Listened (est.)' : 'Listened'],
     [String(favorites.length), 'Favorites'],
     [String(stats.artists), 'Artists'],
   ];
+  const windowLabel = rangeInfo.id === 'all' ? 'All time' : `Over ${rangeInfo.window}`;
 
   return (
     <div className="vx-sec is-wide">
       <PageHeader
         title="Your VinaX"
-        subtitle={`Computed on this device · never uploaded${stats.capped ? ` · history keeps your last ${HISTORY_CAP} plays` : ''}`}
+        subtitle="Computed on this device · never uploaded"
         actions={
           <button type="button" onClick={share} className="vx-sec-pill">
             <ShareIcon className="w-4 h-4" /> Share
           </button>
         }
       />
+
+      <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label="Time range">
+        {STATS_RANGES.map((r) => (
+          <Chip key={r.id} active={rangeInfo.id === r.id} onClick={() => setRange(r.id)}>
+            {r.label}
+          </Chip>
+        ))}
+      </div>
 
       {/* Artwork first: the covers of what you played most, then the four numbers. */}
       <section aria-label="Your listening at a glance" className="vx-sec-block vx-hero-row is-inline">
@@ -253,10 +323,16 @@ export default function StatsPage() {
           ))}
         </div>
       </section>
+      {(rangeNote || stats.plays === 0) && (
+        <p className="vx-sec-lede">
+          {stats.plays === 0 ? `No plays in ${rangeInfo.window}. ` : ''}
+          {rangeNote}
+        </p>
+      )}
 
       {top.length > 0 && (
-        <section aria-label="Most played lately" className="vx-sec-block">
-          <SectionHeader title="Most played lately" explanation={`From your last ${stats.plays} ${stats.plays === 1 ? 'play' : 'plays'}, most played first.`} />
+        <section aria-label="Most played" className="vx-sec-block">
+          <SectionHeader title="Most played" explanation={`${windowLabel}, most played first.`} />
           <div>
             {top.map((t, i) => (
               <SongRow key={t.song.id} song={t.song} songs={top.map((x) => x.song)} index={i} />
@@ -266,7 +342,7 @@ export default function StatsPage() {
       )}
 
       {/* v5.17.0 — weekly report */}
-      <WeeklyReportCard entries={entries} />
+      <WeeklyReportCard merged={merged} synced={synced} />
 
       {/* The daily goal (set in Settings). */}
       <section aria-label="Daily goal" className="vx-sec-block">
@@ -277,46 +353,48 @@ export default function StatsPage() {
       </section>
 
       {/* v5.17.0 — 12-week listening calendar */}
-      <ListeningCalendar entries={entries} />
+      <ListeningCalendar merged={merged} synced={synced} />
 
-      <div className="vx-two">
-        <section aria-label="Top artists">
-          <SectionHeader title="Top artists" explanation="Plays in your history." />
-          <ol className="vx-group">
-            {stats.topArtists.map(([name, count], i) => (
-              <li key={name} className="vx-row">
-                <span className="vx-row-rank">{i + 1}</span>
-                <ArtistAvatar name={name} image={pictures.get(name.trim().toLowerCase())} size={44} />
-                <span className="vx-row-main">
-                  <span className="vx-row-label truncate-1">{name}</span>
-                  <span className="vx-bar mt-2" aria-hidden>
-                    <span style={{ width: `${Math.max(6, (count / stats.maxArtist) * 100)}%` }} />
+      {stats.plays > 0 && (
+        <div className="vx-two">
+          <section aria-label="Top artists">
+            <SectionHeader title="Top artists" explanation={`Plays ${rangeInfo.id === 'all' ? 'of all time' : `in ${rangeInfo.window}`}.`} />
+            <ol className="vx-group">
+              {stats.topArtists.map(([name, count], i) => (
+                <li key={name} className="vx-row">
+                  <span className="vx-row-rank">{i + 1}</span>
+                  <ArtistAvatar name={name} image={pictures.get(name.trim().toLowerCase())} size={44} />
+                  <span className="vx-row-main">
+                    <span className="vx-row-label truncate-1">{name}</span>
+                    <span className="vx-bar mt-2" aria-hidden>
+                      <span style={{ width: `${Math.max(6, (count / stats.maxArtist) * 100)}%` }} />
+                    </span>
                   </span>
-                </span>
-                <span className="vx-row-value w-10">{count}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
+                  <span className="vx-row-value w-10">{count}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
 
-        <section aria-label="Languages">
-          <SectionHeader title="Languages" explanation="Share of your plays." />
-          <div className="h-3 rounded-full overflow-hidden flex gap-[2px]" aria-hidden>
-            {stats.langs.map((l, i) => (
-              <span key={l.name} style={{ width: `${l.pct}%`, background: shareColor(i) }} />
-            ))}
-          </div>
-          <ul className="vx-group mt-3">
-            {stats.langs.map((l, i) => (
-              <li key={l.name} className="vx-row !min-h-[48px]">
-                <span className="w-3 h-3 rounded-[4px] shrink-0" style={{ background: shareColor(i) }} aria-hidden />
-                <span className="vx-row-main vx-row-label truncate-1">{l.name}</span>
-                <span className="vx-row-value">{l.pct}%</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
+          <section aria-label="Languages">
+            <SectionHeader title="Languages" explanation={`Share of your plays ${rangeInfo.id === 'all' ? 'of all time' : `in ${rangeInfo.window}`}.`} />
+            <div className="h-3 rounded-full overflow-hidden flex gap-[2px]" aria-hidden>
+              {stats.langs.map((l, i) => (
+                <span key={l.name} style={{ width: `${l.pct}%`, background: shareColor(i) }} />
+              ))}
+            </div>
+            <ul className="vx-group mt-3">
+              {stats.langs.map((l, i) => (
+                <li key={l.name} className="vx-row !min-h-[48px]">
+                  <span className="w-3 h-3 rounded-[4px] shrink-0" style={{ background: shareColor(i) }} aria-hidden />
+                  <span className="vx-row-main vx-row-label truncate-1">{l.name}</span>
+                  <span className="vx-row-value">{l.pct}%</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

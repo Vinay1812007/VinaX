@@ -27,8 +27,8 @@ const TA: Record<string, string> = {
   'Made for you': 'உங்களுக்காக', 'For you this week': 'இந்த வாரம் உங்களுக்காக', 'Your mixes': 'உங்கள் மிக்ஸ்கள்', 'Your library': 'உங்கள் நூலகம்', 'Your languages': 'உங்கள் மொழிகள்',
   'Your artists': 'உங்கள் கலைஞர்கள்', 'Your favourite artists': 'உங்களுக்குப் பிடித்த கலைஞர்கள்', 'New from your artists': 'உங்கள் கலைஞர்களின் புதியவை', 'Most listened': 'அதிகம் கேட்டவை',
   'On repeat': 'மீண்டும் மீண்டும்', 'On this day': 'இந்த நாளில்', 'Repeat rewind': 'பழைய பிடித்தவை', 'Continue listening': 'தொடர்ந்து கேளுங்கள்', 'Fresh finds': 'புதிய கண்டுபிடிப்புகள்',
-  'Hidden gems': 'மறைந்த முத்துகள்', 'Popular in your languages': 'உங்கள் மொழிகளில் பிரபலம்', 'Recently liked': 'சமீபத்தில் பிடித்தவை', 'Most played lately': 'சமீபத்தில் அதிகம் கேட்டவை',
-  'Listening calendar': 'கேட்கும் நாட்காட்டி', 'This week’s report': 'இந்த வார அறிக்கை', 'Show all': 'அனைத்தையும் காண்',
+  'Hidden gems': 'மறைந்த முத்துகள்', 'Popular in your languages': 'உங்கள் மொழிகளில் பிரபலம்', 'Recently liked': 'சமீபத்தில் பிடித்தவை', 'Most played': 'அதிகம் கேட்டவை',
+  'Listening calendar': 'கேட்கும் நாட்காட்டி', 'This week’s report': 'இந்த வார அறிக்கை', 'Show all': 'அனைத்தையும் காண்', 'Recommended songs': 'பரிந்துரைக்கப்பட்ட பாடல்கள்',
   'Artists you follow': 'நீங்கள் பின்தொடரும் கலைஞர்கள்', 'Your profile': 'உங்கள் சுயவிவரம்', 'Recent likes': 'சமீபத்திய பிடித்தவை', 'Your taste profile': 'உங்கள் ரசனை சுயவிவரம்',
 };
 export default TA;

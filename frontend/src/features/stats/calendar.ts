@@ -1,5 +1,5 @@
 import type { HistoryEntry } from '@/types';
-import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listening';
+import { creditedSeconds } from './listening';
 
 /**
  * v5.17.0 — Listening calendar: a 12-week, Monday-first heatmap of minutes per
@@ -26,8 +26,6 @@ export interface CalendarData {
   maxMinutes: number;
   /** Days with any listening inside the grid. */
   activeDays: number;
-  /** Whether the 150-play history cap cut the 12-week window short. */
-  coverage: HistoryCoverage;
   /** True when any minute in the grid was estimated rather than measured. */
   estimated: boolean;
 }
@@ -100,7 +98,6 @@ export function calendarCells(entries: HistoryEntry[], now = Date.now(), weeks =
     weeks,
     maxMinutes,
     activeDays,
-    coverage: historyCoverage(entries, firstMonday),
     estimated,
   };
 }

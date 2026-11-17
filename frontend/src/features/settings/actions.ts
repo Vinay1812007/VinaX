@@ -11,9 +11,12 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
+import { forgetPlays, readForgotten, restoreForgotten } from '@/features/stats/forgotten';
 
 export function clearHistory(): void {
   useHistoryStore.getState().clearHistory();
+  // Your VinaX also reads this device's play log: cleared plays leave it too.
+  forgetPlays({ from: 0, to: Date.now() });
 }
 
 export function clearFavorites(): void {
@@ -37,6 +40,7 @@ export function clearHistoryWithUndo(): void {
     toast('History is already empty');
     return;
   }
+  const forgotten = readForgotten();
   clearHistory();
   toast(`Cleared ${plural(snapshot.length, 'play')}`, {
     duration: UNDO_MS,
@@ -50,6 +54,7 @@ export function clearHistoryWithUndo(): void {
           return seen.has(key) ? false : (seen.add(key), true);
         });
         useHistoryStore.setState({ entries: entries.sort((a, b) => b.ts - a.ts).slice(0, HISTORY_CAP) });
+        restoreForgotten(forgotten);
       },
     },
   });
