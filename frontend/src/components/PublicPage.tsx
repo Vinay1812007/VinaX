@@ -53,7 +53,7 @@ export default function PublicPage({ page }: { page: ServerPage }): ReactNode {
           ))}
         </nav>
         {/* 13.9 — into the live app signed out: browse and search; play asks to sign in. */}
-        <a href="/explore" className="vx-public-explore" onClick={rememberGuestBrowse}>
+        <a href="/discover/" className="vx-public-explore" onClick={rememberGuestBrowse}>
           Explore
         </a>
         <a href="#vx-public-signin" className="vx-public-cta">
@@ -82,7 +82,7 @@ export default function PublicPage({ page }: { page: ServerPage }): ReactNode {
           </p>
           <p className="vx-public-fine">
             Not yet?{' '}
-            <a href="/explore" onClick={rememberGuestBrowse}>
+            <a href="/discover/" onClick={rememberGuestBrowse}>
               Explore VinaX first
             </a>{' '}
             — songs play once you sign in.

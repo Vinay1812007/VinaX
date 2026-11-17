@@ -275,7 +275,7 @@ var SETTING_KEYS = [
   { key: "announcement", group: "Home & promotion", title: "Announcement", note: "Pop-up shown when the app opens: { title, body, button, link, show: once | always | daily, platforms, popup, start, end, enabled, ts }. The notification sender writes a plain one too.", shape: "object" },
   { key: "support-faq", group: "App", title: "Help center FAQ", note: "Questions and answers shown in Help Center, with a category and an on/off switch each.", shape: "array" },
   { key: "flags", group: "App", title: "Feature switches", note: "Feature switches the app reads: { listenTogether }. Off hides the feature.", shape: "boolean-map" },
-  { key: "vinax-ai", group: "App", title: "VinaX AI", note: "VinaX AI: { enabled, testers: [Google account], search, models: { model: { enabled, order } }, discover, dailyLimit } \u2014 off for everyone but the testers until enabled; discover: false hides the free models found in the providers\u2019 lists.", shape: "object" },
+  { key: "vinax-ai", group: "App", title: "VinaX AI", note: "VinaX AI: { enabled, testers: [Google account], search, models: { model: { enabled, order } }, discover, dailyLimit, images: { enabled, perDay } } \u2014 off for everyone but the testers until enabled; discover: false hides the free models found in the providers\u2019 lists; images turns on Create image (off by default, perDay pictures per person, default 10).", shape: "object" },
   { key: "min-version", group: "App", title: "Minimum app build", note: "Oldest app allowed: { android | web | ios: { minVersion, mode: suggest | force }, message, build (older Android apps) }.", shape: "object" },
   { key: "site-mode", group: "Operations", title: "Site mode", note: "How the app runs: normal, read-only (people can listen but changes are not saved) or maintenance (everyone sees a maintenance screen).", shape: "object" },
   { key: "maintenance-window", group: "Operations", title: "Maintenance window", note: "A planned maintenance time: the app warns people beforehand and shows the maintenance screen while it lasts.", shape: "object" },
@@ -885,9 +885,9 @@ __name(songList, "songList");
 function hubLinks(lang) {
   if (typeof lang !== "string" || !LANG_TAG[lang.toLowerCase()]) return "";
   const l = lang.toLowerCase();
-  const label2 = capWord(l);
-  const moods = Object.entries(HUB_MOODS).map(([k, m2]) => `<a href="/${l}-${k}-songs">${label2} ${m2.label.toLowerCase()} songs</a>`).join(" \xB7 ");
-  return `<h2>More ${esc(label2)} music</h2><p><a href="/${l}-songs/">${esc(label2)} songs</a>: trending, new releases, top artists and a guide to ${esc(label2)} music. By mood: ${moods}.</p>`;
+  const label3 = capWord(l);
+  const moods = Object.entries(HUB_MOODS).map(([k, m2]) => `<a href="/${l}-${k}-songs">${label3} ${m2.label.toLowerCase()} songs</a>`).join(" \xB7 ");
+  return `<h2>More ${esc(label3)} music</h2><p><a href="/${l}-songs/">${esc(label3)} songs</a>: trending, new releases, top artists and a guide to ${esc(label3)} music. By mood: ${moods}.</p>`;
 }
 __name(hubLinks, "hubLinks");
 async function buildMeta(type, id) {
@@ -902,7 +902,7 @@ async function buildMeta(type, id) {
     const tracks2 = songRows(rawSongs);
     const lang2 = typeof d2.language === "string" ? d2.language : void 0;
     const first = rawSongs[0] ?? {};
-    const label3 = plain(first.label ?? first.more_info?.label) || void 0;
+    const label4 = plain(first.label ?? first.more_info?.label) || void 0;
     const copyright2 = plain(first.copyright ?? first.more_info?.copyright_text) || void 0;
     const released2 = longDate(first.releaseDate ?? first.more_info?.release_date);
     const total = tracks2.reduce((n3, t) => n3 + (t.duration ?? 0), 0);
@@ -919,12 +919,12 @@ async function buildMeta(type, id) {
       const s = creditNames(rawSongs[i], ["singer", "playbacksinger", "vocals"]);
       return s.length ? { ...t, artist: listText(s) } : t;
     });
-    const albumPara = `${d2.name} is a${d2.year ? ` ${d2.year}` : ""}${lang2 ? ` ${capWord(lang2)}` : ""} album${music2.length ? ` with music by ${listText(music2.slice(0, 3))}` : artist2 ? ` by ${artist2}` : ""}.` + (tracks2.length ? ` Its ${tracks2.length} song${tracks2.length === 1 ? "" : "s"}${total ? ` run about ${Math.max(1, Math.round(total / 60))} minutes in all` : ""}${released2 ? `, released on ${released2}` : ""}${label3 ? ` by ${label3}` : ""}.` : "") + (singers2.length ? ` The voices on it include ${listText(singers2.slice(0, 5))}${lyrics2.length ? `, with lyrics by ${listText(lyrics2.slice(0, 3))}` : ""}.` : "");
+    const albumPara = `${d2.name} is a${d2.year ? ` ${d2.year}` : ""}${lang2 ? ` ${capWord(lang2)}` : ""} album${music2.length ? ` with music by ${listText(music2.slice(0, 3))}` : artist2 ? ` by ${artist2}` : ""}.` + (tracks2.length ? ` Its ${tracks2.length} song${tracks2.length === 1 ? "" : "s"}${total ? ` run about ${Math.max(1, Math.round(total / 60))} minutes in all` : ""}${released2 ? `, released on ${released2}` : ""}${label4 ? ` by ${label4}` : ""}.` : "") + (singers2.length ? ` The voices on it include ${listText(singers2.slice(0, 5))}${lyrics2.length ? `, with lyrics by ${listText(lyrics2.slice(0, 3))}` : ""}.` : "");
     const credits = [
       ...music2.length ? [["Music", listText(music2)]] : [],
       ...singers2.length ? [["Singers", listText(singers2)]] : [],
       ...lyrics2.length ? [["Lyrics", listText(lyrics2)]] : [],
-      ...label3 ? [["Label", label3]] : [],
+      ...label4 ? [["Label", label4]] : [],
       ...copyright2 ? [["Copyright", copyright2]] : []
     ];
     const albumSections = (trackRows.length ? `<h2>Track list</h2>${songList(trackRows, 40)}` : "") + (credits.length ? `<h2>Credits</h2><dl>${credits.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : "") + hubLinks(lang2);
@@ -1053,7 +1053,7 @@ async function buildMeta(type, id) {
   const year = d.year ? String(d.year) : void 0;
   const lang = typeof d.language === "string" ? d.language : void 0;
   const duration = Number(d.duration ?? mi.duration) || void 0;
-  const label2 = plain(d.label ?? mi.label) || void 0;
+  const label3 = plain(d.label ?? mi.label) || void 0;
   const copyright = plain(d.copyright ?? mi.copyright_text) || void 0;
   const released = longDate(d.releaseDate ?? mi.release_date);
   const singers = creditNames(d, ["singer", "playbacksinger", "vocals"]);
@@ -1076,7 +1076,7 @@ async function buildMeta(type, id) {
     music.length ? `with music by ${listText(music)}` : "",
     lyrics.length ? `and lyrics by ${listText(lyrics)}` : ""
   ].filter(Boolean).join(" ");
-  const para = `\u201C${d.name}\u201D is a${lang ? ` ${capWord(lang)}` : ""} song${creditLine ? ` ${creditLine}` : ""}.` + (album ? ` It appears on ${album === d.name ? "the album of the same name" : `the album ${album}`}${released ? `, released on ${released}` : year ? `, released in ${year}` : ""}${label2 ? ` by ${label2}` : ""}.` : "") + (duration ? ` It runs ${minutes(duration)}.` : "") + (starring.length ? ` On screen it features ${listText(starring)}.` : "");
+  const para = `\u201C${d.name}\u201D is a${lang ? ` ${capWord(lang)}` : ""} song${creditLine ? ` ${creditLine}` : ""}.` + (album ? ` It appears on ${album === d.name ? "the album of the same name" : `the album ${album}`}${released ? `, released on ${released}` : year ? `, released in ${year}` : ""}${label3 ? ` by ${label3}` : ""}.` : "") + (duration ? ` It runs ${minutes(duration)}.` : "") + (starring.length ? ` On screen it features ${listText(starring)}.` : "");
   const rows3 = [
     ...singers.length ? [["Singers", listText(singers)]] : artist ? [["Artist", artist]] : [],
     ...music.length ? [["Music", listText(music)]] : [],
@@ -1086,7 +1086,7 @@ async function buildMeta(type, id) {
     ...lang ? [["Language", capWord(lang)]] : [],
     ...released ? [["Released", released]] : year ? [["Year", year]] : [],
     ...duration ? [["Length", minutes(duration)]] : [],
-    ...label2 ? [["Label", label2]] : [],
+    ...label3 ? [["Label", label3]] : [],
     ...copyright ? [["Copyright", copyright]] : []
   ];
   const sections = (rows3.length ? `<h2>Song details</h2><dl>${rows3.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : "") + (albumTracks.length ? `<h2>More from ${esc(album ?? "this album")}</h2>${songList(albumTracks, 15)}` : "") + (artistTracks.length ? `<h2>More by ${esc(prim[0]?.name || artist)}</h2>${songList(artistTracks, 10)}` : "") + hubLinks(lang);
@@ -1261,18 +1261,18 @@ async function renderHub(lang, mood, request, env) {
     const shellRes = await env.ASSETS.fetch(new URL("/index.html", request.url).toString());
     const shell = await shellRes.text();
     const hub = HUB_MOODS[mood];
-    const label2 = capWord(lang);
+    const label3 = capWord(lang);
     const path = `/${lang}-${mood}-songs`;
     const j = await fetchJson(`search/songs?query=${encodeURIComponent(`${lang} ${hub.query}`)}&limit=30`);
     const tracks2 = songRows(j?.data?.results ?? []);
-    const title = `${label2} ${hub.label} Songs \u2014 Stream Free | VinaX`;
-    const desc = clampDesc(`The best ${label2} ${hub.label.toLowerCase()} songs \u2014 ${hub.blurb}. Stream free on VinaX, no login, tuned to you.`);
+    const title = `${label3} ${hub.label} Songs \u2014 Stream Free | VinaX`;
+    const desc = clampDesc(`The best ${label3} ${hub.label.toLowerCase()} songs \u2014 ${hub.blurb}. Stream free on VinaX, no login, tuned to you.`);
     const jsonld = [
       {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "@id": `${ORIGIN}${path}#page`,
-        name: `${label2} ${hub.label} Songs`,
+        name: `${label3} ${hub.label} Songs`,
         description: desc,
         url: `${ORIGIN}${path}`,
         isPartOf: { "@id": `${ORIGIN}/#website` },
@@ -1291,14 +1291,14 @@ async function renderHub(lang, mood, request, env) {
       },
       breadcrumbLd([
         { name: "Home", item: `${ORIGIN}/` },
-        { name: `${label2} Songs`, item: `${ORIGIN}/${lang}-songs` },
-        { name: `${label2} ${hub.label} Songs` }
+        { name: `${label3} Songs`, item: `${ORIGIN}/${lang}-songs` },
+        { name: `${label3} ${hub.label} Songs` }
       ])
     ];
     const head = `<link rel="canonical" href="${ORIGIN}${path}"/><meta property="og:type" content="website"/><meta property="og:title" content="${esc(title)}"/><meta property="og:description" content="${esc(desc)}"/><meta property="og:url" content="${ORIGIN}${path}"/><script type="application/ld+json">${jsonForScript(jsonld)}<\/script></head>`;
     const list2 = tracks2.length ? `<ol>${tracks2.slice(0, 30).map((t) => `<li>${t.id ? `<a href="/song/${esc(slugify(t.title))}-${esc(t.id)}">${esc(t.title)}</a>` : esc(t.title)}${t.artist ? ` \u2014 ${esc(t.artist)}` : ""}</li>`).join("")}</ol>` : "";
-    const siblings = Object.keys(HUB_MOODS).filter((k) => k !== mood).map((k) => `<a href="/${lang}-${k}-songs">${label2} ${HUB_MOODS[k].label} Songs</a>`).join(" \xB7 ");
-    const content = `<main id="seo-content"><h1>${esc(label2)} ${esc(hub.label)} Songs</h1><p>${esc(label2)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, synced lyrics and offline downloads in the Android app.</p><p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label2)} first. The <a href="/${lang}-songs/">${esc(label2)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label2)} music, its composers and its singers.</p>` + list2 + `<p>${siblings}</p><nav aria-label="VinaX"><a href="/${lang}-songs/">${esc(label2)} Songs</a> <a href="/">Home</a> <a href="/charts/">Charts</a> <a href="/discover/">Discover</a></nav></main>`;
+    const siblings = Object.keys(HUB_MOODS).filter((k) => k !== mood).map((k) => `<a href="/${lang}-${k}-songs">${label3} ${HUB_MOODS[k].label} Songs</a>`).join(" \xB7 ");
+    const content = `<main id="seo-content"><h1>${esc(label3)} ${esc(hub.label)} Songs</h1><p>${esc(label3)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, synced lyrics and offline downloads in the Android app.</p><p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label3)} first. The <a href="/${lang}-songs/">${esc(label3)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label3)} music, its composers and its singers.</p>` + list2 + `<p>${siblings}</p><nav aria-label="VinaX"><a href="/${lang}-songs/">${esc(label3)} Songs</a> <a href="/">Home</a> <a href="/charts/">Charts</a> <a href="/discover/">Discover</a></nav></main>`;
     const html = shell.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`).replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(desc)}$2`).replace(/<meta property="og:(type|title|description|image|image:width|image:height)" content="[^"]*"\s*\/?>/g, "").replace(/<link rel="canonical" href="[^"]*"\s*\/?>/g, "").replace(/<meta property="og:url" content="[^"]*"\s*\/?>/g, "").replace(/<meta name="twitter:(card|image|title|description)" content="[^"]*"\s*\/?>/g, "").replace("</head>", head);
     return new Response(injectContent(html, content), {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600, s-maxage=86400" }
@@ -3700,7 +3700,7 @@ var onRequestGet7 = /* @__PURE__ */ __name(async (context) => {
         const url2 = direct.replace(/_(?:12|48|96|160|320)(\.\w+)$/, `_${rate}$1`);
         return new Response(null, {
           status: 302,
-          headers: { location: url2, "cache-control": "public, max-age=86400" }
+          headers: { location: url2, "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" }
         });
       }
       const j = await upstream(`__call=song.generateAuthToken&url=${encodeURIComponent(enc8)}&bitrate=${rate}`);
@@ -3708,7 +3708,7 @@ var onRequestGet7 = /* @__PURE__ */ __name(async (context) => {
       if (!auth.startsWith("http")) return nf();
       return new Response(null, {
         status: 302,
-        headers: { location: auth.replace(/^http:/, "https:"), "cache-control": "no-store" }
+        headers: { location: auth.replace(/^http:/, "https:"), "cache-control": "no-store", "access-control-allow-origin": "*" }
       });
     }
     if (seg[0] === "search" && seg[1]) {
@@ -3797,12 +3797,12 @@ var onRequestGet7 = /* @__PURE__ */ __name(async (context) => {
 var QUERY = "search/songs?query=telugu&limit=1";
 function mirrorsOf(env) {
   return upstreamBases(env).map((base3, i) => {
-    let label2 = base3;
+    let label3 = base3;
     try {
-      label2 = new URL(base3).host;
+      label3 = new URL(base3).host;
     } catch {
     }
-    return { id: `upstream-${i + 1}`, label: label2, base: base3 };
+    return { id: `upstream-${i + 1}`, label: label3, base: base3 };
   });
 }
 __name(mirrorsOf, "mirrorsOf");
@@ -3844,7 +3844,7 @@ function countSongs(j) {
   return Array.isArray(results5) ? results5.length : 0;
 }
 __name(countSongs, "countSongs");
-async function readHealth(id, label2, base3, run) {
+async function readHealth(id, label3, base3, run) {
   const t0 = Date.now();
   try {
     const res = await run();
@@ -3858,9 +3858,9 @@ async function readHealth(id, label2, base3, run) {
     }
     const ok = res.ok && parsed;
     const note = ok ? null : res.ok ? "non-json body" : `http ${res.status}`;
-    return { id, label: label2, base: base3, ok, status: res.status, ms, songs, note };
+    return { id, label: label3, base: base3, ok, status: res.status, ms, songs, note };
   } catch {
-    return { id, label: label2, base: base3, ok: false, status: null, ms: Date.now() - t0, songs: 0, note: "network / timeout" };
+    return { id, label: label3, base: base3, ok: false, status: null, ms: Date.now() - t0, songs: 0, note: "network / timeout" };
   }
 }
 __name(readHealth, "readHealth");
@@ -5956,6 +5956,106 @@ function discoverySnapshot() {
 }
 __name(discoverySnapshot, "discoverySnapshot");
 
+// functions/_lib/ai/images.ts
+var IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
+var IMAGE_MODEL_ID = `cloudflare:${IMAGE_MODEL}`;
+var IMAGE_MODEL_LABEL = Object.freeze({ name: "FLUX.1 schnell", provider: "Cloudflare" });
+var IMAGE_STEPS = 4;
+var MAX_PROMPT_CHARS = 1e3;
+var NEURONS_PER_IMAGE = 60;
+var IMAGES_PER_DAY_TOTAL = 50;
+var IMAGES_PER_DAY_RANGE = Object.freeze([1, 50, 10]);
+var MAX_IMAGE_OUT_BYTES = 5 * 1024 * 1024;
+function sanitizeImages(raw) {
+  const [min, max, def] = IMAGES_PER_DAY_RANGE;
+  if (raw === true) return { enabled: true, perDay: def };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: false, perDay: def };
+  const v = raw;
+  const n3 = Number(v.perDay);
+  const perDay = v.perDay != null && v.perDay !== "" && Number.isFinite(n3) ? Math.min(max, Math.max(min, Math.round(n3))) : def;
+  return { enabled: v.enabled === true, perDay };
+}
+__name(sanitizeImages, "sanitizeImages");
+var SEXUAL = /\b(nude|nudes|nudity|naked|topless|nsfw|porn\w*|sex|sexy|sexual\w*|erotic\w*|hentai|fetish\w*|lingerie|genital\w*|nipples?|undress\w*|xxx)\b/i;
+var MINOR = /\b(child|children|kid|kids|minor|minors|underage|teen|teens|teenage\w*|boy|girl|loli\w*|shota|toddler|baby|infant|schoolgirl|schoolboy)\b/i;
+var VIOLENT = /\b(gore|gory|behead\w*|dismember\w*|mutilat\w*|torture\w*|bloody corpse)\b/i;
+function promptRefused(prompt) {
+  if (SEXUAL.test(prompt)) return true;
+  return MINOR.test(prompt) && VIOLENT.test(prompt);
+}
+__name(promptRefused, "promptRefused");
+function checkPrompt(raw) {
+  if (raw != null && typeof raw !== "string") return { ok: false, error: "bad_request" };
+  const prompt = (raw ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  if (!prompt) return { ok: false, error: "empty_prompt" };
+  if (prompt.length > MAX_PROMPT_CHARS) return { ok: false, error: "prompt_too_long" };
+  if (promptRefused(prompt)) return { ok: false, error: "prompt_refused" };
+  return { ok: true, prompt };
+}
+__name(checkPrompt, "checkPrompt");
+function imageMime(b) {
+  const at = /* @__PURE__ */ __name((i, ...bytes) => bytes.every((x, j) => b[i + j] === x), "at");
+  if (at(0, 137, 80, 78, 71, 13, 10, 26, 10)) return "image/png";
+  if (at(0, 255, 216, 255)) return "image/jpeg";
+  if (at(0, 82, 73, 70, 70) && at(8, 87, 69, 66, 80)) return "image/webp";
+  return null;
+}
+__name(imageMime, "imageMime");
+function fromBase64(s) {
+  const clean2 = s.replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  if (!clean2 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean2)) return null;
+  try {
+    const bin = atob(clean2);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+__name(fromBase64, "fromBase64");
+function imageFileName(prompt, mime) {
+  const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+  const words = prompt.toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s-]/g, " ").split(/\s+/).filter(Boolean).slice(0, 6).join("-").slice(0, 60).replace(/-+$/, "");
+  return `${words || "vinax-image"}.${ext}`;
+}
+__name(imageFileName, "imageFileName");
+async function bytesOf(out) {
+  if (out instanceof Uint8Array) return out;
+  if (out instanceof ArrayBuffer) return new Uint8Array(out);
+  if (out instanceof ReadableStream) {
+    const buf = new Uint8Array(await new Response(out).arrayBuffer());
+    return buf;
+  }
+  const image = out && typeof out === "object" ? out.image : void 0;
+  return typeof image === "string" ? fromBase64(image) : null;
+}
+__name(bytesOf, "bytesOf");
+async function generateImage(env, prompt) {
+  if (!env.AI || typeof env.AI.run !== "function") return { ok: false, error: "not_configured" };
+  const started = Date.now();
+  let out;
+  try {
+    out = await env.AI.run(IMAGE_MODEL, { prompt, steps: IMAGE_STEPS });
+  } catch (e) {
+    const err = workersAiError(e);
+    if (err.kind === "quota" || err.kind === "rate") return { ok: false, error: "images_busy", cause: err };
+    if (err.kind === "bad_request") return { ok: false, error: "image_refused", cause: err };
+    return { ok: false, error: "image_failed", cause: err };
+  }
+  let bytes;
+  try {
+    bytes = await bytesOf(out);
+  } catch {
+    bytes = null;
+  }
+  if (!bytes || !bytes.length || bytes.length > MAX_IMAGE_OUT_BYTES) return { ok: false, error: "image_failed" };
+  const mime = imageMime(bytes);
+  if (!mime) return { ok: false, error: "image_failed" };
+  return { ok: true, bytes, mime, ms: Date.now() - started };
+}
+__name(generateImage, "generateImage");
+
 // functions/_lib/ai/config.ts
 var LIMIT_RANGES = Object.freeze({
   messagesPerMinute: [1, 30, 20],
@@ -6007,7 +6107,7 @@ function sanitizeAiSettings(raw, check = null, now = Date.now()) {
   const testers = Array.isArray(v.testers) ? v.testers.filter((t) => typeof t === "string" && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === "object" && !Array.isArray(v.models) ? v.models : {};
   const lim = typeof v.dailyLimit === "number" && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(1e4, Math.floor(v.dailyLimit)) : null;
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now) };
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
 }
 __name(sanitizeAiSettings, "sanitizeAiSettings");
 var DISCOVER_KEYS = ["groq", "gemini", "openrouter", "nvidia", "cloudflare"];
@@ -7580,7 +7680,7 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
   const who = await db.one(env, "accounts", q().eq("id", account).select("id,email,name,listener_id,blocked_at"));
   if (!who.ok) return dbFailure(who);
   if (!who.value) return adminJson({ error: "not_found" }, 404);
-  const label2 = who.value.email ?? who.value.name ?? `account ${account}`;
+  const label3 = who.value.email ?? who.value.name ?? `account ${account}`;
   if (body.action === "block" || body.action === "unblock") {
     const blocked_at = body.action === "block" ? (/* @__PURE__ */ new Date()).toISOString() : null;
     const r = await db.update(env, "accounts", q().eq("id", account), { blocked_at }, { returning: true });
@@ -7588,7 +7688,7 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
     forgetBlocked(account);
     if (blocked_at) await db.update(env, "push_devices", q().eq("account_id", account), { account_id: null });
     const reason = clip(body.reason, 200);
-    await audit2({ action: body.action === "block" ? "user-block" : "user-unblock", summary: `${body.action === "block" ? "blocked" : "unblocked"} ${label2}${reason ? ` \u2014 ${reason}` : ""}`, target: account, before: { blocked: !!who.value.blocked_at }, after: { blocked: !!blocked_at } });
+    await audit2({ action: body.action === "block" ? "user-block" : "user-unblock", summary: `${body.action === "block" ? "blocked" : "unblocked"} ${label3}${reason ? ` \u2014 ${reason}` : ""}`, target: account, before: { blocked: !!who.value.blocked_at }, after: { blocked: !!blocked_at } });
     return adminJson({ ok: true, blocked: !!blocked_at });
   }
   if (body.action === "notes") {
@@ -7609,7 +7709,7 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
     if (!r.ok) return dbFailure(r);
     await audit2({
       action: "user-notes",
-      summary: `updated the notes and tags on ${label2}`,
+      summary: `updated the notes and tags on ${label3}`,
       target: account,
       before: { tags: before.value?.tags ?? [], note: !!before.value?.note },
       after: { tags: row.tags, note: !!row.note }
@@ -7629,7 +7729,7 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
       const a = await db.update(env, "accounts", q().eq("id", account).eq("listener_id", device), { listener_id: null });
       if (!a.ok) return dbFailure(a);
     }
-    await audit2({ action: "user-signout-device", summary: `signed ${label2} out of one device`, target: account });
+    await audit2({ action: "user-signout-device", summary: `signed ${label3} out of one device`, target: account });
     return adminJson({ ok: true, signedOutAt: now });
   }
   if (body.action === "delete") {
@@ -7646,7 +7746,7 @@ var onRequestPost6 = adminPost(async ({ env, body, audit: audit2, me }) => {
       if (!r.ok) return dbFailure(r);
       add(r.value);
     }
-    await audit2({ action: "user-delete", summary: `deleted every record of ${label2} \u2014 ${reason}`, target: account, after: totals });
+    await audit2({ action: "user-delete", summary: `deleted every record of ${label3} \u2014 ${reason}`, target: account, after: totals });
     return adminJson({ ok: true, deleted: totals });
   }
   return badRequest("unknown_action");
@@ -9712,7 +9812,7 @@ function weeklySummaryEmail(to, s, opts = {}) {
   const tileHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 8px">${[0, 2].map((i) => `<tr>${tiles.slice(i, i + 2).map(
     ([k, v, c]) => `<td width="48%" style="background:#241a2b;border:1px solid #2b2033;border-radius:12px;padding:12px 14px;vertical-align:top"><span style="display:block;font-size:12px;color:#a899ad">${escapeHtml(k)}</span><strong style="display:block;font-size:22px;line-height:1.3;color:#fff4ea">${escapeHtml(v)}</strong><span style="display:block;font-size:12px;color:${c.startsWith("\u25BC") ? "#ff6384" : "#5ad39a"}">${escapeHtml(c)}</span></td>`
   ).join('<td width="4%" style="font-size:0;line-height:0">&nbsp;</td>')}</tr>`).join("")}</table>`;
-  const list2 = /* @__PURE__ */ __name((title, rows3, label2) => rows3.length ? `<strong>${escapeHtml(title)}</strong><br>${rows3.map((r, i) => `${i + 1}. ${escapeHtml(label2(r))} <span style="color:#a899ad">\xB7 ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? "person" : "people"}</span>`).join("<br>")}` : `<strong>${escapeHtml(title)}</strong><br><span style="color:#a899ad">Nothing played last week.</span>`, "list");
+  const list2 = /* @__PURE__ */ __name((title, rows3, label3) => rows3.length ? `<strong>${escapeHtml(title)}</strong><br>${rows3.map((r, i) => `${i + 1}. ${escapeHtml(label3(r))} <span style="color:#a899ad">\xB7 ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? "person" : "people"}</span>`).join("<br>")}` : `<strong>${escapeHtml(title)}</strong><br><span style="color:#a899ad">Nothing played last week.</span>`, "list");
   const songLabel = /* @__PURE__ */ __name((r) => `${r.title ?? "Unknown song"} \u2014 ${r.artist}`, "songLabel");
   const health = [
     `${fmtInt(s.atRisk)} ${s.atRisk === 1 ? "regular listener has" : "regular listeners have"} not been back for a week (At risk).`,
@@ -11222,7 +11322,8 @@ function upcomingMaintenance(raw, now = /* @__PURE__ */ new Date()) {
   };
 }
 __name(upcomingMaintenance, "upcomingMaintenance");
-var BANNER_PAGES = ["/charts", "/discover", "/explore", "/radio", "/mixes", "/made-for-you", "/weekly", "/vinaxai", "/library", "/search"];
+var BANNER_PAGES = ["/charts", "/discover", "/radio", "/mixes", "/made-for-you", "/weekly", "/vinaxai", "/library", "/search"];
+var BANNER_PAGE_MOVED = { "/explore": "/discover" };
 function activeBanners(value, now = /* @__PURE__ */ new Date()) {
   if (!Array.isArray(value)) return [];
   const today = now.toISOString().slice(0, 10);
@@ -11240,7 +11341,8 @@ function activeBanners(value, now = /* @__PURE__ */ new Date()) {
     const subtitle = str3(b.subtitle, 160);
     if (subtitle) banner.subtitle = subtitle;
     const linkType = str3(b.linkType, 16);
-    const linkId = str3(b.linkId, 80);
+    const rawLinkId = str3(b.linkId, 80);
+    const linkId = linkType === "page" ? BANNER_PAGE_MOVED[rawLinkId] ?? rawLinkId : rawLinkId;
     if (linkType === "charts") banner.linkType = "charts";
     else if (linkType === "page") {
       if (BANNER_PAGES.includes(linkId)) {
@@ -14271,8 +14373,8 @@ function publicConversation(c) {
   return { id: c.id, title: c.title, starred: c.starred, modelPref: c.model_pref, activeLeafId: c.active_leaf_id, projectId: c.project_id ?? null, createdAt: c.created_at, updatedAt: c.updated_at };
 }
 __name(publicConversation, "publicConversation");
-function publicMessage(r, label2) {
-  const named = r.model_id && label2 ? label2(r.model_id) : null;
+function publicMessage(r, label3) {
+  const named = r.model_id && label3 ? label3(r.model_id) : null;
   return {
     id: r.id,
     parentId: r.parent_id,
@@ -14932,7 +15034,8 @@ var onRequestGet46 = /* @__PURE__ */ __name(async (ctx) => {
   const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
   const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
   const chatLadders = ["default", "code", "deep", "vision", "long", "fast"].flatMap((l) => ladderModels(registry, l)).filter((spec) => providerConfigured(env, spec.provider));
-  return json10({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, autoThinking: autoLevels(chatLadders) });
+  const images = { enabled: settings.images.enabled && typeof env.AI?.run === "function", perDay: settings.images.perDay, maxPrompt: MAX_PROMPT_CHARS };
+  return json10({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, images, autoThinking: autoLevels(chatLadders) });
 }, "onRequestGet");
 
 // functions/api/ai/conversations.ts
@@ -15390,15 +15493,182 @@ var onRequestPost37 = /* @__PURE__ */ __name(async (ctx) => {
   return new Response(readable, { status: 200, headers: { ...CORS9, "content-type": "application/x-vinax-speech", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 }, "onRequestPost");
 
+// functions/api/ai/images.ts
+var images_exports = {};
+__export(images_exports, {
+  IMAGE_REPLY_TEXT: () => IMAGE_REPLY_TEXT,
+  IMAGE_REQUEST_PREFIX: () => IMAGE_REQUEST_PREFIX,
+  MAX_BODY_BYTES: () => MAX_BODY_BYTES2,
+  onRequestOptions: () => onRequestOptions27,
+  onRequestPost: () => onRequestPost38
+});
+var MAX_BODY_BYTES2 = 8192;
+var IMAGE_REQUEST_PREFIX = "Create an image: ";
+var IMAGE_REPLY_TEXT = "Here\u2019s your image.";
+var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var label = /* @__PURE__ */ __name((id) => id === IMAGE_MODEL_ID ? IMAGE_MODEL_LABEL : null, "label");
+var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
+  const { request, env } = ctx;
+  const limited = await rateLimitAsync(request, "ai-images", { capacity: 5, refillPerMinute: 5 }, env);
+  if (limited) return limited;
+  const sub = await readSession(env, bearer(request));
+  if (!sub) return json10({ error: "signed_out" }, 401);
+  if (!dbConfigured(env)) return json10({ error: "unavailable" }, 503);
+  const settings = await aiSettings(env);
+  if (!aiOpenFor(settings, sub)) return json10({ error: "ai_disabled" }, 503);
+  if (!settings.images.enabled) return json10({ error: "images_off" }, 503);
+  if (!env.AI || typeof env.AI.run !== "function") return json10({ error: "ai_not_configured" }, 503);
+  const read = await readJsonCapped(request, MAX_BODY_BYTES2);
+  if (!read.ok) return json10({ error: read.reason === "too_large" ? "prompt_too_long" : "bad_request" }, read.reason === "too_large" ? 413 : 400);
+  const body = read.value && typeof read.value === "object" ? read.value : {};
+  const checked = checkPrompt(body.prompt);
+  if (!checked.ok) return json10({ error: checked.error }, checked.error === "prompt_too_long" ? 413 : 400);
+  const prompt = checked.prompt;
+  if (body.conversationId != null && !isUuid(body.conversationId)) return json10({ error: "not_found" }, 404);
+  const parentRaw = body.parentMessageId;
+  if (parentRaw != null && parentRaw !== "root" && !isUuid(parentRaw)) return json10({ error: "bad_request" }, 400);
+  if (body.projectId != null && !isUuid(body.projectId)) return json10({ error: "bad_request" }, 400);
+  let conv = null;
+  let rows3 = [];
+  if (isUuid(body.conversationId)) {
+    const [c, m2] = await Promise.all([getConversation(env, sub, body.conversationId), listMessages(env, body.conversationId)]);
+    if (!c.ok) return json10({ error: "unavailable" }, 503);
+    if (!c.value) return json10({ error: "not_found" }, 404);
+    if (!m2.ok) return json10({ error: "unavailable" }, 503);
+    conv = c.value;
+    rows3 = m2.rows;
+    if (rows3.length + 2 > MAX_MESSAGES) return json10({ error: "conversation_full" }, 409);
+    const have = await db.count(env, "ai_attachments", q().eq("conversation_id", conv.id));
+    if (have.ok && have.value >= settings.limits.filesPerChat) return json10({ error: "too_many_files" }, 409);
+  }
+  let parentId = null;
+  if (conv) {
+    if (parentRaw === "root") parentId = null;
+    else if (isUuid(parentRaw)) {
+      if (!rows3.some((r) => r.id === parentRaw)) return json10({ error: "not_found" }, 404);
+      parentId = parentRaw;
+    } else {
+      const active = conv.active_leaf_id && rows3.some((r) => r.id === conv?.active_leaf_id) ? conv.active_leaf_id : null;
+      parentId = active ?? latestLeaf(rows3)?.id ?? null;
+    }
+  }
+  let projectId = null;
+  if (!conv && isUuid(body.projectId)) {
+    const p = await getProject(env, sub, body.projectId);
+    if (!p.ok) return json10({ error: "unavailable" }, 503);
+    if (!p.value) return json10({ error: "not_found" }, 404);
+    projectId = p.value.id;
+  }
+  const mine = await db.rpc(env, "ai_take_daily", { p_kind: `img:${sub}`, p_limit: settings.images.perDay });
+  if (!mine.ok) return json10({ error: "unavailable" }, 503);
+  if (mine.value !== true) return json10({ error: "image_daily_limit", limit: settings.images.perDay }, 429);
+  const all = await db.rpc(env, "ai_take_daily", { p_kind: "images", p_limit: IMAGES_PER_DAY_TOTAL });
+  if (!all.ok) return json10({ error: "unavailable" }, 503);
+  if (all.value !== true) return json10({ error: "images_busy" }, 429);
+  const made = await generateImage(env, prompt);
+  const log = /* @__PURE__ */ __name((status, extra = {}) => console.log(JSON.stringify({ route: "ai-images", model: IMAGE_MODEL_ID, status, neurons: NEURONS_PER_IMAGE, ...extra })), "log");
+  if (!made.ok) {
+    log(made.error, made.cause ? { kind: made.cause.kind } : {});
+    if (made.error === "images_busy") return json10({ error: "images_busy" }, 429);
+    if (made.error === "image_refused") return json10({ error: "image_refused" }, 422);
+    if (made.error === "not_configured") return json10({ error: "ai_not_configured" }, 503);
+    return json10({ error: "image_failed" }, 502);
+  }
+  let created = false;
+  if (!conv) {
+    const madeConv = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(prompt), model_pref: "auto", project_id: projectId });
+    if (!madeConv.ok) return madeConv.code === "23503" ? json10({ error: "signed_out" }, 401) : json10({ error: "unavailable" }, 503);
+    if (!madeConv.rows[0]) return json10({ error: "unavailable" }, 503);
+    conv = madeConv.rows[0];
+    created = true;
+    if (body.incognito === true) await markIncognito(env, sub, conv.id);
+  }
+  const fileId = crypto.randomUUID();
+  const path = `${sub}/${conv.id}/${fileId}`;
+  if (!await storagePut(env, path, new Uint8Array(made.bytes), made.mime, made.bytes.length)) return json10({ error: "unavailable" }, 503);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const file = {
+    id: fileId,
+    account_id: sub,
+    conversation_id: conv.id,
+    name: imageFileName(prompt, made.mime),
+    mime: made.mime,
+    size: made.bytes.length,
+    kind: "image",
+    storage_path: path,
+    extracted_text: null,
+    pages: null,
+    gemini_uri: null,
+    gemini_expires_at: null,
+    created_at: now
+  };
+  const savedFile = await db.insert(env, "ai_attachments", {
+    id: file.id,
+    account_id: sub,
+    conversation_id: conv.id,
+    name: file.name,
+    mime: file.mime,
+    size: file.size,
+    kind: "image",
+    storage_path: path,
+    extracted_text: null
+  });
+  if (!savedFile.ok) {
+    await storageRemove(env, [path]);
+    return json10({ error: "unavailable" }, 503);
+  }
+  const user2 = {
+    id: crypto.randomUUID(),
+    conversation_id: conv.id,
+    parent_id: parentId,
+    role: "user",
+    content: [{ type: "text", text: `${IMAGE_REQUEST_PREFIX}${prompt}` }],
+    thinking: null,
+    thinking_ms: null,
+    sources: null,
+    artifacts: null,
+    model_id: null,
+    provider: null,
+    stop_reason: null,
+    usage: null,
+    created_at: now
+  };
+  const reply = {
+    ...user2,
+    id: crypto.randomUUID(),
+    parent_id: user2.id,
+    role: "assistant",
+    content: [{ type: "text", text: IMAGE_REPLY_TEXT }, attachmentPart(file)],
+    model_id: IMAGE_MODEL_ID,
+    provider: "cloudflare",
+    stop_reason: "end",
+    created_at: new Date(Date.parse(now) + 1).toISOString()
+  };
+  const savedUser = await insertMessage(env, user2);
+  const savedReply = savedUser.ok ? await insertMessage(env, reply) : savedUser;
+  if (!savedReply.ok) {
+    log("save_failed");
+    return json10({ error: "unavailable" }, 503);
+  }
+  const updated = await updateConversation(env, sub, conv.id, { updated_at: (/* @__PURE__ */ new Date()).toISOString(), active_leaf_id: reply.id });
+  const convOut = updated.ok && updated.rows?.[0] ? updated.rows[0] : { ...conv, active_leaf_id: reply.id };
+  log("ok", { ms: made.ms, created });
+  return json10({
+    conversation: { ...publicConversation(convOut), ...created && body.incognito === true ? { incognito: true } : {} },
+    userMessage: publicMessage(user2, label),
+    assistantMessage: publicMessage(reply, label)
+  });
+}, "onRequestPost");
+
 // functions/api/ai/live-token.ts
 var live_token_exports = {};
 __export(live_token_exports, {
   liveCandidates: () => liveCandidates,
-  onRequestOptions: () => onRequestOptions27,
-  onRequestPost: () => onRequestPost38
+  onRequestOptions: () => onRequestOptions28,
+  onRequestPost: () => onRequestPost39
 });
 var UUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var onRequestOptions27 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function liveCandidates(thinking, skip, now = Date.now(), picked = null, search = false) {
   const first = ALL_LIVE_MODELS.find((m2) => m2.id === picked);
   const searchers = search ? LIVE_MODELS.filter((m2) => LIVE_SEARCH_MODELS.includes(m2.id)) : [];
@@ -15406,7 +15676,7 @@ function liveCandidates(thinking, skip, now = Date.now(), picked = null, search 
   return all.filter((m2, i) => all.findIndex((x) => x.id === m2.id) === i && !skip.includes(m2.id) && !voiceResting(m2.id, now));
 }
 __name(liveCandidates, "liveCandidates");
-var onRequestPost38 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost39 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, "ai-live-token", "live");
   if (!gate.ok) return gate.res;
@@ -15472,8 +15742,8 @@ __export(live_transcript_exports, {
   MAX_TURN_SOURCES: () => MAX_TURN_SOURCES,
   cleanSources: () => cleanSources,
   cleanTurns: () => cleanTurns,
-  onRequestOptions: () => onRequestOptions28,
-  onRequestPost: () => onRequestPost39
+  onRequestOptions: () => onRequestOptions29,
+  onRequestPost: () => onRequestPost40
 });
 
 // functions/_lib/ai/complete.ts
@@ -15602,7 +15872,7 @@ function cleanSources(raw, into = []) {
   return out;
 }
 __name(cleanSources, "cleanSources");
-var onRequestOptions28 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
 function cleanTurns(raw) {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TURNS) return null;
   const out = [];
@@ -15626,7 +15896,7 @@ function cleanTurns(raw) {
   return out.length ? out : null;
 }
 __name(cleanTurns, "cleanTurns");
-var onRequestPost39 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost40 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "ai-live-transcript", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -15717,7 +15987,7 @@ var id_exports3 = {};
 __export(id_exports3, {
   onRequestDelete: () => onRequestDelete2,
   onRequestGet: () => onRequestGet50,
-  onRequestOptions: () => onRequestOptions29,
+  onRequestOptions: () => onRequestOptions30,
   onRequestPatch: () => onRequestPatch2
 });
 
@@ -15799,7 +16069,7 @@ function publicShareSummary(r) {
 __name(publicShareSummary, "publicShareSummary");
 
 // functions/api/ai/conversations/[id].ts
-var onRequestOptions29 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned2(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -15814,9 +16084,10 @@ async function owned2(ctx, route2) {
   return { sub, conv: c.value };
 }
 __name(owned2, "owned");
-var label = /* @__PURE__ */ __name((modelId) => {
+var label2 = /* @__PURE__ */ __name((modelId) => {
   const live = liveLabel(modelId);
   if (live) return live;
+  if (modelId === IMAGE_MODEL_ID) return IMAGE_MODEL_LABEL;
   const spec = modelById(MODELS, modelId) ?? knownDiscovered(modelId);
   if (spec) return { name: spec.name, provider: PROVIDER_NAMES[spec.provider] };
   const p = modelId.slice(0, modelId.indexOf(":"));
@@ -15831,7 +16102,7 @@ var onRequestGet50 = /* @__PURE__ */ __name(async (ctx) => {
   ]);
   if (!m2.ok) return json10({ error: "unavailable" }, 503);
   const incognito = inc.ok && inc.value?.incognito === true;
-  return json10({ conversation: { ...publicConversation(o.conv), ...incognito ? { incognito: true } : {} }, messages: m2.rows.map((r) => publicMessage(r, label)) });
+  return json10({ conversation: { ...publicConversation(o.conv), ...incognito ? { incognito: true } : {} }, messages: m2.rows.map((r) => publicMessage(r, label2)) });
 }, "onRequestGet");
 var onRequestPatch2 = /* @__PURE__ */ __name(async (ctx) => {
   const o = await owned2(ctx, "ai-conversation-write");
@@ -15886,10 +16157,10 @@ var onRequestDelete2 = /* @__PURE__ */ __name(async (ctx) => {
 var shares_exports = {};
 __export(shares_exports, {
   onRequestGet: () => onRequestGet51,
-  onRequestOptions: () => onRequestOptions30,
-  onRequestPost: () => onRequestPost40
+  onRequestOptions: () => onRequestOptions31,
+  onRequestPost: () => onRequestPost41
 });
-var onRequestOptions30 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var onRequestGet51 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-shares", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -15902,7 +16173,7 @@ var onRequestGet51 = /* @__PURE__ */ __name(async ({ request, env }) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ items: r.rows.map(publicShareSummary) });
 }, "onRequestGet");
-var onRequestPost40 = /* @__PURE__ */ __name(async ({ request, env }) => {
+var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-share-write", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -15944,7 +16215,7 @@ var onRequestPost40 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var artifacts_exports = {};
 __export(artifacts_exports, {
   onRequestGet: () => onRequestGet52,
-  onRequestOptions: () => onRequestOptions31
+  onRequestOptions: () => onRequestOptions32
 });
 
 // functions/_lib/ai/gallery.ts
@@ -16033,7 +16304,7 @@ async function artifactVersions(env, accountId, conversationId, artifactId) {
 __name(artifactVersions, "artifactVersions");
 
 // functions/api/ai/artifacts.ts
-var onRequestOptions31 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
   const limited = await rateLimitAsync(request, "ai-artifacts", { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16055,9 +16326,9 @@ var onRequestGet52 = /* @__PURE__ */ __name(async ({ request, env }) => {
 var id_exports4 = {};
 __export(id_exports4, {
   onRequestGet: () => onRequestGet53,
-  onRequestOptions: () => onRequestOptions32
+  onRequestOptions: () => onRequestOptions33
 });
-var onRequestOptions32 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, OPTIONS" } }), "onRequestOptions");
 var onRequestGet53 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-artifact", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
@@ -16077,11 +16348,11 @@ var id_exports5 = {};
 __export(id_exports5, {
   onRequestDelete: () => onRequestDelete3,
   onRequestGet: () => onRequestGet54,
-  onRequestOptions: () => onRequestOptions33
+  onRequestOptions: () => onRequestOptions34
 });
 var NOINDEX = { "x-robots-tag": "noindex, nofollow" };
 var notFound = /* @__PURE__ */ __name(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", ...NOINDEX, ...CORS9 } }), "notFound");
-var onRequestOptions33 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet54 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-read", { capacity: 60, refillPerMinute: 60 }, env);
   if (limited) return limited;
@@ -16115,11 +16386,11 @@ var onRequestDelete3 = /* @__PURE__ */ __name(async ({ request, env, params }) =
 // functions/api/ai/shares/[id]-continue.ts
 var id_continue_exports = {};
 __export(id_continue_exports, {
-  onRequestOptions: () => onRequestOptions34,
-  onRequestPost: () => onRequestPost41
+  onRequestOptions: () => onRequestOptions35,
+  onRequestPost: () => onRequestPost42
 });
-var onRequestOptions34 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
-var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
+var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "POST, OPTIONS" } }), "onRequestOptions");
+var onRequestPost42 = /* @__PURE__ */ __name(async ({ request, env, params }) => {
   const limited = await rateLimitAsync(request, "ai-share-continue", { capacity: 5, refillPerMinute: 5 }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
@@ -16165,10 +16436,10 @@ var onRequestPost41 = /* @__PURE__ */ __name(async ({ request, env, params }) =>
 var projects_exports = {};
 __export(projects_exports, {
   onRequestGet: () => onRequestGet55,
-  onRequestOptions: () => onRequestOptions35,
-  onRequestPost: () => onRequestPost42
+  onRequestOptions: () => onRequestOptions36,
+  onRequestPost: () => onRequestPost43
 });
-var onRequestOptions35 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 async function session(request, env, route2) {
   const limited = await rateLimitAsync(request, route2, { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -16202,7 +16473,7 @@ var onRequestGet55 = /* @__PURE__ */ __name(async (ctx) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ items: r.rows.map((p) => publicProject(p, counts.get(p.id) ?? { chats: 0, files: 0 })) });
 }, "onRequestGet");
-var onRequestPost42 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost43 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await session(ctx.request, ctx.env, "ai-projects-write");
   if (sub instanceof Response) return sub;
   const read = await readJsonCapped(ctx.request, 64e3);
@@ -16233,10 +16504,10 @@ var id_exports6 = {};
 __export(id_exports6, {
   onRequestDelete: () => onRequestDelete4,
   onRequestGet: () => onRequestGet56,
-  onRequestOptions: () => onRequestOptions36,
+  onRequestOptions: () => onRequestOptions37,
   onRequestPatch: () => onRequestPatch3
 });
-var onRequestOptions36 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PATCH, DELETE, OPTIONS" } }), "onRequestOptions");
 async function owned3(ctx, route2) {
   const limited = await rateLimitAsync(ctx.request, route2, { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
@@ -16301,10 +16572,10 @@ var memories_exports = {};
 __export(memories_exports, {
   onRequestDelete: () => onRequestDelete5,
   onRequestGet: () => onRequestGet57,
-  onRequestOptions: () => onRequestOptions37,
-  onRequestPost: () => onRequestPost43
+  onRequestOptions: () => onRequestOptions38,
+  onRequestPost: () => onRequestPost44
 });
-var onRequestOptions37 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet57 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
@@ -16312,7 +16583,7 @@ var onRequestGet57 = /* @__PURE__ */ __name(async (ctx) => {
   if (!items.ok || !prefs.ok) return json10({ error: "unavailable" }, 503);
   return json10({ enabled, prefs: prefs.value, items: items.rows.map(publicMemory), max: MEMORY_MAX_ITEMS });
 }, "onRequestGet");
-var onRequestPost43 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost44 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, true);
   if (sub instanceof Response) return sub;
   const read = await readJsonCapped(ctx.request, 2048);
@@ -16344,10 +16615,10 @@ var onRequestDelete5 = /* @__PURE__ */ __name(async (ctx) => {
 var prefs_exports = {};
 __export(prefs_exports, {
   onRequestGet: () => onRequestGet58,
-  onRequestOptions: () => onRequestOptions38,
+  onRequestOptions: () => onRequestOptions39,
   onRequestPut: () => onRequestPut3
 });
-var onRequestOptions38 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, OPTIONS" } }), "onRequestOptions");
 var onRequestGet58 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, false);
   if (sub instanceof Response) return sub;
@@ -16376,9 +16647,9 @@ var onRequestPut3 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports7 = {};
 __export(id_exports7, {
   onRequestDelete: () => onRequestDelete6,
-  onRequestOptions: () => onRequestOptions39
+  onRequestOptions: () => onRequestOptions40
 });
-var onRequestOptions39 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestDelete6 = /* @__PURE__ */ __name(async (ctx) => {
   const sub = await memoryGate(ctx, true);
   if (sub instanceof Response) return sub;
@@ -16395,7 +16666,7 @@ var profile_exports = {};
 __export(profile_exports, {
   onRequestDelete: () => onRequestDelete7,
   onRequestGet: () => onRequestGet59,
-  onRequestOptions: () => onRequestOptions40,
+  onRequestOptions: () => onRequestOptions41,
   onRequestPut: () => onRequestPut4
 });
 
@@ -16483,11 +16754,27 @@ function publicProfile(p, extra = {}) {
     updatedAt: p.updated_at,
     ...extra.following !== void 0 ? { following: extra.following } : {},
     ...extra.followers !== void 0 ? { followers: extra.followers } : {},
-    // The owner also sees their own sharing switch; nobody else does.
-    ...extra.own ? { shareNow: p.share_now } : {}
+    // v23 — the room to join: only what jamFor allowed (a mutual follower, a live room).
+    ...extra.jamCode ? { jamCode: extra.jamCode } : {},
+    // The owner also sees their own sharing switches; nobody else does.
+    ...extra.own ? { shareNow: p.share_now, shareJam: p.share_jam === true } : {}
   };
 }
 __name(publicProfile, "publicProfile");
+var JAM_LIVE_MS = 3 * 6e4;
+var ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
+async function liveRoomCodes(env, codes, now = Date.now()) {
+  const want = [...new Set(codes.filter((c) => typeof c === "string" && ROOM_CODE_RE.test(c)))];
+  if (!want.length) return /* @__PURE__ */ new Set();
+  const r = await db.select(env, "rooms", q().in("code", want).gte("updated_at", since(JAM_LIVE_MS, now)).select("code").limit(want.length));
+  return new Set(r.ok ? r.rows.map((x) => x.code) : []);
+}
+__name(liveRoomCodes, "liveRoomCodes");
+function jamFor(p, mutual, live) {
+  if (!mutual || p.share_jam !== true || !p.jam_code) return null;
+  return live.has(p.jam_code) ? p.jam_code : null;
+}
+__name(jamFor, "jamFor");
 async function profileByHandle(env, handle) {
   return db.one(env, "profiles", q().ilike("handle", like(handle)));
 }
@@ -16503,7 +16790,7 @@ async function isFollowing(env, follower, followee) {
 __name(isFollowing, "isFollowing");
 
 // functions/api/profile.ts
-var onRequestOptions40 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet59 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
@@ -16533,19 +16820,41 @@ var onRequestPut4 = /* @__PURE__ */ __name(async (ctx) => {
     if (held.value && held.value.account_id !== who.sub) return json10({ error: "taken" }, 409);
   }
   if (body.bio !== void 0 && body.bio !== null && typeof body.bio !== "string") return json10({ error: "bad_request", field: "bio" }, 400);
+  const shareJam = typeof body.shareJam === "boolean" ? body.shareJam : existing.value?.share_jam === true;
+  let jamCode;
+  if (body.jam === null) jamCode = null;
+  else if (body.jam !== void 0) {
+    const j = asObject(body.jam);
+    const code = typeof j?.code === "string" ? j.code.trim().toUpperCase() : "";
+    const token = clip(j?.hostToken, 64);
+    if (!ROOM_CODE_RE.test(code) || !token) return json10({ error: "bad_request", field: "jam" }, 400);
+    if (shareJam) {
+      const room = await db.one(env, "rooms", q().eq("code", code).select("host_token,updated_at"));
+      if (!room.ok) return json10({ error: "unavailable" }, 503);
+      if (!room.value || !safeEqual(token, room.value.host_token)) return json10({ error: "forbidden", field: "jam" }, 403);
+      if (!(Date.now() - Date.parse(room.value.updated_at) < JAM_LIVE_MS)) return json10({ error: "ended", field: "jam" }, 409);
+      jamCode = code;
+    } else jamCode = null;
+  }
+  if (!shareJam && (jamCode !== void 0 || existing.value?.jam_code)) jamCode = null;
+  const jamOnly = !!existing.value && Object.keys(body).every((k) => k === "jam");
   const patch = {
     account_id: who.sub,
     handle,
-    updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    updated_at: jamOnly && existing.value ? existing.value.updated_at : (/* @__PURE__ */ new Date()).toISOString(),
     public: typeof body.public === "boolean" ? body.public : existing.value?.public ?? false,
     share_now: typeof body.shareNow === "boolean" ? body.shareNow : existing.value?.share_now ?? false,
     bio: body.bio === void 0 ? existing.value?.bio ?? null : body.bio === null ? null : clip(body.bio, 160),
     summary: body.summary !== void 0 ? cleanSummary2(body.summary) : existing.value?.summary ?? cleanSummary2({}),
-    now_playing: body.nowPlaying === void 0 ? existing.value?.now_playing ?? null : body.nowPlaying === null ? null : cleanSong(body.nowPlaying)
+    now_playing: body.nowPlaying === void 0 ? existing.value?.now_playing ?? null : body.nowPlaying === null ? null : cleanSong(body.nowPlaying),
+    // Sent only when they change, so a write that never touches the jam works on a database before v23.
+    ...typeof body.shareJam === "boolean" ? { share_jam: body.shareJam } : {},
+    ...jamCode !== void 0 ? { jam_code: jamCode } : {}
   };
   if (JSON.stringify(patch.summary).length > MAX_SUMMARY_BYTES) return json10({ error: "too_large" }, 413);
   const wrote = await db.upsert(env, "profiles", patch, "account_id", { returning: true });
   if (!wrote.ok) {
+    if (wrote.code === "23503" && typeof jamCode === "string") return json10({ error: "ended", field: "jam" }, 409);
     if (wrote.error === "conflict") return json10({ error: "taken" }, 409);
     if (wrote.code === "23503") return json10({ error: "signed_out" }, 401);
     return json10({ error: "unavailable" }, 503);
@@ -16568,8 +16877,8 @@ var onRequestDelete7 = /* @__PURE__ */ __name(async (ctx) => {
 var reactions_exports = {};
 __export(reactions_exports, {
   onRequestGet: () => onRequestGet60,
-  onRequestOptions: () => onRequestOptions41,
-  onRequestPost: () => onRequestPost44,
+  onRequestOptions: () => onRequestOptions42,
+  onRequestPost: () => onRequestPost45,
   onRequestPut: () => onRequestPut5
 });
 var CORS10 = {
@@ -16577,18 +16886,18 @@ var CORS10 = {
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions41 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
+var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS10 }), "onRequestOptions");
 var onRequestGet60 = /* @__PURE__ */ __name(async () => jsonResponse({ total: 0, counts: {}, mine: null }, 200, { ...CORS10, "cache-control": "public, max-age=3600" }), "onRequestGet");
 var onRequestPut5 = /* @__PURE__ */ __name(async () => methodNotAllowed(), "onRequestPut");
-var onRequestPost44 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS10), "onRequestPost");
+var onRequestPost45 = /* @__PURE__ */ __name(async () => jsonResponse({ error: "reactions_removed" }, 410, CORS10), "onRequestPost");
 
 // functions/api/profile/[handle].ts
 var handle_exports = {};
 __export(handle_exports, {
   onRequestGet: () => onRequestGet61,
-  onRequestOptions: () => onRequestOptions42
+  onRequestOptions: () => onRequestOptions43
 });
-var onRequestOptions42 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
+var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS9 }), "onRequestOptions");
 var onRequestGet61 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = rateLimit(ctx.request, "profile-read", { capacity: 60, refillPerMinute: 60 }, ctx.env);
   if (limited) return limited;
@@ -16603,12 +16912,16 @@ var onRequestGet61 = /* @__PURE__ */ __name(async (ctx) => {
   const self = viewer === p.account_id;
   let following;
   if (viewer && !self) following = await isFollowing(ctx.env, viewer, p.account_id) ?? false;
-  if (!p.public && !self) {
-    const back = viewer ? await isFollowing(ctx.env, p.account_id, viewer) : false;
-    if (!back || !following) return json10({ error: "not_found" }, 404);
-  }
-  const [acc, followers] = await Promise.all([accountOf(ctx.env, p.account_id), db.count(ctx.env, "follows", q().eq("followee_id", p.account_id))]);
-  return json10({ profile: publicProfile(p, { following, followers: followers.ok ? followers.value : 0, name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null }) });
+  let back = false;
+  if (viewer && !self && following && (!p.public || p.share_jam === true && !!p.jam_code)) back = await isFollowing(ctx.env, p.account_id, viewer) ?? false;
+  if (!p.public && !self && (!back || !following)) return json10({ error: "not_found" }, 404);
+  const mutual = !!following && back;
+  const [acc, followers, live] = await Promise.all([
+    accountOf(ctx.env, p.account_id),
+    db.count(ctx.env, "follows", q().eq("followee_id", p.account_id)),
+    mutual && p.share_jam === true ? liveRoomCodes(ctx.env, [p.jam_code]) : Promise.resolve(/* @__PURE__ */ new Set())
+  ]);
+  return json10({ profile: publicProfile(p, { following, followers: followers.ok ? followers.value : 0, name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null, jamCode: jamFor(p, mutual, live) }) });
 }, "onRequestGet");
 
 // functions/api/follow.ts
@@ -16616,10 +16929,10 @@ var follow_exports = {};
 __export(follow_exports, {
   MAX_FOLLOWING: () => MAX_FOLLOWING,
   onRequestGet: () => onRequestGet62,
-  onRequestOptions: () => onRequestOptions43,
-  onRequestPost: () => onRequestPost45
+  onRequestOptions: () => onRequestOptions44,
+  onRequestPost: () => onRequestPost46
 });
-var onRequestOptions43 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var MAX_FOLLOWING = 500;
 var onRequestGet62 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
@@ -16636,11 +16949,14 @@ var onRequestGet62 = /* @__PURE__ */ __name(async (ctx) => {
   const back = await db.select(ctx.env, "follows", q().eq("followee_id", who.sub).in("follower_id", ids).select("follower_id").limit(MAX_FOLLOWING));
   if (!back.ok) return json10({ error: "unavailable" }, 503);
   const followsMe = new Set(back.rows.map((r) => r.follower_id));
-  const following = p.rows.filter((row) => wanted.has(row.account_id) && (row.public || followsMe.has(row.account_id))).map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null }));
-  following.sort((a, b) => (b.nowPlaying ? 1 : 0) - (a.nowPlaying ? 1 : 0) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const shown = p.rows.filter((row) => wanted.has(row.account_id) && (row.public || followsMe.has(row.account_id)));
+  const live = await liveRoomCodes(ctx.env, shown.filter((row) => followsMe.has(row.account_id) && row.share_jam === true).map((row) => row.jam_code));
+  const following = shown.map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null, jamCode: jamFor(row, followsMe.has(row.account_id), live) }));
+  const active = /* @__PURE__ */ __name((x) => x.jamCode ? 2 : x.nowPlaying ? 1 : 0, "active");
+  following.sort((a, b) => active(b) - active(a) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return json10({ following });
 }, "onRequestGet");
-var onRequestPost45 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost46 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = await rateLimitAsync(ctx.request, "follow", { capacity: 30, refillPerMinute: 20 }, ctx.env);
   if (limited) return limited;
   const who = await requireAccount(ctx.env, ctx.request);
@@ -16678,8 +16994,8 @@ __export(shared_playlist_exports, {
   cleanSongs: () => cleanSongs,
   onRequestDelete: () => onRequestDelete8,
   onRequestGet: () => onRequestGet63,
-  onRequestOptions: () => onRequestOptions44,
-  onRequestPost: () => onRequestPost46,
+  onRequestOptions: () => onRequestOptions45,
+  onRequestPost: () => onRequestPost47,
   publicPlaylist: () => publicPlaylist
 });
 function cleanSongs(raw) {
@@ -16711,7 +17027,7 @@ function publicPlaylist(p, extra = {}) {
   };
 }
 __name(publicPlaylist, "publicPlaylist");
-var onRequestOptions44 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" } }), "onRequestOptions");
 var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
   const who = await requireAccount(ctx.env, ctx.request);
   if ("fail" in who) return who.fail;
@@ -16719,7 +17035,7 @@ var onRequestGet63 = /* @__PURE__ */ __name(async (ctx) => {
   if (!r.ok) return json10({ error: "unavailable" }, 503);
   return json10({ playlists: r.rows.map((p) => publicPlaylist(p, { mine: true })) });
 }, "onRequestGet");
-var onRequestPost46 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost47 = /* @__PURE__ */ __name(async (ctx) => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, "shared-playlist", { capacity: 30, refillPerMinute: 15 }, env);
   if (limited) return limited;
@@ -16783,10 +17099,10 @@ var onRequestDelete8 = /* @__PURE__ */ __name(async (ctx) => {
 var id_exports8 = {};
 __export(id_exports8, {
   onRequestGet: () => onRequestGet64,
-  onRequestOptions: () => onRequestOptions45,
-  onRequestPost: () => onRequestPost47
+  onRequestOptions: () => onRequestOptions46,
+  onRequestPost: () => onRequestPost48
 });
-var onRequestOptions45 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
+var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: { ...CORS9, "access-control-allow-methods": "GET, POST, OPTIONS" } }), "onRequestOptions");
 var idOf3 = /* @__PURE__ */ __name((v) => typeof v === "string" && /^[a-z0-9]{12}$/.test(v) ? v : null, "idOf");
 async function load(env, id) {
   const r = await db.one(env, "shared_playlists", q().eq("id", id));
@@ -16810,7 +17126,7 @@ var onRequestGet64 = /* @__PURE__ */ __name(async (ctx) => {
   const acc = await accountOf(ctx.env, r.row.owner_id);
   return json10({ playlist: publicPlaylist(r.row, { owner: acc.ok ? acc.value?.name ?? null : null, mine }), canEdit: mine || tokenOk(r.row, token) }, 200);
 }, "onRequestGet");
-var onRequestPost47 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost48 = /* @__PURE__ */ __name(async (ctx) => {
   const limited = await rateLimitAsync(ctx.request, "shared-playlist-collab", { capacity: 40, refillPerMinute: 20 }, ctx.env);
   if (limited) return limited;
   if (!dbConfigured(ctx.env)) return json10({ error: "unavailable" }, 503);
@@ -16847,8 +17163,8 @@ var onRequestPost47 = /* @__PURE__ */ __name(async (ctx) => {
 // functions/api/push/fcm-register.ts
 var fcm_register_exports = {};
 __export(fcm_register_exports, {
-  onRequestOptions: () => onRequestOptions46,
-  onRequestPost: () => onRequestPost49
+  onRequestOptions: () => onRequestOptions47,
+  onRequestPost: () => onRequestPost50
 });
 
 // functions/api/push/subscribe.ts
@@ -16857,7 +17173,7 @@ __export(subscribe_exports, {
   accountOfRequest: () => accountOfRequest,
   cleanTzOffset: () => cleanTzOffset,
   isAllowedPushEndpoint: () => isAllowedPushEndpoint,
-  onRequestPost: () => onRequestPost48
+  onRequestPost: () => onRequestPost49
 });
 var ALLOWED_PUSH_HOSTS = [
   "fcm.googleapis.com",
@@ -16884,7 +17200,7 @@ async function accountOfRequest(request, env) {
   return token ? readSession(env, token) : null;
 }
 __name(accountOfRequest, "accountOfRequest");
-var onRequestPost48 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost49 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-subscribe", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -16928,8 +17244,8 @@ var CORS11 = {
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type, authorization"
 };
-var onRequestOptions46 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
-var onRequestPost49 = /* @__PURE__ */ __name(async (context) => {
+var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS11 }), "onRequestOptions");
+var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-fcm", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -16965,16 +17281,16 @@ var onRequestPost49 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/push/opened.ts
 var opened_exports = {};
 __export(opened_exports, {
-  onRequestOptions: () => onRequestOptions47,
-  onRequestPost: () => onRequestPost50
+  onRequestOptions: () => onRequestOptions48,
+  onRequestPost: () => onRequestPost51
 });
 var CORS12 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type"
 };
-var onRequestOptions47 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
-var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
+var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS12 }), "onRequestOptions");
+var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-opened", { capacity: 20, refillPerMinute: 20 }, env);
   if (limited) return limited;
@@ -16989,9 +17305,9 @@ var onRequestPost50 = /* @__PURE__ */ __name(async (context) => {
 // functions/api/push/unsubscribe.ts
 var unsubscribe_exports = {};
 __export(unsubscribe_exports, {
-  onRequestPost: () => onRequestPost51
+  onRequestPost: () => onRequestPost52
 });
-var onRequestPost51 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   const limited = rateLimit(request, "push-unsubscribe", { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -17028,8 +17344,8 @@ __export(room_exports, {
   newCode: () => newCode2,
   newHostToken: () => newHostToken,
   onRequestGet: () => onRequestGet66,
-  onRequestOptions: () => onRequestOptions48,
-  onRequestPost: () => onRequestPost52,
+  onRequestOptions: () => onRequestOptions49,
+  onRequestPost: () => onRequestPost53,
   pushMoment: () => pushMoment
 });
 function liveLine(env) {
@@ -17096,7 +17412,7 @@ __name(memberHandle, "memberHandle");
 var HANDLE = /^[0-9a-f]{12}$/;
 var jamOf = /* @__PURE__ */ __name((r) => r.jam && typeof r.jam === "object" && !Array.isArray(r.jam) ? r.jam : {}, "jamOf");
 var removedOf = /* @__PURE__ */ __name((r) => new Set(Array.isArray(jamOf(r).removed) ? jamOf(r).removed : []), "removedOf");
-var onRequestOptions48 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
+var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS13 }), "onRequestOptions");
 function newCode2() {
   const a = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const buf = new Uint8Array(6);
@@ -17245,7 +17561,7 @@ var onRequestGet66 = /* @__PURE__ */ __name(async (context) => {
   if (live) body.live = live;
   return json11(body);
 }, "onRequestGet");
-var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
+var onRequestPost53 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (!dbConfigured(env)) return json11({ error: "not_configured" }, 503);
   const body = asObject(await request.json().catch(() => null)) ?? {};
@@ -17426,13 +17742,13 @@ var onRequestPost52 = /* @__PURE__ */ __name(async (context) => {
 var site_mode_exports = {};
 __export(site_mode_exports, {
   onRequestGet: () => onRequestGet67,
-  onRequestOptions: () => onRequestOptions49
+  onRequestOptions: () => onRequestOptions50
 });
 var CORS14 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions49 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
+var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS14 }), "onRequestOptions");
 var onRequestGet67 = /* @__PURE__ */ __name(async (ctx) => {
   const { values } = await settingsMap(ctx?.env ?? {});
   return new Response(JSON.stringify(publicSiteMode(values)), {
@@ -17444,13 +17760,13 @@ var onRequestGet67 = /* @__PURE__ */ __name(async (ctx) => {
 var trending_searches_exports = {};
 __export(trending_searches_exports, {
   onRequestGet: () => onRequestGet68,
-  onRequestOptions: () => onRequestOptions50
+  onRequestOptions: () => onRequestOptions51
 });
 var CORS15 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions50 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS15 }), "onRequestOptions");
+var onRequestOptions51 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS15 }), "onRequestOptions");
 var onRequestGet68 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ queries: [] }), {
   headers: { "content-type": "application/json", "cache-control": "public, max-age=600", ...CORS15 }
 }), "onRequestGet");
@@ -17459,13 +17775,13 @@ var onRequestGet68 = /* @__PURE__ */ __name(async () => new Response(JSON.string
 var trends_exports2 = {};
 __export(trends_exports2, {
   onRequestGet: () => onRequestGet69,
-  onRequestOptions: () => onRequestOptions51
+  onRequestOptions: () => onRequestOptions52
 });
 var CORS16 = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, OPTIONS"
 };
-var onRequestOptions51 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS16 }), "onRequestOptions");
+var onRequestOptions52 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS16 }), "onRequestOptions");
 var onRequestGet69 = /* @__PURE__ */ __name(async () => new Response(JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), sources: [], items: [] }), {
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60, s-maxage=300", ...CORS16 }
 }), "onRequestGet");
@@ -17475,8 +17791,8 @@ var username_exports = {};
 __export(username_exports, {
   normalizeHandle: () => normalizeHandle2,
   onRequestGet: () => onRequestGet70,
-  onRequestOptions: () => onRequestOptions52,
-  onRequestPost: () => onRequestPost53
+  onRequestOptions: () => onRequestOptions53,
+  onRequestPost: () => onRequestPost54
 });
 var HANDLE_RE2 = /^[a-z0-9_]{3,20}$/;
 var CORS17 = {
@@ -17485,7 +17801,7 @@ var CORS17 = {
   "access-control-allow-headers": "content-type"
 };
 var json12 = /* @__PURE__ */ __name((body, status = 200) => jsonResponse(body, status, CORS17), "json");
-var onRequestOptions52 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
+var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS17 }), "onRequestOptions");
 var normalizeHandle2 = /* @__PURE__ */ __name((raw) => {
   if (typeof raw !== "string") return null;
   const u2 = raw.trim().toLowerCase();
@@ -17517,7 +17833,7 @@ var onRequestGet70 = /* @__PURE__ */ __name(async (ctx) => {
   if (owner === void 0) return json12({ error: "unavailable" }, 503);
   return json12({ available: owner === null });
 }, "onRequestGet");
-var onRequestPost53 = /* @__PURE__ */ __name(async (ctx) => {
+var onRequestPost54 = /* @__PURE__ */ __name(async (ctx) => {
   if (!ctx || !dbConfigured(ctx.env)) return json12({ ok: true, unchecked: true });
   const { request, env } = ctx;
   const limited = rateLimit(request, "username-claim", { capacity: 10, refillPerMinute: 5 }, env);
@@ -17548,7 +17864,7 @@ var version_exports = {};
 __export(version_exports, {
   buildFromRelease: () => buildFromRelease,
   onRequestGet: () => onRequestGet71,
-  onRequestOptions: () => onRequestOptions53
+  onRequestOptions: () => onRequestOptions54
 });
 var CORS18 = {
   "access-control-allow-origin": "*",
@@ -17568,7 +17884,7 @@ function buildFromRelease(tagName, body) {
   return parseInt(/build(\d+)/i.exec(tagName)?.[1] ?? "0", 10);
 }
 __name(buildFromRelease, "buildFromRelease");
-var onRequestOptions53 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
+var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS18 }), "onRequestOptions");
 var onRequestGet71 = /* @__PURE__ */ __name(async (context) => {
   const { request, env } = context;
   if (!githubConfigured(env)) return json13({ error: "not_configured" }, 503);
@@ -17609,7 +17925,7 @@ var errors_exports = {};
 __export(errors_exports, {
   ERROR_STATUSES: () => ERROR_STATUSES,
   onRequestGet: () => onRequestGet73,
-  onRequestPost: () => onRequestPost54
+  onRequestPost: () => onRequestPost55
 });
 var ERROR_STATUSES = ["new", "investigating", "fixed", "ignored"];
 var onRequestGet73 = adminGet(async ({ env, url }) => {
@@ -17627,7 +17943,7 @@ var onRequestGet73 = adminGet(async ({ env, url }) => {
     top: Array.isArray(v.top) ? v.top : []
   });
 });
-var onRequestPost54 = adminPost(async ({ env, body, audit: audit2, me }) => {
+var onRequestPost55 = adminPost(async ({ env, body, audit: audit2, me }) => {
   if (body.action === "status") {
     const fingerprint = typeof body.fingerprint === "string" && /^[0-9a-f]{32}$/.test(body.fingerprint) ? body.fingerprint : null;
     const status = body.status;
@@ -18029,10 +18345,8 @@ var ROUTES = [
   ["/trending", "daily", "0.9"],
   ["/most-searched", "daily", "0.8"],
   ["/movies", "daily", "0.8"],
-  ["/explore", "weekly", "0.7"],
   ["/moods", "weekly", "0.7"],
   ["/languages", "weekly", "0.6"],
-  ["/regions", "weekly", "0.6"],
   ["/made-for-you", "daily", "0.8"],
   // 1.12 — the browse pages a visitor can open signed out.
   ["/new-releases", "daily", "0.8"],
@@ -18088,8 +18402,8 @@ var onRequestGet85 = /* @__PURE__ */ __name((context) => renderEntity("song", St
 var songId_exports = {};
 __export(songId_exports, {
   onRequestGet: () => onRequestGet86,
-  onRequestOptions: () => onRequestOptions54,
-  onRequestPost: () => onRequestPost55
+  onRequestOptions: () => onRequestOptions55,
+  onRequestPost: () => onRequestPost56
 });
 var CORS19 = {
   "access-control-allow-origin": "*",
@@ -18100,8 +18414,8 @@ function json14(body, status = 200, cache = "no-store") {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, ...CORS19 } });
 }
 __name(json14, "json");
-var onRequestOptions54 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
-var onRequestPost55 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
+var onRequestOptions55 = /* @__PURE__ */ __name(async () => new Response(null, { status: 204, headers: CORS19 }), "onRequestOptions");
+var onRequestPost56 = /* @__PURE__ */ __name(async () => methodNotAllowed("GET, OPTIONS"), "onRequestPost");
 var onRequestGet86 = /* @__PURE__ */ __name(async (context) => {
   const { request, env, params } = context;
   const limited = await rateLimitAsync(request, "recs-similar", { capacity: 30, refillPerMinute: 30 }, env);
@@ -18206,6 +18520,7 @@ var EXACT = {
   "/api/ai/attachments": attachments_exports,
   "/api/ai/transcribe": transcribe_exports,
   "/api/ai/speak": speak_exports,
+  "/api/ai/images": images_exports,
   "/api/ai/live-token": live_token_exports,
   "/api/ai/live-transcript": live_transcript_exports,
   "/api/ai/shares": shares_exports,

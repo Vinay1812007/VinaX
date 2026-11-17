@@ -8,7 +8,7 @@
  */
 import { bearer, readSession, type AuthEnv } from './googleAuth';
 import { json } from './authShared';
-import { db, dbConfigured, like, q, type DbEnv } from './db';
+import { db, dbConfigured, like, q, since, type DbEnv } from './db';
 import { asObject, clip } from './edge';
 
 export type SocialEnv = AuthEnv & DbEnv;
@@ -110,11 +110,15 @@ export interface ProfileRow {
   summary: ProfileSummary;
   now_playing: Record<string, unknown> | null;
   share_now: boolean;
+  /** v23 — "Let people I follow join my room" (absent on a database before v23). */
+  share_jam?: boolean;
+  /** v23 — the code of the room this listener hosts, while they share it (rooms.code; set null when the room goes). */
+  jam_code?: string | null;
   updated_at: string;
 }
 
 /** What anyone may see of a profile (the account id never leaves). */
-export function publicProfile(p: ProfileRow, extra: { following?: boolean; followers?: number; name?: string | null; picture?: string | null; own?: boolean } = {}) {
+export function publicProfile(p: ProfileRow, extra: { following?: boolean; followers?: number; name?: string | null; picture?: string | null; own?: boolean; jamCode?: string | null } = {}) {
   // Now playing is shared only while fresh (the device writes it with sync).
   const fresh = p.share_now && p.now_playing && Date.now() - Date.parse(p.updated_at) < 20 * 60_000;
   return {
@@ -132,9 +136,41 @@ export function publicProfile(p: ProfileRow, extra: { following?: boolean; follo
     updatedAt: p.updated_at,
     ...(extra.following !== undefined ? { following: extra.following } : {}),
     ...(extra.followers !== undefined ? { followers: extra.followers } : {}),
-    // The owner also sees their own sharing switch; nobody else does.
-    ...(extra.own ? { shareNow: p.share_now } : {}),
+    // v23 — the room to join: only what jamFor allowed (a mutual follower, a live room).
+    ...(extra.jamCode ? { jamCode: extra.jamCode } : {}),
+    // The owner also sees their own sharing switches; nobody else does.
+    ...(extra.own ? { shareNow: p.share_now, shareJam: p.share_jam === true } : {}),
   };
+}
+
+/**
+ * v23 — join a friend's jam. A room counts as live while its host has pushed
+ * in the last few minutes: a host's app pushes every 4 s while it runs, and a
+ * locked phone that throttles that for a while is still the same room.
+ */
+export const JAM_LIVE_MS = 3 * 60_000;
+export const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
+
+/**
+ * The codes among `codes` whose room is live right now. A database failure
+ * answers none: a code is never shown without this check.
+ */
+export async function liveRoomCodes(env: DbEnv, codes: Array<string | null | undefined>, now = Date.now()): Promise<Set<string>> {
+  const want = [...new Set(codes.filter((c): c is string => typeof c === 'string' && ROOM_CODE_RE.test(c)))];
+  if (!want.length) return new Set();
+  const r = await db.select<{ code: string }>(env, 'rooms', q().in('code', want).gte('updated_at', since(JAM_LIVE_MS, now)).select('code').limit(want.length));
+  return new Set(r.ok ? r.rows.map((x) => x.code) : []);
+}
+
+/**
+ * The join code a viewer may see on a profile, or null. The room code is the
+ * join credential, so it goes only to a MUTUAL follower (the viewer follows
+ * the owner and the owner follows the viewer back), only while the owner's
+ * switch is on, and only while the room is live.
+ */
+export function jamFor(p: ProfileRow, mutual: boolean, live: Set<string>): string | null {
+  if (!mutual || p.share_jam !== true || !p.jam_code) return null;
+  return live.has(p.jam_code) ? p.jam_code : null;
 }
 
 export async function profileByHandle(env: DbEnv, handle: string) {

@@ -56,6 +56,14 @@ export interface ModelsResponse {
   autoThinking?: ThinkingLevel[];
   /** The owner's file limits (counts, MB and pages). */
   limits?: Partial<Record<'imagesPerMessage' | 'filesPerMessage' | 'filesPerChat' | 'pdfMB' | 'pdfPages' | 'textMB', number>>;
+  /** Create image (POST /api/ai/images): the owner's switch, the pictures a person may make a day, the longest prompt. */
+  images?: ImagesInfo;
+}
+
+export interface ImagesInfo {
+  enabled: boolean;
+  perDay: number;
+  maxPrompt: number;
 }
 
 export interface VoiceInfo {
@@ -145,6 +153,8 @@ export interface ChatMessage {
   createdAt: string;
   /** Only on this device so far (not yet confirmed by the server). */
   local?: boolean;
+  /** While Create image is making this reply's picture. */
+  imaging?: boolean;
 }
 
 /** One message as GET /api/ai/conversations/:id sends it. */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFollowing, getMyProfile, getProfile, getSharedPlaylist, listSharedPlaylists } from './api';
+import { getFollowing, getMyProfile, getProfile, getSharedPlaylist, jamPath, listSharedPlaylists } from './api';
 
 vi.mock('@/services/auth/google', () => ({ currentAccount: () => ({ session: 'vx1.t', user: {} }) }));
 
@@ -22,5 +22,12 @@ describe('15.0 — the social client never trusts an answer\'s shape', () => {
     const list = await getFollowing();
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ handle: 'bobo', topArtists: [], recentLikes: [], nowPlaying: { id: 's1' }, public: false });
+  });
+
+  it('v23 — keeps a room code only in the shape rooms use', async () => {
+    answer({ following: [{ handle: 'bobo', jamCode: 'JAM123' }, { handle: 'cyan', jamCode: '../evil' }, { handle: 'dee', jamCode: 42 }] });
+    const list = await getFollowing();
+    expect(list.map((p) => p.jamCode)).toEqual(['JAM123', undefined, undefined]);
+    expect(jamPath('JAM123')).toBe('/together?code=JAM123');
   });
 });

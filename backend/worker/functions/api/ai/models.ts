@@ -9,7 +9,8 @@
  *            locked? }],          // true: Claude, which this account may not use (claudeAccess.ts); reason "locked"
  *            autoThinking: [...],   // the thinking levels Auto can give with the models in its ladders
  *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }], liveLanguages: [{ code, name, native }] },
- *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
+ *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB },
+ *            images: { enabled, perDay, maxPrompt } }   // Create image (POST /api/ai/images): the owner's switch and cap
  *
  * `voice` says which voice features have a provider key (phase 6) and
  * which voices the page may offer for Read aloud and Live. `liveSearch`:
@@ -44,6 +45,7 @@ import { searchConfigured } from '../../_lib/ai/search';
 import { ALL_LIVE_MODELS, LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
 import { LIVE_LANGUAGES } from '../../_lib/ai/prompt';
+import { MAX_PROMPT_CHARS } from '../../_lib/ai/images';
 
 /** A model's capability filters, from its flags, group, limits and Auto's ladders. */
 export function kindsOf(spec: ModelSpec): Array<'fast' | 'reasoning' | 'code' | 'vision' | 'long'> {
@@ -107,5 +109,7 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
   const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
   const chatLadders = (['default', 'code', 'deep', 'vision', 'long', 'fast'] as const).flatMap((l) => ladderModels(registry, l)).filter((spec) => providerConfigured(env, spec.provider));
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, autoThinking: autoLevels(chatLadders) });
+  // Create image: the owner's switch, and Workers AI must be bound.
+  const images = { enabled: settings.images.enabled && typeof env.AI?.run === 'function', perDay: settings.images.perDay, maxPrompt: MAX_PROMPT_CHARS };
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, images, autoThinking: autoLevels(chatLadders) });
 };

@@ -4,10 +4,13 @@
  * being written. Beside the + menu sits the Thinking menu (Auto, Fast,
  * Standard, Extended, Maximum). The mic dictates into the text (never sends by itself);
  * with nothing typed, the Live voice button stands where Send goes.
+ * Create image (from the + menu) turns the composer into a picture prompt:
+ * an "Image" pill with ×, its own placeholder and length limit, and Send
+ * makes the picture instead of a reply.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ACCEPT } from './files';
-import { ArrowUpIcon, CheckIcon, CloseIcon, MicIcon, StopIcon, WaveIcon } from './icons';
+import { ArrowUpIcon, CheckIcon, CloseIcon, ImageIcon, MicIcon, StopIcon, WaveIcon } from './icons';
 import { ModelPicker } from './ModelPicker';
 import { PlusMenu, type WebSearch } from './PlusMenu';
 import { ThinkingPicker } from './ThinkingPicker';
@@ -45,6 +48,8 @@ interface Props {
   onLive?(): void;
   /** Open VinaX AI settings (from the + menu). */
   onSettings?(): void;
+  /** Create image, when the owner has it on: whether the composer is in it now, and how to switch. */
+  image?: { on: boolean; maxPrompt: number; onChange(on: boolean): void };
 }
 
 export interface ComposerHandle { focus(): void }
@@ -75,7 +80,7 @@ function RecordingBar({ d }: { d: Dictation }): ReactNode {
   );
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, autoThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, autoThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings, image }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({
@@ -96,9 +101,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
     el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
   }, [value]);
 
-  const canSend = !disabled && !streaming && !sendBlocked && (value.trim().length > 0 || !!hasFiles);
+  const imaging = !!image?.on;
+  const canSend = !disabled && !streaming && (imaging
+    ? value.trim().length > 0 && value.trim().length <= (image?.maxPrompt ?? Infinity)
+    : !sendBlocked && (value.trim().length > 0 || !!hasFiles));
   const dictating = !!dictation && dictation.phase !== 'idle';
-  const showLive = !!onLive && !streaming && !value.trim() && !hasFiles;
+  const showLive = !!onLive && !imaging && !streaming && !value.trim() && !hasFiles;
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = [...(e.clipboardData?.files ?? [])];
     if (pasted.length && onFiles) {
@@ -136,7 +144,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
           }}
         />
       )}
-      <label htmlFor="vx-ai-input" className="sr-only">Message VinaX AI</label>
+      <label htmlFor="vx-ai-input" className="sr-only">{imaging ? 'Describe the image you want' : 'Message VinaX AI'}</label>
       <textarea
         id="vx-ai-input"
         ref={area}
@@ -145,7 +153,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
-        placeholder={placeholder ?? 'Message VinaX AI'}
+        placeholder={imaging ? 'Describe the image you want' : placeholder ?? 'Message VinaX AI'}
+        maxLength={imaging ? image?.maxPrompt : undefined}
         disabled={disabled}
         enterKeyHint="send"
         autoComplete="off"
@@ -153,7 +162,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       {dictation && dictating ? <RecordingBar d={dictation} /> : (
       <div className="vx-ai-composer-row">
         <div className="vx-ai-composer-tools">
-          <PlusMenu search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onSettings={onSettings} />
+          <PlusMenu search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onCreateImage={image && !imaging ? () => image.onChange(true) : undefined} onSettings={onSettings} />
           {onThinking && (
             <ThinkingPicker
               value={thinking ?? 'auto'}
@@ -164,7 +173,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
               disabled={disabled}
             />
           )}
-          {search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
+          {imaging && (
+            <span className="vx-ai-pill vx-ai-pill-image">
+              <ImageIcon className="w-3.5 h-3.5" /> Image
+              <button type="button" className="vx-ai-pill-x" onClick={() => image?.onChange(false)} aria-label="Stop creating an image">
+                <CloseIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {!imaging && search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
         </div>
         {models && onModel ? <ModelPicker models={models} value={model ?? 'auto'} onChange={onModel} /> : <span className="vx-ai-composer-mode">Auto</span>}
         {dictation?.supported && !streaming && (
@@ -184,7 +201,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
             <WaveIcon className="w-4 h-4" />
           </button>
         ) : (
-          <button key="send" type="submit" className="vx-ai-send" disabled={!canSend} aria-label="Send message">
+          <button key="send" type="submit" className="vx-ai-send" disabled={!canSend} aria-label={imaging ? 'Create image' : 'Send message'}>
             <ArrowUpIcon className="w-4 h-4" />
           </button>
         )}

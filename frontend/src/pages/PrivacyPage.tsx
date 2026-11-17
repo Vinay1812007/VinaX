@@ -150,6 +150,11 @@ export default function PrivacyPage() {
           this device; it is not linked to your name or account.
         </p>
         <p>
+          If you switch on &ldquo;Let people I follow join my room&rdquo; (Settings &rarr; Profile; off by default), the
+          code of a room you host is kept with your profile while the room is live, so people you follow who follow you
+          back can join it from Home or your profile. Nobody else is shown it, and it is cleared when the room ends.
+        </p>
+        <p>
           While you are in a room, your device also keeps a live connection to VinaX&rsquo;s database provider, so that
           a pause, a chat line or a reaction reaches everyone at once. What passes over it is what the room already
           shares: the song the host is playing and where it is, chat lines, reactions, the name you gave the room and

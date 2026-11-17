@@ -1,12 +1,12 @@
 /**
- * VinaX AI — the composer's + menu: Add photos and files, Web search (Auto,
- * On, Off) when it is offered, and Settings (the VinaX AI settings panel:
+ * VinaX AI — the composer's + menu: Add photos and files, Create image when
+ * the owner has it on, Web search (Auto, On, Off) when it is offered, and Settings (the VinaX AI settings panel:
  * model, thinking, voice, microphone). Thinking has its own menu
  * (ThinkingPicker.tsx).
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, SettingsIcon } from './icons';
+import { GlobeSmallIcon, ImageIcon, PaperclipIcon, PlusSmallIcon, SettingsIcon } from './icons';
 
 export type WebSearch = 'auto' | 'on' | 'off';
 const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
@@ -20,12 +20,14 @@ interface Props {
   search?: { value: WebSearch; onChange(v: WebSearch): void };
   /** Open the file picker. */
   onAddFiles?(): void;
+  /** Turn on Create image (present when the owner has it on). */
+  onCreateImage?(): void;
   /** Open VinaX AI settings. */
   onSettings?(): void;
   disabled?: boolean;
 }
 
-export function PlusMenu({ search, onAddFiles, onSettings, disabled }: Props): ReactNode {
+export function PlusMenu({ search, onAddFiles, onCreateImage, onSettings, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -74,6 +76,21 @@ export function PlusMenu({ search, onAddFiles, onSettings, disabled }: Props): R
               <span className="vx-ai-menu-text">
                 <span>Add photos and files</span>
                 <span className="vx-ai-opt-sub">Images, PDFs, text and code</span>
+              </span>
+            </div>
+          )}
+          {onCreateImage && (
+            <div
+              role="menuitem"
+              tabIndex={-1}
+              className="vx-ai-menu-item"
+              onClick={() => { close(false); onCreateImage(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(false); onCreateImage(); } }}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span className="vx-ai-menu-text">
+                <span>Create image</span>
+                <span className="vx-ai-opt-sub">Describe a picture and VinaX AI makes it</span>
               </span>
             </div>
           )}

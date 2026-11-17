@@ -5,7 +5,7 @@
  * so the device always holds one week of ready-to-go music and no more.
  *
  * Rules:
- * - Only on the Android app (the web has no downloads).
+ * - Only on the Android app (the web saves songs by hand only, 1.16).
  * - Only on Wi-Fi (or a wired connection) when the browser can tell; where
  *   it cannot (`navigator.connection` missing), only while Data saver is off.
  * - At most SMART_MAX songs a week, songs the listener downloaded by hand

@@ -19,13 +19,15 @@ export interface DownloadItem {
    */
   uri?: string;
   dir?: DownloadDir;
+  /** 1.16 — real size of a web save (the browser knows it); absent on Android. */
+  bytes?: number;
   addedAt: number;
 }
 
 interface DownloadsState {
   items: Record<string, DownloadItem>;
   downloading: Record<string, boolean>;
-  add(song: Song, path?: string, uri?: string, dir?: DownloadDir): void;
+  add(song: Song, path?: string, uri?: string, dir?: DownloadDir, bytes?: number): void;
   setUri(id: string, uri: string): void;
   remove(id: string): void;
   setDownloading(id: string, v: boolean): void;
@@ -36,8 +38,8 @@ export const useDownloadsStore = create<DownloadsState>()(
     (set, get) => ({
       items: {},
       downloading: {},
-      add: (song, path, uri, dir) =>
-        set({ items: { ...get().items, [song.id]: { song, path, uri, dir, addedAt: Date.now() } } }),
+      add: (song, path, uri, dir, bytes) =>
+        set({ items: { ...get().items, [song.id]: { song, path, uri, dir, ...(bytes ? { bytes } : {}), addedAt: Date.now() } } }),
       setUri: (id, uri) => {
         const cur = get().items[id];
         if (!cur) return;

@@ -283,6 +283,50 @@ export function voiceNotice(code: string): string {
   }
 }
 
+// ---------- Create image ----------
+
+export interface ImageRequestBody {
+  prompt: string;
+  conversationId: string | null;
+  parentMessageId?: string | 'root';
+  projectId?: string;
+  incognito?: boolean;
+}
+
+/** One picture from a prompt (POST /api/ai/images); the turn comes back saved, in the conversation's shapes. */
+export async function createImageTurn(body: ImageRequestBody, signal?: AbortSignal): Promise<{ conversation: ServerConversation; userMessage: ServerMessage; assistantMessage: ServerMessage }> {
+  let res: Response;
+  try {
+    res = await fetch(`${AI_BASE}/images`, { method: 'POST', headers: headers(true), body: JSON.stringify(body), signal });
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    throw new AiError(0, 'network');
+  }
+  const out = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new AiError(res.status, typeof out.error === 'string' ? out.error : `http_${res.status}`);
+  // A body cut short (or read after Stop) is not a saved turn.
+  const turn = out as { conversation?: ServerConversation; userMessage?: ServerMessage; assistantMessage?: ServerMessage };
+  if (!turn.conversation?.id || !Array.isArray(turn.userMessage?.content) || !Array.isArray(turn.assistantMessage?.content)) throw new AiError(res.status, 'image_failed');
+  return turn as { conversation: ServerConversation; userMessage: ServerMessage; assistantMessage: ServerMessage };
+}
+
+/** What a failed Create image means for the listener. */
+export function imageNotice(code: string, perDay?: number): string {
+  switch (code) {
+    case 'empty_prompt': return 'Describe the image you want first.';
+    case 'prompt_too_long': return 'That description is too long. Keep it under 1,000 characters.';
+    case 'prompt_refused':
+    case 'image_refused': return 'VinaX AI can’t make that image. Try describing something else.';
+    case 'image_daily_limit': return perDay ? `You’ve made today’s ${perDay} images. Try again tomorrow.` : 'You’ve made all your images for today. Try again tomorrow.';
+    case 'images_busy': return 'Image making is used up for today. Try again tomorrow.';
+    case 'images_off': return 'Creating images is switched off right now.';
+    case 'image_failed': return 'The image didn’t come out. Try again.';
+    case 'rate_limited': return 'That’s a lot of images at once. Wait a minute, then try again.';
+    case 'too_many_files': return 'This chat is full of files. Start a new chat to make more images.';
+    default: return noticeFor(code);
+  }
+}
+
 /** What a failed request means for the listener (never a raw error). */
 export function noticeFor(code: string): string {
   switch (code) {

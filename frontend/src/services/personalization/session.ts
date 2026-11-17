@@ -20,27 +20,6 @@ import { inferMood, type Mood } from '@/services/recommendation/mood';
 const KEY = 'vinax.session.window.v1';
 const WINDOW = 10;
 
-// Package C5 — the manual mood pin. The WRITERS (pin/clear) live in the lazy
-// moodPin module with the Now Playing page; only the READ sits here on the
-// eager recommendation path. Key shared via this export.
-export const MOOD_PIN_KEY = 'vinax.session.moodpin.v1';
-
-/** The active pinned mood, or null (expired pins self-clean). */
-export function getMoodPin(): Mood | null {
-  try {
-    const raw = window.sessionStorage.getItem(MOOD_PIN_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as { m?: Mood; until?: number };
-    if (!p.m || typeof p.until !== 'number' || p.until <= Date.now()) {
-      window.sessionStorage.removeItem(MOOD_PIN_KEY);
-      return null;
-    }
-    return p.m;
-  } catch {
-    return null;
-  }
-}
-
 interface WindowEntry {
   mood: Mood;
   energy: number; // 0..1
@@ -118,22 +97,10 @@ const EMPTY_VECTOR: SessionVector = { mood: null, energy: null, language: null, 
 
 /** Compute the current session vector from the rolling window. Returns a
  *  cold vector (all null, size 0) when nothing has played this session.
- *  C5: a manual mood pin overrides the inferred mood/energy at full weight
- *  (size floors at 5 so the scorer's ramp engages immediately) — the listener
- *  said so explicitly, which beats any inference. */
+ *  (The old manual mood pin that overrode this is gone: steering is Tune this
+ *  queue's job now.) */
 export function getSessionVector(): SessionVector {
-  const pin = getMoodPin();
   const win = readWindow();
-  if (pin) {
-    const langCounts = new Map<string, number>();
-    for (const e of win) if (e.language) langCounts.set(e.language, (langCounts.get(e.language) ?? 0) + 1);
-    return {
-      mood: pin,
-      energy: MOOD_ENERGY[pin],
-      language: [...langCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-      size: Math.max(win.length, 5),
-    };
-  }
   if (!win.length) return EMPTY_VECTOR;
 
   // Dominant mood — most frequent, ignoring 'neutral' unless it's all we have.

@@ -80,6 +80,7 @@ import * as m_api_ai_attachments from './functions/api/ai/attachments';
 import * as m_api_ai_attachment_id from './functions/api/ai/attachments/[id]';
 import * as m_api_ai_transcribe from './functions/api/ai/transcribe';
 import * as m_api_ai_speak from './functions/api/ai/speak';
+import * as m_api_ai_images from './functions/api/ai/images';
 import * as m_api_ai_live_token from './functions/api/ai/live-token';
 import * as m_api_ai_live_transcript from './functions/api/ai/live-transcript';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
@@ -215,6 +216,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/attachments': m_api_ai_attachments,
   '/api/ai/transcribe': m_api_ai_transcribe,
   '/api/ai/speak': m_api_ai_speak,
+  '/api/ai/images': m_api_ai_images,
   '/api/ai/live-token': m_api_ai_live_token,
   '/api/ai/live-transcript': m_api_ai_live_transcript,
   '/api/ai/shares': m_api_ai_shares,

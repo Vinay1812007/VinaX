@@ -44,6 +44,8 @@
     { key: 'pdfPages', label: 'Most PDF pages', min: 1, max: 1000, def: 500, unit: ' pages', step: 10 },
     { key: 'textMB', label: 'Largest text file', min: 1, max: 5, def: 2, unit: ' MB' }
   ];
+  /** Create image (the Worker's _lib/ai/images.ts): off by default, a daily cap per person. */
+  var IMAGES = { min: 1, max: 50, def: 10, neurons: 60, total: 50 };
   var SEARCH_CHOICES = [{ value: '', label: 'Server default (100 a day)' }, { value: '0', label: 'Web search off' }, { value: '50', label: '50 a day' }, { value: '100', label: '100 a day' }, { value: '250', label: '250 a day' }, { value: '500', label: '500 a day' }, { value: '1000', label: '1,000 a day' }, { value: '2000', label: '2,000 a day' }];
 
   var models = null; // the model list from /api/admin/ai, loaded once per page
@@ -69,7 +71,7 @@
       var limits = {};
       LIMITS.forEach(function (l) { limits[l.key] = typeof lim[l.key] === 'number' ? lim[l.key] : l.def; });
       var extra = {};
-      Object.keys(v).forEach(function (k) { if (['enabled', 'testers', 'search', 'memory', 'models', 'dailyLimit', 'instructions', 'limits'].indexOf(k) < 0) extra[k] = v[k]; });
+      Object.keys(v).forEach(function (k) { if (['enabled', 'testers', 'search', 'memory', 'models', 'dailyLimit', 'instructions', 'limits', 'images'].indexOf(k) < 0) extra[k] = v[k]; });
       return {
         enabled: v.enabled === true, testers: arr(v.testers).slice(0, 50), search: v.search !== false, models: obj(v.models),
         // Memory is on unless the owner turned it off (false, or { enabled: false }).
@@ -77,6 +79,9 @@
         dailyLimit: typeof v.dailyLimit === 'number' ? String(v.dailyLimit) : '',
         instructions: typeof v.instructions === 'string' ? v.instructions : '',
         limits: limits, searchesPerDay: lim.searchesPerDay == null ? '' : String(lim.searchesPerDay),
+        // Create image: true is on with the built-in cap; anything but { enabled: true } is off.
+        imagesOn: v.images === true || obj(v.images).enabled === true,
+        imagesPerDay: typeof obj(v.images).perDay === 'number' ? Math.min(IMAGES.max, Math.max(IMAGES.min, Math.round(v.images.perDay))) : IMAGES.def,
         extra: extra
       };
     },
@@ -93,6 +98,10 @@
       LIMITS.forEach(function (l) { if (m.limits[l.key] !== l.def) lim[l.key] = m.limits[l.key]; });
       if (m.searchesPerDay !== '') lim.searchesPerDay = Number(m.searchesPerDay);
       if (Object.keys(lim).length) o.limits = lim;
+      if (m.imagesOn || m.imagesPerDay !== IMAGES.def) {
+        o.images = { enabled: m.imagesOn };
+        if (m.imagesPerDay !== IMAGES.def) o.images.perDay = m.imagesPerDay;
+      }
       // Never changed and closed: the same as the built-in setting.
       if (!o.enabled && !o.testers.length && o.search && Object.keys(o).length === 3) return null;
       return o;
@@ -106,6 +115,7 @@
       var off = Object.keys(obj(v.models)).filter(function (k) { return obj(v.models[k]).enabled === false; }).length;
       if (off) parts.push(fmt.plural(off, 'model') + ' off');
       if (v.instructions) parts.push('with instructions');
+      if (v.images === true || obj(v.images).enabled === true) parts.push('Create image on (' + (typeof obj(v.images).perDay === 'number' ? v.images.perDay : IMAGES.def) + ' a day each)');
       return parts.join(', ');
     },
     render: function (m, set, api) {
@@ -153,6 +163,13 @@
           onChange: function (v) { m.limits[l.key] = v; set(m); } });
       }));
 
+      var imagesHost = h('div.form-col',
+        ui.switchRow('Create image', 'Lets people make pictures from a description in VinaX AI (the + menu). Signed-in people only; the music side never uses it.', m.imagesOn, function (on) { m.imagesOn = on; set(m); }),
+        ui.slider({ label: 'Images a day (per person)', min: IMAGES.min, max: IMAGES.max, step: 1, value: m.imagesPerDay, disabled: api.readOnly,
+          format: function (v) { return fmt.num(v) + (v === IMAGES.def ? ' (built-in)' : ''); },
+          onChange: function (v) { m.imagesPerDay = v; set(m); } }),
+        ui.notice('Pictures are made with FLUX.1 schnell on Cloudflare Workers AI. They share the free pool of about 10,000 neurons a day with the hand-picked Workers AI chat models; each picture is counted as about ' + IMAGES.neurons + ' neurons, and everyone together can make at most ' + IMAGES.total + ' a day (about ' + fmt.num(IMAGES.neurons * IMAGES.total) + ' neurons). When the pool is used up, people are told to try again tomorrow.', 'info'));
+
       var counter = h('span.counter.muted.small', m.instructions.length + ' / 4000');
       var instr = ui.textarea({ rows: 5, maxlength: 4000, placeholder: 'e.g. Keep answers short and friendly. Suggest Telugu songs first.' });
       instr.value = m.instructions;
@@ -168,6 +185,7 @@
           h('div.form-row', ui.dropdown('Daily message limit per user', LIMIT_CHOICES, m.dailyLimit, function (v) { m.dailyLimit = v; set(m); }),
             ui.dropdown('Web searches a day (everyone together)', SEARCH_CHOICES, m.searchesPerDay, function (v) { m.searchesPerDay = v; set(m); })),
           limitsHost),
+        h('div', ui.heading('Images', 'Making pictures in the chat. Off until you switch it on.'), imagesHost),
         ui.field('Instructions for every VinaX AI model', instr, h('span', 'Added to every reply’s instructions, after VinaX AI’s own; they can shape tone and behaviour but don’t override its safety rules. ', counter)));
     }
   };

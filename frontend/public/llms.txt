@@ -6,7 +6,7 @@
 
 - [Home](https://www.vinaxmusic.online/): Trending now, charts, new releases and shelves arranged for you
 - [Search](https://www.vinaxmusic.online/search): Songs, albums, artists, playlists, podcasts and lyrics lines
-- [Discover](https://www.vinaxmusic.online/discover): Charts, languages, moods, regions, films, radio and podcasts
+- [Discover](https://www.vinaxmusic.online/discover): Charts, languages, moods, films, radio and podcasts
 - [Top Charts](https://www.vinaxmusic.online/charts): The most played songs by language, updated daily
 - [Top Songs](https://www.vinaxmusic.online/top-songs) · [Popular](https://www.vinaxmusic.online/trending) · [Most Searched](https://www.vinaxmusic.online/most-searched)
 - [New Releases](https://www.vinaxmusic.online/new-releases): The newest songs and albums as they land
@@ -41,7 +41,7 @@ Each language also has mood pages at /{language}-{mood}-songs for romantic, sad,
 
 ## What a listener can do
 
-- Tap any song and Up Next fills itself five songs at a time, led by that song's language and mood, never repeating what you have heard; songs you queue yourself play first. Familiar, Balanced or Discover sets how adventurous it is; Tune this queue pins a mood.
+- Tap any song and Up Next fills itself five songs at a time, led by that song's language and mood, never repeating what you have heard; songs you queue yourself play first. Familiar, Balanced or Discover sets how adventurous it is; Tune this queue steers the mood until a fresh song starts.
 - Signed in: Home shelves made for you on your device ("Made for you", "Because you liked…", your languages, discoveries), a weekly mix, Discover 5 unheard songs a day and listening stats.
 - Search by title, artist, album or a line of lyrics; synced lyrics with romanised text; karaoke mode.
 - One "Music languages" button in the top bar changes Home, charts, radio and search together.

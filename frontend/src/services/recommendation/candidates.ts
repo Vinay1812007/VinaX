@@ -357,7 +357,7 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     add('related', 'seed', suggest(seed.id, 30), seed.title, true);
     const artist = seed.artists[0]?.name;
     if (artist) add('favorite-artist', 'seed', search(artist, 1, 20), artist);
-    // v7.1.0 — the listener asked for something (a tune, a pinned mood): fetch songs
+    // v7.1.0 — the listener asked for something (a tune): fetch songs
     // FOR that intent, in the queue's language, instead of only re-scoring the seed's pool.
     if (ctx.intentQuery) for (const page of [1, 2 + (salt % 2)]) add('intent', `p${page}`, search(ctx.intentQuery, page, 20), ctx.intentQuery, true);
     // 8.3.0 — the listener's style (DJ remixes, folk, devotional): the

@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 22
+-- VinaX database · schema version 23
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -46,7 +46,11 @@
 --  control playback, who the host is, who was removed) and `controls`
 --  (guests' play, pause, skip, add and remove), and room_control adds one;
 --  room_members gain `app` and `sync`, the version a member's app runs, so a
---  room can say whose app is too old to keep in step)
+--  room can say whose app is too old to keep in step);
+--  version 23 lets friends join a jam: profiles gain `share_jam` ("Let
+--  people I follow join my room") and `jam_code`, the room the listener
+--  hosts, which references rooms and goes with the room; room_sweep also
+--  clears a code whose room has been idle 15 minutes)
 --  12. security
 -- =============================================================================
 
@@ -264,12 +268,14 @@ create table if not exists profiles (
   summary     jsonb not null default '{}'::jsonb,       -- { topArtists: [{name, plays}], recentLikes: [song…], topLanguages: [{id, pct}] }
   now_playing jsonb,                                    -- { id, title, artist, image } when the listener shares it
   share_now   boolean not null default false,
+  share_jam   boolean not null default false,          -- v23: "Let people I follow join my room"
   updated_at  timestamptz not null default now(),
   constraint profiles_handle_shape check (handle ~ '^[a-z0-9_]{3,20}$'),
   constraint profiles_bio_len check (bio is null or char_length(bio) <= 160),
   constraint profiles_summary_shape check (jsonb_typeof(summary) = 'object')
 );
 create unique index if not exists profiles_handle_key on profiles (lower(handle));
+alter table profiles add column if not exists share_jam boolean not null default false;
 
 -- Who follows whom. One direction per row; no approval step (profiles are
 -- public or not, and a private profile shows only to followers it follows back).
@@ -405,6 +411,14 @@ create table if not exists room_members (
 create index if not exists room_members_seen_idx on room_members (room_code, last_seen desc);
 alter table room_members add column if not exists app text;
 alter table room_members add column if not exists sync smallint;
+
+-- Version 23: the room a listener hosts, while they let people they follow
+-- join it (profiles.share_jam). Only the Worker reads it, and hands it only to
+-- mutual followers while the room is live. It goes with the room: `end`, the
+-- sweep, or a deleted room clear it, so a code given out again later never
+-- leads friends to a stranger's room.
+alter table profiles add column if not exists jam_code text references rooms (code) on delete set null;
+create index if not exists profiles_jam_code_idx on profiles (jam_code) where jam_code is not null;
 
 -- ------------------------------------------- 6. push devices, notifications --
 
@@ -2293,11 +2307,17 @@ $$;
 -- Rooms nobody touched for six hours, members not seen for a day.
 create or replace function room_sweep() returns jsonb
 language plpgsql set search_path = public, pg_temp as $$
-declare n_rooms bigint; n_members bigint;
+declare n_rooms bigint; n_members bigint; n_jams bigint;
 begin
   delete from rooms where updated_at < now() - interval '6 hours'; get diagnostics n_rooms = row_count;
   delete from room_members where last_seen < now() - interval '1 day'; get diagnostics n_members = row_count;
-  return jsonb_build_object('rooms', n_rooms, 'members', n_members);
+  -- v23: a join code whose room has been idle for 15 minutes is gone too
+  -- (the Worker already hides it after 3; deleted rooms clear it themselves).
+  update profiles p set jam_code = null
+  where p.jam_code is not null
+    and not exists (select 1 from rooms r where r.code = p.jam_code and r.updated_at > now() - interval '15 minutes');
+  get diagnostics n_jams = row_count;
+  return jsonb_build_object('rooms', n_rooms, 'members', n_members, 'jams', n_jams);
 end;
 $$;
 
@@ -2726,7 +2746,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 22, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 22, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 23, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 23, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 22 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 23 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

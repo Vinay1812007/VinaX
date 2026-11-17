@@ -173,7 +173,6 @@ function BrowseChips({ className, railLangs }: { className: string; railLangs: s
       <Link className="vxh-chip" to="/charts">Charts</Link>
       <Link className="vxh-chip" to="/trending">Trending</Link>
       <Link className="vxh-chip" to="/moods">Moods</Link>
-      <Link className="vxh-chip" to="/regions">Regions</Link>
       <Link className="vxh-chip" to="/made-for-you">Made for you</Link>
       <LyricsChip />
     </nav>

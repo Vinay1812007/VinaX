@@ -313,7 +313,6 @@ export interface SessionStyleInput {
   /** The song this stretch will follow in the queue, when it is not the seed. */
   previous?: Song | null;
   tune?: string | null;
-  moodPin?: string | null;
 }
 
 /** How many of the last three plays say this style in their words (title, album, credits). */
@@ -343,7 +342,7 @@ export function turnedAway(sitting: readonly StylePlay[], style: MusicStyle): bo
  *   1. A tune decides first: "DJ remix", "Folk" or "Devotional" sets the
  *      style; a mood tune clears it unless it goes with the style
  *      (STYLE_FRIENDLY_TUNES: "More energetic" over a DJ remix); a language
- *      or era tune leaves it. A pinned devotional mood sets devotional.
+ *      or era tune leaves it.
  *   2. A seed that says its style in words (title, album, credits) sets it.
  *      When it shows two, the one the last plays share wins.
  *   3. A seed whose style is only in genre/mood metadata sets it when two of
@@ -360,7 +359,6 @@ export function turnedAway(sitting: readonly StylePlay[], style: MusicStyle): bo
 export function sessionStyle(input: SessionStyleInput): ActiveStyle | null {
   const fromTune = tuneStyle(input.tune);
   if (fromTune) return { style: fromTune, from: 'tune', reinforced: true };
-  if (!input.tune && low(input.moodPin) === 'devotional') return { style: 'devotional', from: 'tune', reinforced: true };
   const found = styleOfSession(input);
   if (found && input.sitting && turnedAway(input.sitting, found.style)) return null;
   if (fromTune === null) return found && STYLE_FRIENDLY_TUNES[found.style].includes(String(input.tune)) ? found : null;

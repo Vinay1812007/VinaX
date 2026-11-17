@@ -1,12 +1,14 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { EntityAction, EntityHeader, EntityMeta, GlyphCover, PlayFab, totalDuration } from '@/components/EntityHeader';
 import { useDownloadsStore } from '@/store/downloadsStore';
-import { removeDownload } from '@/services/downloads';
+import { canSaveOffline, removeDownload } from '@/services/downloads';
+import { storageInfo, WARN_BYTES, type StorageInfo } from '@/services/downloads/web';
 import { usePlayerStore } from '@/store/playerStore';
 import { isNativePlatform } from '@/services/native';
+import { iosWeb, standaloneWeb } from '@/utils/platform';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { PlayIcon, DownloadIcon, ShuffleIcon, XIcon } from '@/components/Icons';
 import { EmptyState } from '@/components/States';
@@ -16,6 +18,8 @@ import { shuffled } from '@/features/library/sort';
 import { cn } from '@/utils/cn';
 import type { Song } from '@/types';
 import '@/styles/pages/tracklist.css';
+
+const InstallGuideSheet = lazy(() => import('@/components/InstallGuideSheet').then((m) => ({ default: m.InstallGuideSheet })));
 
 // Package D8 — estimated on-disk size. The catalog doesn't expose real file
 // sizes, so we estimate from duration at the high-quality bitrate (320 kbps ≈
@@ -101,7 +105,8 @@ const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, 
 });
 
 /**
- * Downloads (the Android app's offline copies). 9.0 "Encore": the header
+ * Downloads (offline copies: the Android app's, and since 1.16 the web app's
+ * in the browser's cache). 9.0 "Encore": the header
  * plays or shuffles everything saved, a storage estimate sits under it, a
  * live strip counts what is still downloading, and Select turns the list
  * into a batch remover.
@@ -113,6 +118,22 @@ export default function OfflinePage() {
   const list = useMemo(() => Object.values(items).sort((a, b) => b.addedAt - a.addedAt), [items]);
   const songs = useMemo(() => list.map((x) => x.song), [list]);
   const inFlight = Object.keys(downloading).length;
+  const native = isNativePlatform();
+  const savable = canSaveOffline();
+  // 1.16 — web saves: what the browser really stores for this site, and the
+  // iPhone nudge (Safari can clear a site's storage after a week unopened;
+  // Home Screen apps keep it).
+  const [space, setSpace] = useState<StorageInfo | null>(null);
+  useEffect(() => {
+    if (native || !savable) return;
+    let live = true;
+    void storageInfo().then((s) => live && setSpace(s));
+    return () => {
+      live = false;
+    };
+  }, [native, savable, list.length]);
+  const showHomeTip = !native && iosWeb() && !standaloneWeb();
+  const [howOpen, setHowOpen] = useState(false);
 
   // D8 — batch selection mode.
   const [selecting, setSelecting] = useState(false);
@@ -150,6 +171,12 @@ export default function OfflinePage() {
     stopSelecting();
     toast(`Removed ${ids.length} download${ids.length === 1 ? '' : 's'}`);
   };
+  const removeAll = async (): Promise<void> => {
+    const ids = list.map((x) => x.song.id);
+    if (!ids.length || !window.confirm(`Remove all ${ids.length} download${ids.length === 1 ? '' : 's'} from this device?`)) return;
+    for (const id of ids) await removeDownload(id);
+    toast('Removed all downloads');
+  };
 
   const header = (actions?: React.ReactNode, meta?: React.ReactNode) => (
     <EntityHeader
@@ -165,17 +192,17 @@ export default function OfflinePage() {
   if (!list.length && !inFlight) {
     return (
       <div className="vx-entity">
-        {header(undefined, isNativePlatform() ? <EntityMeta items={['Songs you save play without a connection']} /> : undefined)}
+        {header(undefined, savable ? <EntityMeta items={['Songs you save play without a connection']} /> : undefined)}
         <EmptyState
           icon={<DownloadIcon className="w-8 h-8" />}
           title="No downloads yet"
           message={
-            isNativePlatform()
+            savable
               ? 'Open the ⋯ menu on any song and choose Download to save it for offline listening.'
-              : 'Offline downloads are available in the VinaX Android app.'
+              : 'This browser can’t save songs. Offline downloads are in the VinaX Android app.'
           }
           action={
-            isNativePlatform() ? (
+            savable ? (
               <Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>
             ) : (
               <Link to="/download" className="px-5 py-2.5 rounded-full btn-primary">Get the app</Link>
@@ -186,8 +213,10 @@ export default function OfflinePage() {
     );
   }
 
-  const totalSec = list.reduce((s, x) => s + (x.song.duration || 0), 0);
-  const estBytes = totalSec * BYTES_PER_SEC;
+  // Web saves know their real size; Android ones are estimated from duration.
+  const exact = list.every((x) => !!x.bytes);
+  const estBytes = list.reduce((s, x) => s + (x.bytes || (x.song.duration || 0) * BYTES_PER_SEC), 0);
+  const sizeLabel = `${exact ? '' : '≈ '}${fmtBytes(estBytes)}`;
 
   return (
     <div className="vx-entity">
@@ -206,25 +235,57 @@ export default function OfflinePage() {
                 </button>
               </>
             ) : (
-              <button type="button" onClick={() => setSelecting(true)} className="vx-quiet-btn">
-                Select
-              </button>
+              <>
+                <button type="button" onClick={() => setSelecting(true)} className="vx-quiet-btn">
+                  Select
+                </button>
+                <button type="button" onClick={() => void removeAll()} className="vx-quiet-btn is-danger">
+                  Remove all
+                </button>
+              </>
             )}
           </>
         ) : undefined,
-        list.length > 0 ? <EntityMeta items={[`${list.length} song${list.length > 1 ? 's' : ''}`, totalDuration(songs), `≈ ${fmtBytes(estBytes)}`]} /> : undefined,
+        list.length > 0 ? <EntityMeta items={[`${list.length} song${list.length > 1 ? 's' : ''}`, totalDuration(songs), sizeLabel]} /> : undefined,
       )}
 
-      {/* D8 — storage summary (estimate; the catalog hides real sizes). */}
+      {/* D8 — storage summary (an estimate on Android; real sizes on the web). */}
       {list.length > 0 && (
         <div className="vx-storage">
           <div className="vx-storage-head">
-            <span className="vx-storage-title">≈ {fmtBytes(estBytes)} on this device</span>
-            <span className="vx-storage-note">Estimated at high quality · change quality in Settings → Playback</span>
+            <span className="vx-storage-title">{sizeLabel} on this device</span>
+            <span className="vx-storage-note">
+              {space
+                ? `${fmtBytes(space.usage)} used · ${fmtBytes(Math.max(0, space.quota - space.usage))} free for VinaX`
+                : exact
+                  ? 'Saved in this browser · change quality in Settings → Playback'
+                  : 'Estimated at high quality · change quality in Settings → Playback'}
+            </span>
           </div>
           <div className="vx-storage-bar" aria-hidden>
             <i style={{ width: `${Math.max(1.5, Math.min(100, (estBytes / BAR_SCALE) * 100))}%` }} />
           </div>
+        </div>
+      )}
+
+      {space && space.usage > WARN_BYTES && (
+        <p className="vx-etools-note mb-3">Saved songs use over 1 GB. Remove ones you no longer play to free up space.</p>
+      )}
+
+      {showHomeTip && (
+        <div className="vx-strip" role="note">
+          <p className="vx-strip-text">
+            <b>Keep your saved songs.</b>
+            <span> Safari can clear them if VinaX isn’t opened for a week. Add VinaX to your Home Screen to keep them.</span>
+          </p>
+          <button type="button" onClick={() => setHowOpen(true)} className="vx-quiet-btn">
+            How
+          </button>
+          {howOpen && (
+            <Suspense fallback={null}>
+              <InstallGuideSheet open onClose={() => setHowOpen(false)} onDone={() => setHowOpen(false)} />
+            </Suspense>
+          )}
         </div>
       )}
 

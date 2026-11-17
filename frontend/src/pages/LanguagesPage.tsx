@@ -1,7 +1,8 @@
 import { LanguageGrid } from '@/components/LanguageGrid';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { songPath } from '@/utils/slug';
-import { LANGUAGES, languageLabel } from '@/constants/languages';
+import { Link } from 'react-router-dom';
+import { HUB_LANGUAGES, LANGUAGES, languageLabel } from '@/constants/languages';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Chip } from '@/components/Chip';
 import { Shelf } from '@/components/Shelf';
@@ -14,6 +15,8 @@ import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
+import { useRegion } from '@/features/location/useRegion';
+import { regionLanguages } from '@/features/location/regionLanguages';
 import '@/styles/pages/browse.css';
 
 function LanguageShelf({ language }: { language: string }) {
@@ -33,8 +36,39 @@ function LanguageShelf({ language }: { language: string }) {
   );
 }
 
+/** A language's page: its hub when it has one, else its trending search. */
+const languageTo = (l: string): string =>
+  (HUB_LANGUAGES as readonly string[]).includes(l) ? `/${l}-songs` : `/search/${encodeURIComponent(trendingSeed(l))}`;
+
 /**
- * Languages: the hubs, each in its own script; then the two controls that
+ * The languages played where the listener is (it replaced the Regions page).
+ * The country and region come from Settings › Region & privacy; nothing shows
+ * while the country is unknown.
+ */
+function RegionLanguages() {
+  const region = useRegion();
+  const langs = regionLanguages(region?.country, region?.regionLabel);
+  if (!langs.length) return null;
+  return (
+    <section className="bx-group" aria-label="Popular in your region">
+      <h2 className="bx-subhead">Popular in your region</h2>
+      <p className="bx-subhint">
+        {region?.regionLabel ? `What people play in ${region.regionLabel}.` : 'What people play where you are.'} Change it in{' '}
+        <Link to="/settings#privacy" className="underline">Settings</Link>.
+      </p>
+      <nav className="vx-chip-row" aria-label="Languages in your region">
+        {langs.map((l) => (
+          <Link key={l} to={languageTo(l)} className="bx-pill">
+            {languageLabel(l)}
+          </Link>
+        ))}
+      </nav>
+    </section>
+  );
+}
+
+/**
+ * Languages: the languages popular in the listener's region, the hubs, each in its own script; then the two controls that
  * steer every recommendation (languages you love, languages to keep out);
  * then a trending shelf for each language you love.
  */
@@ -47,6 +81,8 @@ export default function LanguagesPage() {
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
       <PageHeader title="Languages" subtitle="Every language hub in its own script, and the languages you want more or less of." />
+
+      <RegionLanguages />
 
       <LanguageGrid heading={false} />
 

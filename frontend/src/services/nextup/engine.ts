@@ -230,7 +230,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     const other = listener.find((l) => !languages.includes(l));
     if (other) languages = [other];
   }
-  const mood = ctx.moodPin ?? anchor.mood;
+  const mood = anchor.mood;
   const ledger = exposureLedger(now);
   const tasteLeads = new Set(topArtists(ctx.profile, 20).map((a) => (a.affinity.name ?? '').trim().toLowerCase()).filter(Boolean));
   const tuneQuery = tune ? tuneSearchQuery(tune, languages[0] ?? null) : null;
@@ -469,7 +469,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const queued = { ids: new Set(options.excludeIds ?? []), keys: new Set(options.excludeKeys ?? []) };
   prune(p, filterFor(env, queued));
   // The listener just steered — a like or an add (the anchor moved), or a new
-  // tune or pinned mood nobody has searched for yet: give that lookup time to
+  // tune nobody has searched for yet: give that lookup time to
   // land so this stretch already follows it.
   const newTune = !!env.tuneQuery && !p.asked.has(env.tuneQuery);
   if (moved || newTune) {

@@ -23,6 +23,7 @@ import { liveLabel } from '../../../_lib/ai/voice';
 import { removeSharesOf } from '../../../_lib/ai/shares';
 import { getProject } from '../../../_lib/ai/projects';
 import { db, dbConfigured, q } from '../../../_lib/db';
+import { IMAGE_MODEL_ID, IMAGE_MODEL_LABEL } from '../../../_lib/ai/images';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
@@ -46,6 +47,8 @@ async function owned(ctx: Ctx, route: string): Promise<{ sub: string; conv: Conv
 const label = (modelId: string): { name: string; provider: string } | null => {
   const live = liveLabel(modelId);
   if (live) return live;
+  // A picture from Create image (POST /api/ai/images).
+  if (modelId === IMAGE_MODEL_ID) return IMAGE_MODEL_LABEL;
   // A free model found in its provider's list: its name when this instance knows the list, else one made from the id.
   const spec = modelById(MODELS, modelId) ?? knownDiscovered(modelId);
   if (spec) return { name: spec.name, provider: PROVIDER_NAMES[spec.provider] };

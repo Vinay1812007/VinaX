@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 1.3 — Moods and Explore show the catalogue's moods & genres when the API
+ * 1.3 — Moods shows the catalogue's moods & genres when the API
  * has them, and look as they did before when it does not.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -25,7 +25,6 @@ vi.mock('@/services/api', async (importOriginal) => {
 });
 
 import MoodsPage from './MoodsPage';
-import ExplorePage from './ExplorePage';
 import { useSettingsStore } from '@/store/settingsStore';
 
 const cat = (id: string, name: string, category: string, isNew = false): BrowseCategory => ({
@@ -84,24 +83,5 @@ describe('MoodsPage — catalogue moods & genres', () => {
     expect(screen.queryByRole('heading', { name: 'Moods & moments' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Genres' })).toBeNull();
     expect(document.querySelector('a[href^="/browse/"]')).toBeNull();
-  });
-});
-
-describe('ExplorePage — catalogue moods & genres', () => {
-  it('surfaces a few categories, moods first', async () => {
-    getBrowseCategories.mockResolvedValue(list);
-    mount(<ExplorePage />);
-    expect(await screen.findByRole('heading', { name: 'Moods & genres' })).toBeTruthy();
-    expect(link('Romance')).toBe('/browse/27');
-    expect(document.querySelectorAll('a[href^="/browse/"]')).toHaveLength(8);
-  });
-
-  it('leaves the section out when the API is unavailable', async () => {
-    getBrowseCategories.mockRejectedValue(new Error('unavailable'));
-    mount(<ExplorePage />);
-    await vi.waitFor(() => expect(getBrowseCategories).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.queryByRole('heading', { name: 'Moods & genres' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Any mood, your language' })).toBeTruthy();
   });
 });

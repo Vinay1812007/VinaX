@@ -129,17 +129,17 @@ test('1.13.22: play as a guest, sign in with email from the sheet, and the play 
   });
   const calls: string[] = [];
   await mockEmailApi(page, calls);
-  await page.goto('/explore');
+  await page.goto('/discover');
   await page.getByRole('button', { name: /^Play \d{4}$/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Sign in to start listening' });
   await sheet.getByRole('link', { name: 'Sign in with email' }).click();
-  await expect(page).toHaveURL(/\/login\?next=%2Fexplore$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fdiscover$/);
   await expect(page.getByRole('status').filter({ hasText: 'Now playing:' })).toHaveCount(0);
   await page.getByLabel('Email').fill('mail@example.com');
   await page.getByLabel('Password', { exact: true }).fill('right-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(/\/explore$/);
-  // The decade play the sheet interrupted runs now.
+  await expect(page).toHaveURL(/\/discover$/);
+  // The year play the sheet interrupted runs now.
   await expect(page.getByRole('status').filter({ hasText: 'Now playing:' })).toBeVisible();
 });
 

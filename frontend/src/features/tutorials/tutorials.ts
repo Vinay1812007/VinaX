@@ -139,7 +139,7 @@ export const TUTORIALS: Tutorial[] = [
       { route: '/search', target: SEARCH, title: 'Full results', body: 'Press Enter for the Top result, then Songs, Artists, Albums and Playlists, each with See all.', tip: 'Use ↑, ↓ and Enter in the suggestions. Esc closes them.', placement: 'bottom' },
       { route: '/search', target: SEARCH, title: 'Search by lyrics', body: 'Type five or more words of a lyric and VinaX offers Search by lyrics.', placement: 'bottom' },
       { route: '/search', title: 'Recent and trending', body: 'Long-press or hover a recent search to pin it. Tap a trending chip to search it.', tip: 'Press ⌘/Ctrl+K anywhere for the command palette.' },
-      { route: '/discover', target: 'nav[aria-label="Browse music"] a[href="/charts"]', title: 'Discover', body: 'Charts, Languages and Moods lead this grid. Regions, Movies, Videos and mixes follow.', placement: 'bottom' },
+      { route: '/discover', target: 'nav[aria-label="Browse music"] a[href="/charts"]', title: 'Discover', body: 'Charts, Languages and Moods lead this grid. Radio, Movies, Videos and mixes follow.', placement: 'bottom' },
     ],
   },
   {

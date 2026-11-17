@@ -130,7 +130,7 @@ describe('sessionStyle', () => {
     expect(sessionStyle({ seed: dj('s'), tune: 'energetic' })?.style).toBe('dj');
     expect(sessionStyle({ seed: film('s'), tune: 'energetic' })).toBeNull();
     expect(sessionStyle({ seed: dj('s'), tune: 'same-language' })?.style).toBe('dj');
-    expect(sessionStyle({ seed: film('s'), moodPin: 'devotional' })?.style).toBe('devotional');
+    expect(sessionStyle({ seed: film('s'), tune: 'devotional' })?.style).toBe('devotional');
     expect(tuneStyle('dj')).toBe('dj');
     expect(tuneStyle('chill')).toBeNull();
     expect(tuneStyle(null)).toBeUndefined();

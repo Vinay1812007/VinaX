@@ -6,7 +6,7 @@ import { EntityHeader, EntityMeta, PlayFab } from '@/components/EntityHeader';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
 import { SectionHeader } from '@/components/SectionHeader';
-import { getProfile, SocialError, type PublicProfile } from '@/services/social/api';
+import { getProfile, jamPath, SocialError, type PublicProfile } from '@/services/social/api';
 import { resolveSongs } from '@/features/social/resolve';
 import { useSocialStore } from '@/features/social/store';
 import { currentAccount } from '@/services/auth/google';
@@ -23,7 +23,8 @@ import '@/styles/pages/secondary.css';
  * 15.0 — /u/<handle>: a listener's public profile. Their name and picture,
  * a line, top artists and languages, recent likes (playable), what they
  * are playing when they share it, Follow, and Blend — a mix built on this
- * device from both listeners' likes.
+ * device from both listeners' likes. v23: Join their room, when they host a
+ * jam and let you (you follow each other; the server decides).
  */
 export default function ProfilePage() {
   const { handle = '' } = useParams();
@@ -71,6 +72,9 @@ export default function ProfilePage() {
               <button type="button" onClick={() => void toggleFollow()} disabled={toggling} aria-pressed={!!isFollowing} className={cn('vx-tap px-5 min-h-[44px] rounded-full font-semibold', isFollowing ? 'btn-secondary' : 'btn-primary')}>
                 {isFollowing ? 'Following' : 'Follow'}
               </button>
+            )}
+            {!mine && profile.jamCode && (
+              <Link to={jamPath(profile.jamCode)} className="vx-tap px-5 min-h-[44px] inline-flex items-center rounded-full btn-primary font-semibold" aria-label={`Join ${profile.name ?? profile.handle}'s room`}>Join their room</Link>
             )}
             {!mine && <BlendButton profile={profile} />}
             {mine && <Link to="/settings#profile" className="vx-tap px-5 min-h-[44px] inline-flex items-center rounded-full btn-secondary font-semibold">Edit</Link>}

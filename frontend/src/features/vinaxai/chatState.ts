@@ -46,7 +46,9 @@ export interface ChatState {
 export type ChatAction =
   | { type: 'reset' }
   | { type: 'load'; conversation: ServerConversation; messages: ServerMessage[] }
-  | { type: 'send'; text: string; parentId: string | null; now: string; files?: FileRef[]; projectId?: string | null }
+  | { type: 'send'; text: string; parentId: string | null; now: string; files?: FileRef[]; projectId?: string | null; image?: boolean }
+  /** Create image answered: the saved question and reply take the place of the local pair. */
+  | { type: 'image-done'; conversation: ServerConversation; user: ServerMessage; reply: ServerMessage }
   | { type: 'retry'; userId: string; now: string }
   | { type: 'continue'; messageId: string }
   | { type: 'select-leaf'; leafId: string }
@@ -126,6 +128,23 @@ export function unansweredQuestion(state: ChatState): ChatMessage | null {
   return q && q.role === 'user' && !q.local ? q : null;
 }
 
+/** One saved message as the page holds it. */
+export function fromServer(m: ServerMessage): ChatMessage {
+  return {
+    id: m.id, parentId: m.parentId, role: m.role,
+    text: m.content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n'),
+    files: m.content
+      .filter((p) => p.type === 'attachment' && typeof p.id === 'string')
+      .map((p) => ({ id: p.id!, name: p.name ?? 'file', kind: p.kind ?? 'text', mime: p.mime ?? '', size: p.size ?? 0, ...(p.pages ? { pages: p.pages } : {}) })),
+    thinking: m.thinking ?? '', thinkingMs: m.thinkingMs, model: m.model, stopReason: m.stopReason, error: null, createdAt: m.createdAt,
+    sources: m.sources && Array.isArray(m.sources.items) ? m.sources : null,
+  };
+}
+
+/** A reply made by Create image: a picture and no model text worth copying or retrying. */
+export const isImageReply = (m: Pick<ChatMessage, 'role' | 'files' | 'imaging'>): boolean =>
+  m.role === 'assistant' && (!!m.imaging || (!!m.files?.length && m.files.every((f) => f.kind === 'image')));
+
 function rename(messages: Record<string, ChatMessage>, from: string, to: string): Record<string, ChatMessage> {
   if (from === to || !messages[from]) return messages;
   const out: Record<string, ChatMessage> = {};
@@ -188,17 +207,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'load': {
       const messages: Record<string, ChatMessage> = {};
-      for (const m of action.messages) {
-        messages[m.id] = {
-          id: m.id, parentId: m.parentId, role: m.role,
-          text: m.content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n'),
-          files: m.content
-            .filter((p) => p.type === 'attachment' && typeof p.id === 'string')
-            .map((p) => ({ id: p.id!, name: p.name ?? 'file', kind: p.kind ?? 'text', mime: p.mime ?? '', size: p.size ?? 0, ...(p.pages ? { pages: p.pages } : {}) })),
-          thinking: m.thinking ?? '', thinkingMs: m.thinkingMs, model: m.model, stopReason: m.stopReason, error: null, createdAt: m.createdAt,
-          sources: m.sources && Array.isArray(m.sources.items) ? m.sources : null,
-        };
-      }
+      for (const m of action.messages) messages[m.id] = fromServer(m);
       const leaf = action.conversation.activeLeafId && messages[action.conversation.activeLeafId] ? action.conversation.activeLeafId : latestLeaf(messages);
       return { ...initialChat(), conversationId: action.conversation.id, title: action.conversation.title, projectId: action.conversation.projectId ?? null, messages, leafId: leaf, finished: state.finished, incognito: action.conversation.incognito === true };
     }
@@ -207,9 +216,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (state.streaming) return state;
       const base = dropFailedLocals(state.messages);
       const user = { ...blank(LOCAL_USER, action.parentId, 'user', action.text, action.now), ...(action.files?.length ? { files: action.files } : {}) };
-      const reply = blank(LOCAL_REPLY, LOCAL_USER, 'assistant', '', action.now);
+      const reply = { ...blank(LOCAL_REPLY, LOCAL_USER, 'assistant', '', action.now), ...(action.image ? { imaging: true } : {}) };
       const projectId = state.conversationId ? state.projectId : action.projectId ?? null;
       return { ...state, notice: null, projectId, messages: { ...base, [LOCAL_USER]: user, [LOCAL_REPLY]: reply }, leafId: LOCAL_REPLY, replyId: LOCAL_REPLY, streaming: true, thinkingStartedAt: null };
+    }
+
+    case 'image-done': {
+      if (!state.streaming || state.replyId !== LOCAL_REPLY) return state;
+      const base = without(state.messages, (m) => m.id === LOCAL_USER || m.id === LOCAL_REPLY);
+      const user = fromServer(action.user);
+      const reply = fromServer(action.reply);
+      const c = action.conversation;
+      return {
+        ...state, conversationId: c.id, title: state.title ?? c.title, projectId: c.projectId ?? state.projectId,
+        messages: { ...base, [user.id]: user, [reply.id]: reply }, leafId: reply.id, replyId: null, streaming: false, thinkingStartedAt: null, finished: state.finished + 1,
+      };
     }
 
     case 'retry': {

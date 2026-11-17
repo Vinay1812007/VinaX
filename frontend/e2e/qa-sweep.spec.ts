@@ -15,7 +15,7 @@ const ROUTES = [
   '/', '/discover', '/charts', '/top-songs', '/trending', '/most-searched',
   '/made-for-you', '/radio', '/weekly', '/mixes', '/search',
   '/search/tum%20hi%20ho', '/library', '/favorites', '/history', '/queue',
-  '/now-playing', '/languages', '/explore', '/movies', '/moods', '/regions',
+  '/now-playing', '/languages', '/movies', '/moods',
   '/taste-profile', '/settings', '/cache-info', '/about',
   '/privacy', '/terms', '/contact', '/dmca', '/help', '/stats', '/offline',
   '/together', '/karaoke', '/download', '/drive', '/disco',

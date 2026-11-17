@@ -6,7 +6,7 @@
  */
 import { create } from 'zustand';
 import { queryClient } from '@/services/queryClient';
-import { AiError, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
+import { AiError, createImageTurn, imageNotice, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, unansweredQuestion, type ChatAction, type ChatState } from './chatState';
 import { personalOf, usePrefs } from './prefs';
 import { parseArtifacts, mayHaveArtifacts } from './artifacts';
@@ -201,6 +201,52 @@ export function sendMessage(text: string, opts: { parentId?: string | null; file
     ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),
     content: [...files.map((f) => ({ type: 'attachment' as const, id: f.id })), ...(text.trim() ? [{ type: 'text' as const, text }] : [])],
   });
+}
+
+/** What the listener's turn says for a Create image request (the Worker saves the same). */
+export const IMAGE_REQUEST_PREFIX = 'Create an image: ';
+
+/**
+ * Create image: one picture from `prompt` (POST /api/ai/images), in the
+ * open chat or a new one. The turn shows at once with a "Creating image…"
+ * placeholder; Stop drops it here (the Worker may still finish and save it,
+ * and it then shows when the chat is opened again).
+ */
+export async function createImage(prompt: string, opts: { projectId?: string | null; perDay?: number } = {}): Promise<RunOutcome> {
+  const s = useChatStore.getState();
+  const text = prompt.trim();
+  if (s.streaming || !text) return { ok: true };
+  inflight?.abort();
+  const ctl = new AbortController();
+  inflight = ctl;
+  const parent = parentForNext(s);
+  dispatch({ type: 'send', text: `${IMAGE_REQUEST_PREFIX}${text}`, parentId: parent, now: new Date().toISOString(), projectId: opts.projectId, image: true });
+  const projectId = s.conversationId ? null : opts.projectId ?? null;
+  try {
+    const r = await createImageTurn({
+      prompt: text,
+      conversationId: s.conversationId,
+      ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),
+      ...(projectId ? { projectId } : {}),
+      ...(s.incognito ? { incognito: true } : {}),
+    }, ctl.signal);
+    if (ctl.signal.aborted) throw new DOMException('Stopped', 'AbortError');
+    dispatch({ type: 'image-done', conversation: r.conversation, user: r.userMessage, reply: r.assistantMessage });
+    refreshList();
+    return { ok: true };
+  } catch (e) {
+    if (ctl.signal.aborted) {
+      // Stopped here (Stop, New chat): drop the placeholder. Replaced by a newer
+      // request instead: that one owns the page now, so leave it alone.
+      if (inflight === ctl) dispatch({ type: 'stopped' });
+      return { ok: false, code: 'aborted', beforeStart: true };
+    }
+    const code = e instanceof AiError ? e.code : 'network';
+    dispatch({ type: 'fail', code, message: imageNotice(code, opts.perDay) });
+    return { ok: false, code, beforeStart: true };
+  } finally {
+    if (inflight === ctl) inflight = null;
+  }
 }
 
 /** A new answer to the question `userId`, from the composer's model or `choice`. */

@@ -1,6 +1,6 @@
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { loadProfile } from '@/services/personalization/storage';
-import { getMoodPin, getSessionVector } from '@/services/personalization/session';
+import { getSessionVector } from '@/services/personalization/session';
 import { buildSessionRecommendationProfile, buildUserRecommendationProfile } from './profiles';
 import { useSettingsStore, resolvedRegion, resolveDiscoveryMode } from '@/store/settingsStore';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
@@ -38,7 +38,6 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     explore: discoveryMode === 'discover',
     discoveryMode,
     sessionIntent: getSessionIntent(),
-    moodPin: getMoodPin(),
     seedSong,
     surface,
     userProfile: buildUserRecommendationProfile(profile, favorites, history),

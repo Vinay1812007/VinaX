@@ -27,7 +27,7 @@ vi.mock('@/services/personalization/updater', async (importOriginal) => {
   };
 });
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
-vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
+vi.mock('@/services/downloads', () => ({ canSaveOffline: () => false, downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';

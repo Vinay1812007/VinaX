@@ -710,6 +710,17 @@
 .vx-ai-file-x:hover { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); }
 .vx-ai-file-thumb { display: block; width: 120px; height: 120px; border-radius: var(--vx-radius-card); overflow: hidden; border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); }
 .vx-ai-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Create image: the picture VinaX AI made, its placeholder, and the composer's Image pill. */
+.vx-ai-made-list { display: flex; flex-direction: column; gap: 12px; margin: 8px 0 4px; }
+.vx-ai-made { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: min(100%, 512px); }
+.vx-ai-made-frame { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: var(--vx-radius-card); overflow: hidden; border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); }
+.vx-ai-made-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vx-ai-made-frame.is-making { display: grid; place-items: center; font-size: 0.875rem; }
+.vx-ai-made-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.vx-ai-made-actions .vx-ai-chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.vx-ai-pill-image { display: inline-flex; align-items: center; gap: 4px; overflow: visible; }
+.vx-ai-pill-x { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: -4px; border-radius: var(--radius-pill); color: inherit; background: none; border: 0; cursor: pointer; }
+.vx-ai-pill-x:hover, .vx-ai-pill-x:focus-visible { background: rgb(var(--ember-500) / 0.24); }
 .vx-ai-notice-actions { display: flex; flex: none; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 .vx-ai-notice-actions .vx-ai-chip { white-space: nowrap; }
 .vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35); }

@@ -57,6 +57,9 @@ export function ProfileSettings() {
           <Row label="Share what I'm playing" note="Friends see the song you have on, for a few minutes after you play it." keywords="now playing friends listening">
             <Toggle on={!!profile.shareNow} onChange={(v) => void useSocialStore.getState().save({ shareNow: v, ...(v ? {} : { nowPlaying: null }) })} label="Share what I'm playing" disabled={busy} />
           </Row>
+          <Row label="Let people I follow join my room" note="While you host Listen Together, people you follow who follow you back see a Join button on Home and your profile. Off by default." keywords="listen together jam room join friends">
+            <Toggle on={!!profile.shareJam} onChange={(v) => void useSocialStore.getState().save({ shareJam: v })} label="Let people I follow join my room" disabled={busy} />
+          </Row>
           <Row label="Remove my profile" note="Deletes the page and every follow. Your library and account stay.">
             <RowButton tone="danger" disabled={busy} onClick={() => { if (window.confirm('Remove your public profile and all follows?')) void useSocialStore.getState().remove().then(() => toast('Profile removed')); }}>Remove</RowButton>
           </Row>

@@ -412,8 +412,29 @@ begin
   assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'room_members' and column_name = 'sync'), 'room_members.sync';
   assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'rooms' and column_name = 'jam'), 'rooms.jam';
 
+  -- Version 23: a profile's join code goes with its room, and the sweep clears an idle one.
+  assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'share_jam'), 'profiles.share_jam';
+  assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'jam_code'), 'profiles.jam_code';
+  assert (select share_jam = false from profiles where account_id = 'check_a2'), 'profiles.share_jam: off by default';
+  insert into rooms (code, host_token) values ('CHECKJ', 'tok');
+  update profiles set share_jam = true, jam_code = 'CHECKJ' where account_id = 'check_a2';
+  delete from rooms where code = 'CHECKJ';
+  assert (select jam_code is null from profiles where account_id = 'check_a2'), 'profiles.jam_code: cleared when the room ends';
+  begin
+    update profiles set jam_code = 'NOPE00' where account_id = 'check_a2';
+    raise exception 'profiles.jam_code accepted a room that does not exist';
+  exception when foreign_key_violation then null;
+  end;
+  insert into rooms (code, host_token, updated_at) values ('CHECKS', 'tok', now() - interval '20 minutes');
+  update profiles set jam_code = 'CHECKS' where account_id = 'check_a2';
+  update profiles set share_jam = true, jam_code = 'CHECK1' where account_id = 'check_a1';
+
   v := room_sweep();
   assert (v ->> 'rooms')::int = 0 and (v ->> 'members')::int = 0, 'room_sweep leaves fresh rooms alone';
+  assert (v ->> 'jams')::int = 1, 'room_sweep clears one idle join code';
+  assert (select jam_code is null from profiles where account_id = 'check_a2'), 'room_sweep: the idle room''s code is gone';
+  assert (select jam_code = 'CHECK1' from profiles where account_id = 'check_a1'), 'room_sweep: a live room''s code stays';
+  delete from rooms where code = 'CHECKS';
   n := purge_events(180);
   assert n = 0, 'purge_events keeps recent events';
   n := retire_push_devices(180);
@@ -668,7 +689,7 @@ begin
   assert jsonb_array_length(v -> 'byDay') >= 1 and jsonb_array_length(v -> 'byEmoji') = 3, 'stats_reactions: by day and by emoji';
   assert not has_table_privilege('anon', 'public.song_reactions', 'select'), 'anon cannot read song reactions';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 22, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 23, 'meta.schema.version';
   -- v20: email + password sign-in. bcrypt in the database, the hash in its own locked table.
   insert into accounts (id, email, name) values ('check_pw', 'Pw@Example.com', 'Pw');
   assert account_set_password('check_nobody', 'long-enough') = false, 'account_set_password: no account';

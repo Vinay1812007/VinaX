@@ -58,6 +58,12 @@ describe('banners', () => {
       { title: 'Song', linkType: 'song', linkId: 's1' },
     ]);
   });
+
+  it('opens Discover for a banner saved with the retired Explore page', () => {
+    expect(activeBanners([{ title: 'Old', linkType: 'page', linkId: '/explore' }], NOW)).toEqual([
+      { title: 'Old', linkType: 'page', linkId: '/discover' },
+    ]);
+  });
 });
 
 describe('announcement pop-up', () => {

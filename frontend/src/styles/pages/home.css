@@ -906,6 +906,10 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
 .vx-home .vxh-friends-row::-webkit-scrollbar { display: none; }
 .vx-home .vxh-friend { flex: 0 0 auto; width: min(260px, 78vw); padding: 10px; border-radius: var(--tpl-r-tile, 8px); background: var(--vxh-tile-bg); }
 .vx-home .vxh-friend-who { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 700; }
+/* v23 — a friend's jam you may join. */
+.vx-home .vxh-friend-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.vx-home .vxh-friend-join { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: var(--radius-pill); background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
+.vx-home .vxh-friend-join:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 2px; }
 .vx-home .vxh-friend-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
 .vx-home .vxh-friend-song { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
 .vx-home .vxh-friend-art { width: 48px; height: 48px; border-radius: var(--tpl-r-art-sm, 8px); object-fit: cover; flex-shrink: 0; }

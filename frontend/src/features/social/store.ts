@@ -7,6 +7,11 @@
  * the playing song while "Share what I'm playing" is on (refreshed every few
  * minutes). The digest is built from the on-device taste profile and
  * favourites; the server stores it as sent (nothing is computed there).
+ *
+ * v23 — "Let people I follow join my room" (off by default): while this
+ * listener hosts Listen Together, the room's code and host token go to the
+ * server, which checks the token against the room and shows the code only to
+ * people who follow each other with this listener, only while the room is live.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -15,7 +20,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { loadProfile } from '@/services/personalization/storage';
 import { useLibraryStore } from '@/store/libraryStore';
-import { deleteMyProfile, getFollowing, getMyProfile, liteSong, putMyProfile, setFollow, type ProfileWrite, type PublicProfile } from '@/services/social/api';
+import { deleteMyProfile, getFollowing, getMyProfile, liteSong, putMyProfile, setFollow, SocialError, type ProfileWrite, type PublicProfile } from '@/services/social/api';
 
 export interface SocialState {
   profile: PublicProfile | null;
@@ -24,6 +29,9 @@ export interface SocialState {
   followingAt: number;
   digestAt: number;
   nowAt: number;
+  /** v23 — the room code last sent with the profile (null: none, or cleared), and when. Not persisted. */
+  jamSent: string | null;
+  jamAt: number;
   busy: boolean;
   error: string | null;
   /** Fetch the own profile and the following list (cheap; cached a few minutes). */
@@ -35,11 +43,26 @@ export interface SocialState {
   pushDigest(force?: boolean): Promise<void>;
   /** Send the playing song (or clear it) while sharing is on. */
   pushNow(song: Song | null): Promise<void>;
+  /** v23 — send the room this device hosts (or clear it) while "Let people I follow join my room" is on. */
+  pushJam(jam: { code: string; hostToken: string } | null): Promise<void>;
 }
 
 export const DIGEST_EVERY_MS = 30 * 60_000;
 export const NOW_EVERY_MS = 3 * 60_000;
 export const REFRESH_EVERY_MS = 5 * 60_000;
+/** v23 — while hosting, the room is sent again this often (the server's sweep forgets a code idle for 15 minutes). */
+export const JAM_EVERY_MS = 5 * 60_000;
+
+/** v23 — the list without room codes (for anything kept rather than just fetched). Always an array. */
+export function withoutJams(list: unknown): PublicProfile[] {
+  if (!Array.isArray(list)) return [];
+  return (list as PublicProfile[]).map((p) => {
+    if (!p || typeof p !== 'object' || !('jamCode' in p)) return p;
+    const { jamCode: _drop, ...rest } = p;
+    void _drop;
+    return rest;
+  });
+}
 
 /** The digest from the taste profile and favourites. Pure. (2.0 — badges are gone, so none are sent.) */
 export function buildDigest(favorites: Song[], profile = loadProfile()): NonNullable<ProfileWrite['summary']> {
@@ -62,13 +85,16 @@ export const useSocialStore = create<SocialState>()(
       followingAt: 0,
       digestAt: 0,
       nowAt: 0,
+      jamSent: null,
+      jamAt: 0,
       busy: false,
       error: null,
       refresh: async (force = false) => {
         if (!force && Date.now() - get().loadedAt < REFRESH_EVERY_MS) return;
         set({ busy: true, error: null });
         try {
-          const [profile, following] = await Promise.all([getMyProfile(), getFollowing().catch(() => get().following ?? [])]);
+          // A list kept from before is shown without room codes: a code is only ever as fresh as the server's answer.
+          const [profile, following] = await Promise.all([getMyProfile(), getFollowing().catch(() => withoutJams(get().following))]);
           set({ profile, following, loadedAt: Date.now(), followingAt: Date.now(), busy: false });
         } catch (e) {
           set({ busy: false, error: e instanceof Error ? e.message : 'error' });
@@ -79,6 +105,8 @@ export const useSocialStore = create<SocialState>()(
         try {
           const profile = await putMyProfile(patch);
           set({ profile, busy: false, loadedAt: Date.now() });
+          // The switch off: the server dropped the room code.
+          if (patch.shareJam === false) set({ jamSent: null, jamAt: 0 });
           return profile;
         } catch (e) {
           set({ busy: false, error: e instanceof Error ? e.message : 'error' });
@@ -89,7 +117,7 @@ export const useSocialStore = create<SocialState>()(
         set({ busy: true, error: null });
         try {
           await deleteMyProfile();
-          set({ profile: null, following: [], busy: false, digestAt: 0, nowAt: 0 });
+          set({ profile: null, following: [], busy: false, digestAt: 0, nowAt: 0, jamSent: null, jamAt: 0 });
         } catch (e) {
           set({ busy: false, error: e instanceof Error ? e.message : 'error' });
         }
@@ -127,14 +155,33 @@ export const useSocialStore = create<SocialState>()(
           /* next time */
         }
       },
+      pushJam: async (jam) => {
+        const p = get().profile;
+        if (!p) return;
+        const sent = get().jamSent;
+        if (jam) {
+          if (!p.shareJam) return;
+          // Half the period: the bridge's timer fires a little under JAM_EVERY_MS after the last send landed.
+          if (sent === jam.code && Date.now() - get().jamAt < JAM_EVERY_MS / 2) return;
+        } else if (!sent) return;
+        try {
+          const profile = await putMyProfile({ jam });
+          set({ ...(profile ? { profile } : {}), jamSent: jam?.code ?? null, jamAt: Date.now() });
+        } catch (e) {
+          // The room is over (409) or not this device's (403): not asked again
+          // until the next send is due. Anything else: the next change tries again.
+          if (e instanceof SocialError && (e.status === 409 || e.status === 403)) set({ jamSent: jam?.code ?? null, jamAt: Date.now() });
+        }
+      },
     }),
     {
       name: KEYS.social,
-      partialize: (s) => ({ profile: s.profile, following: s.following, digestAt: s.digestAt }),
+      // v23 — room codes are never stored: a code from an earlier visit may lead to a room that is over.
+      partialize: (s) => ({ profile: s.profile, following: withoutJams(s.following), digestAt: s.digestAt }),
       // A stored copy from storage is untrusted too: the list is always an array.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SocialState>;
-        return { ...current, ...p, following: Array.isArray(p.following) ? p.following : [], profile: p.profile && typeof p.profile === 'object' && typeof p.profile.handle === 'string' ? p.profile : null };
+        return { ...current, ...p, following: withoutJams(p.following), profile: p.profile && typeof p.profile === 'object' && typeof p.profile.handle === 'string' ? p.profile : null };
       },
     },
   ),

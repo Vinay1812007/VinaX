@@ -21,7 +21,7 @@ vi.mock('@/services/media-session', () => ({
 }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web' }));
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
-vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
+vi.mock('@/services/downloads', () => ({ canSaveOffline: () => false, downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(), recordPlaylistAdd: vi.fn(), recordDislike: vi.fn(),
 }));

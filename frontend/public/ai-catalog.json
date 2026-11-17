@@ -10,7 +10,7 @@
   "pages": [
     { "title": "Home", "url": "https://www.vinaxmusic.online/", "description": "Trending now, charts, new releases and shelves arranged for you" },
     { "title": "Search", "url": "https://www.vinaxmusic.online/search", "description": "Songs, albums, artists, playlists, podcasts and lyrics" },
-    { "title": "Discover", "url": "https://www.vinaxmusic.online/discover", "description": "Charts, languages, moods, regions, films, radio and podcasts" },
+    { "title": "Discover", "url": "https://www.vinaxmusic.online/discover", "description": "Charts, languages, moods, films, radio and podcasts" },
     { "title": "Top Charts", "url": "https://www.vinaxmusic.online/charts", "description": "The most played songs by language" },
     { "title": "New Releases", "url": "https://www.vinaxmusic.online/new-releases", "description": "The newest songs and albums" },
     { "title": "Top Playlists", "url": "https://www.vinaxmusic.online/top-playlists", "description": "The most played playlists" },

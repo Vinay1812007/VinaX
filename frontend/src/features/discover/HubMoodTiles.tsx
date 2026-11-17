@@ -4,7 +4,7 @@ import { languageLabel } from '@/constants/languages';
 import { BrowseTile, TileGlyph } from './BrowseTile';
 import '@/styles/pages/browse.css';
 
-/** Each mood hub's tone and icon, shared with Explore's hub list. */
+/** Each mood hub's tone and icon, shared with the mood hub pages. */
 export const HUB_TONE: Record<string, [number, typeof HeartIcon]> = {
   romantic: [3, HeartIcon],
   sad: [12, WaveIcon],

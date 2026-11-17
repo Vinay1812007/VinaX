@@ -4,7 +4,9 @@
  *   GET  /api/follow                 → 200 { following: [profile…] }
  *        each profile carries `nowPlaying` when that listener shares it and
  *        was playing in the last 20 minutes — the "friends are listening"
- *        row on Home reads this.
+ *        row on Home reads this. v23: and `jamCode`, the room to join, only
+ *        for a mutual follower who lets people they follow join their room,
+ *        and only while that room is live (social.ts jamFor).
  *   POST /api/follow { handle, on }  → 200 { following: boolean }
  *        400 bad_request · 404 not_found (no such public handle) · 409 self
  *   401 signed_out · 503 unavailable
@@ -14,7 +16,7 @@ import { readJsonCapped } from '../_lib/body';
 import { rateLimitAsync } from '../_lib/ratelimit';
 import { db, q } from '../_lib/db';
 import { asObject } from '../_lib/edge';
-import { isFollowing, normalizeHandle, profileByHandle, publicProfile, requireAccount, type ProfileRow, type SocialEnv } from '../_lib/social';
+import { isFollowing, jamFor, liveRoomCodes, normalizeHandle, profileByHandle, publicProfile, requireAccount, type ProfileRow, type SocialEnv } from '../_lib/social';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, POST, OPTIONS' } });
 
@@ -37,8 +39,12 @@ export const onRequestGet = async (ctx: { request: Request; env: SocialEnv }): P
   const back = await db.select<{ follower_id: string }>(ctx.env, 'follows', q().eq('followee_id', who.sub).in('follower_id', ids).select('follower_id').limit(MAX_FOLLOWING));
   if (!back.ok) return json({ error: 'unavailable' }, 503);
   const followsMe = new Set(back.rows.map((r) => r.follower_id));
-  const following = p.rows.filter((row) => wanted.has(row.account_id) && (row.public || followsMe.has(row.account_id))).map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null }));
-  following.sort((a, b) => (b.nowPlaying ? 1 : 0) - (a.nowPlaying ? 1 : 0) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const shown = p.rows.filter((row) => wanted.has(row.account_id) && (row.public || followsMe.has(row.account_id)));
+  // v23 — a room code only for those who follow the caller back, checked live.
+  const live = await liveRoomCodes(ctx.env, shown.filter((row) => followsMe.has(row.account_id) && row.share_jam === true).map((row) => row.jam_code));
+  const following = shown.map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null, jamCode: jamFor(row, followsMe.has(row.account_id), live) }));
+  const active = (x: { nowPlaying: unknown; jamCode?: string }): number => (x.jamCode ? 2 : x.nowPlaying ? 1 : 0);
+  following.sort((a, b) => active(b) - active(a) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return json({ following });
 };
 

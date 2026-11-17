@@ -37,6 +37,11 @@
  * half the room. Rooms live in `rooms` and `room_members`; idle rooms are
  * swept by housekeeping.
  *
+ * v23 — a host who lets people they follow join stores the code with their
+ * profile (api/profile.ts, `jam`). profiles.jam_code references rooms.code
+ * ON DELETE SET NULL, so `end` and the sweep clear it with the room, and a
+ * code handed out again later never points friends at a stranger's room.
+ *
  * Timing. Followers place the host's playhead from two readings of this
  * server's clock: `updated_at` (stamped when a host push ARRIVES) and `now`
  * (stamped when a poll arrives). Both answers also say how long the server

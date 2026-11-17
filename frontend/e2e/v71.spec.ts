@@ -3,8 +3,9 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
  * v7.1 from the built bundle, in a real browser:
- *  - "Pin a mood" rebuilds Up Next at once, from songs fetched FOR that mood in
- *    the queue's language (it used to change nothing visible);
+ *  - Tune this queue in Now Playing's Up next (where Pin a mood used to be)
+ *    rebuilds Up Next at once, from songs fetched FOR that mood in the queue's
+ *    language;
  *  - a continuation is five songs, all in the playing song's language;
  *  - Up Next rows read Song – Movie/Album – Artist;
  *  - Home greets by first name, never by a whole device name.
@@ -49,14 +50,14 @@ async function seed(page: Page, baseURL: string): Promise<{ queries: string[] }>
 
 const queue = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []) as Array<{ id: string; language: string }>);
 
-test('Pin a mood rebuilds Up Next with songs for that mood, five at a time, in the song’s language', async ({ page, baseURL }) => {
+test('Tune this queue in Up next rebuilds it with songs for that mood, five at a time, in the song’s language', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const seen = await seed(page, baseURL!);
   await page.goto('/now-playing');
-  const moods = page.getByRole('group', { name: 'Pin a mood' });
+  const moods = page.getByRole('tabpanel', { name: 'Up next' }).getByRole('group', { name: 'Tune this queue' });
   await expect(moods).toBeVisible();
-  await moods.getByRole('button', { name: 'Devotional' }).click();
-  await expect(moods.getByRole('button', { name: 'Devotional' })).toHaveAttribute('aria-pressed', 'true');
+  await moods.getByRole('button', { name: 'Tune queue: Devotional' }).click();
+  await expect(moods.getByRole('button', { name: 'Tune queue: Devotional' })).toHaveAttribute('aria-pressed', 'true');
   // The list is rebuilt NOW — not eight songs from now.
   await expect.poll(() => queue(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(1);
   const built = await queue(page);
@@ -67,12 +68,7 @@ test('Pin a mood rebuilds Up Next with songs for that mood, five at a time, in t
   expect(seen.queries.some((q) => q.includes('telugu devotional'))).toBe(true);
   // Rows read Song – Movie/Album – Artist.
   await expect(page.getByText(/Bhakti Album \d – Devotee \d/).first()).toBeVisible();
-  await page.screenshot({ path: 'test-results/v71-mood-pin-1280.png' });
-
-  // Unpinning goes back to the usual mix — again at once.
-  await moods.getByRole('button', { name: 'Devotional' }).click();
-  await expect(moods.getByRole('button', { name: 'Devotional' })).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(() => queue(page).then((q) => q.slice(1).filter((s) => s.id.startsWith('u')).length), { timeout: 20_000 }).toBeGreaterThanOrEqual(3);
+  await page.screenshot({ path: 'test-results/v71-tune-up-next-1280.png' });
 });
 
 test('Home greets by first name, not by a device name', async ({ page, baseURL }) => {

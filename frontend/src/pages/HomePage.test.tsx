@@ -23,7 +23,7 @@ vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), hap
 vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(),
 }));
-vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn() }));
+vi.mock('@/services/downloads', () => ({ canSaveOffline: () => false, downloadSong: vi.fn(), removeDownload: vi.fn() }));
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
 const searched: string[] = [];
 // 1.3 — the catalogue's own feeds; they miss by default (the backup source does not know them).

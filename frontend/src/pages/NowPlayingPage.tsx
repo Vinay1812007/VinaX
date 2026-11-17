@@ -9,13 +9,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
-import { getMoodPin } from '@/services/personalization/session';
-import { clearMoodPin, pinMood } from '@/features/player/moodPin';
 import { beginArtSwipe, endArtSwipe, moveArtSwipe, swipeFollow, type ArtSwipe } from '@/features/player/artSwipe';
 import { UpNextRows } from '@/features/player/UpNextRows';
 import { SleepTimerButton, SleepTimerOptions, SleepTimerSheet } from '@/features/player/SleepTimer';
 import { StageLyrics } from '@/features/lyrics/StageLyrics';
-import type { Mood } from '@/services/recommendation/mood';
 import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { Seekbar } from '@/components/Seekbar';
@@ -64,8 +61,6 @@ import { FocusSheet } from '@/features/focus/FocusSheet';
 import { useFocusStore } from '@/features/focus/focusSounds';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
-import { Chip } from '@/components/Chip';
-import type { TuneIntent } from '@/services/recommendation/tune';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -191,15 +186,6 @@ function PlayButton({ isPlaying, isBuffering, onClick, size = 'stage' }: { isPla
   );
 }
 
-/** Mood → the tune intent that rebuilds the queue for it. */
-const MOOD_PINS: Array<[Mood, string, TuneIntent]> = [
-  ['romantic', 'Romantic', 'romantic'],
-  ['energetic', 'Energetic', 'energetic'],
-  ['chill', 'Chill', 'chill'],
-  ['melancholy', 'Melancholy', 'heartbreak'],
-  ['devotional', 'Devotional', 'devotional'],
-];
-
 type PanelTab = 'queue' | 'lyrics' | 'about' | 'together';
 // 1.13 — Together sits after Credits: Listen Together used to be one line in the ⋮ menu.
 const TABS: Array<[PanelTab, string]> = [
@@ -256,9 +242,7 @@ export default function NowPlayingPage() {
   const panelRef = useRef<HTMLElement>(null);
   // The artwork's own colour for the stage wash (an "R G B" triplet).
   const [wash, setWash] = useState<string | null>(null);
-  // C5 — the manually pinned session mood (45-min override of inference).
-  const [moodPin, setMoodPin] = useState<Mood | null>(() => getMoodPin());
-  // True from a mood tap until the rebuilt list arrives (or the attempt gives up).
+  // True from a Tune tap until the rebuilt list arrives (or the attempt gives up).
   const [rebuilding, setRebuilding] = useState(false);
   const upcomingCount = usePlayerStore((st) => Math.max(0, st.queue.length - st.index - 1));
   // The rebuilt list arrived — or, after a generous wait, it is not coming (offline, empty catalogue).
@@ -532,7 +516,7 @@ export default function NowPlayingPage() {
     </>
   );
 
-  // Up next preview: the next six (Pin a mood still fits under them on a
+  // Up next preview: the next six (Tune this queue still fits under them on a
   // desktop); the whole queue is one tap away (Open queue).
   const upNext = queue.slice(index + 1, index + 7);
   // 1.15 — what the listener pressed play on (an album, a playlist, Liked songs, a search…).
@@ -895,40 +879,16 @@ export default function NowPlayingPage() {
                   <UpNextRows songs={upNext} start={index + 1} variant="stage" />
                 )}
 
-                {/* C5 / v7.1.0 — pin a mood. It used to set a flag that only nudged the NEXT automatic
-                    extension (possibly eight songs away), so tapping a chip changed nothing you could
-                    see. Now it rebuilds Up Next at once: songs are fetched FOR the mood, in this
-                    queue's language; songs you queued by hand stay where they are. */}
-                <div className="vx-np-mood" role="group" aria-label="Pin a mood">
+                {/* Round 5 — Tune this queue sits where Pin a mood used to (the pin is gone: it
+                    rebuilt Up Next with the same tune search, plus a 45-minute hold). A chip
+                    rebuilds Up Next at once with songs fetched for it, in this queue's language;
+                    songs you queued by hand stay. The tune lasts until a fresh song starts. */}
+                <div className="vx-np-tune">
                   <div className="vx-np-subhead">
-                    <h3>Pin a mood</h3>
-                    <span className="vx-np-meta">Rebuilds Up next · holds 45 min</span>
+                    <h3>Tune this queue</h3>
+                    <span className="vx-np-meta">Rebuilds Up next · until a fresh song</span>
                   </div>
-                  <div className="vx-np-chips">
-                    {MOOD_PINS.map(([m, label, intent]) => (
-                      <Chip
-                        key={m}
-                        active={moodPin === m}
-                        onClick={() => {
-                          const store = usePlayerStore.getState();
-                          if (moodPin === m) {
-                            clearMoodPin();
-                            setMoodPin(null);
-                            store.tuneQueue(null);
-                            toast('Mood unpinned — Up Next goes back to your usual mix');
-                          } else {
-                            pinMood(m);
-                            setMoodPin(m);
-                            store.tuneQueue(intent);
-                            toast(`${label} pinned — rebuilding Up Next`);
-                          }
-                          setRebuilding(true);
-                        }}
-                      >
-                        {label}
-                      </Chip>
-                    ))}
-                  </div>
+                  <TuneChips onTune={() => setRebuilding(true)} />
                 </div>
               </div>
             )}

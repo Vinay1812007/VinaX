@@ -11,10 +11,8 @@ const ROUTES: Array<[path: string, changefreq: string, priority: string]> = [
   ['/trending', 'daily', '0.9'],
   ['/most-searched', 'daily', '0.8'],
   ['/movies', 'daily', '0.8'],
-  ['/explore', 'weekly', '0.7'],
   ['/moods', 'weekly', '0.7'],
   ['/languages', 'weekly', '0.6'],
-  ['/regions', 'weekly', '0.6'],
   ['/made-for-you', 'daily', '0.8'],
   // 1.12 — the browse pages a visitor can open signed out.
   ['/new-releases', 'daily', '0.8'],

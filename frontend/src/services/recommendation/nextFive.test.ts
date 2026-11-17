@@ -6,8 +6,8 @@ import { makeContext, makeSong, warmProfile } from '@/__fixtures__/songs';
 
 /**
  * v7.1.0 — "the next five": same language as the seed, the strongest and most
- * familiar hand-off first, related songs introduced gradually — and a tune or
- * a pinned mood fetches songs FOR that intent.
+ * familiar hand-off first, related songs introduced gradually — and a tune
+ * fetches songs FOR that intent.
  */
 let pool: Candidate[] = [];
 const seenCtx: RecommendationContext[] = [];
@@ -63,11 +63,11 @@ describe('the next five', () => {
     expect(flat.songs[0].song.id.startsWith('n')).toBe(true);
   });
 
-  it('a tune or a pinned mood fetches songs FOR the intent, in the queue’s language', async () => {
+  it('a tune fetches songs FOR the intent, in the queue’s language', async () => {
     pool = Array.from({ length: 8 }, (_, i) => cand(makeSong(`te${i}`, { artist: `Artist ${i}` })));
     await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5, tune: 'devotional' });
     expect(seenCtx[0].intentQuery).toBe('telugu devotional songs');
-    await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW), moodPin: 'melancholy' }), { limit: 5 });
+    await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5, tune: 'heartbreak' });
     expect(seenCtx[1].intentQuery).toBe('telugu sad songs');
     await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5 });
     expect(seenCtx[2].intentQuery ?? null).toBeNull();

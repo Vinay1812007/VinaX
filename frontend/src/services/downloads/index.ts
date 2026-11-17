@@ -8,9 +8,14 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { orderByQuality, type AudioQualityPref } from '@/services/audio/quality';
 
 /**
- * Offline downloads (Android app only). Audio is fetched with native HTTP (no
+ * Offline downloads. In the Android app, audio is fetched with native HTTP (no
  * CORS) and saved into the app's own folder, so saved songs play from local
  * files exactly like any offline-first player.
+ *
+ * 1.16 — the web app (desktop browsers, iPhone/iPad Home Screen) saves too:
+ * ./web.ts (loaded on the first save, never at first load) fetches the audio
+ * with CORS straight into the same AUDIO_CACHE bucket the service worker
+ * serves at /offline-audio/<id>. A web save has no file on disk (no `path`).
  *
  * 8.2.0 — downloads that failed on Android, fixed at the root:
  *   1. The native downloader never creates the `vinax-downloads/` folder
@@ -42,13 +47,23 @@ import { orderByQuality, type AudioQualityPref } from '@/services/audio/quality'
  */
 const urlMap = new Map<string, string>();
 
+/** The web can save songs: a browser (not the Android app) with the Cache API. */
+export function webSaveSupported(): boolean {
+  return !isNativePlatform() && typeof caches !== 'undefined';
+}
+
+/** Song menus offer Download here (the Android app, or a browser that can save). */
+export function canSaveOffline(): boolean {
+  return isNativePlatform() || webSaveSupported();
+}
+
 /** File-bridge (convertFileSrc) URLs — the last-resort offline source. */
 const bridgeMap = new Map<string, string>();
 
 /** Same-origin cache bucket the service worker serves audio from (sw.js).
  *  Nothing may ever delete this bucket wholesale — not the SW's activate
  *  prune, not the boot recovery in index.html. */
-const AUDIO_CACHE = 'vinax-audio-v1';
+export const AUDIO_CACHE = 'vinax-audio-v1';
 
 /** Folder (inside the app's directory) that holds the saved files. */
 const FOLDER = 'vinax-downloads';
@@ -58,15 +73,17 @@ const FOLDER = 'vinax-downloads';
 const CONNECT_TIMEOUT_MS = 15_000;
 const READ_TIMEOUT_MS = 30_000;
 /** Hard cap on one attempt, in case the native side never answers at all. */
-const ATTEMPT_TIMEOUT_MS = 5 * 60_000;
+export const ATTEMPT_TIMEOUT_MS = 5 * 60_000;
 
 /** Why a download failed — picks the message the listener sees. */
-export type DownloadFailure = 'offline' | 'unavailable' | 'storage' | 'timeout' | 'unknown';
+export type DownloadFailure = 'offline' | 'unavailable' | 'blocked' | 'storage' | 'timeout' | 'unknown';
 
 const FAILURE_MESSAGES: Record<DownloadFailure, string> = {
   offline: 'No internet connection — connect and try again',
   unavailable: 'This song isn’t available to download',
-  storage: 'Couldn’t save to your phone — free up some space and try again',
+  // Web only: the audio host refuses the browser a copy (no CORS).
+  blocked: 'Not available to save',
+  storage: 'Couldn’t save on this device — free up some space and try again',
   timeout: 'The download stalled — check your connection and try again',
   unknown: 'Download failed — please try again',
 };
@@ -77,12 +94,14 @@ export function downloadFailureMessage(reason: DownloadFailure | null | undefine
 }
 
 /** Why the most recent download of this song failed (null after a success). */
-const lastFailure = new Map<string, DownloadFailure>();
+/** @internal — shared with ./web */
+export const lastFailure = new Map<string, DownloadFailure>();
 export function lastDownloadFailure(id: string): DownloadFailure | null {
   return lastFailure.get(id) ?? null;
 }
 
-class DownloadError extends Error {
+/** @internal — shared with ./web */
+export class DownloadError extends Error {
   constructor(
     readonly reason: DownloadFailure,
     message: string,
@@ -118,7 +137,7 @@ export function classifyDownloadError(e: unknown): DownloadFailure {
 }
 
 /** Definitely offline (navigator.onLine can only be trusted when false). */
-function isOffline(): boolean {
+export function isOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
@@ -157,7 +176,8 @@ export function getOfflineUrl(id: string): string | null {
 
 /** Per-song result of the Cache API copy this session: true = the
  *  /offline-audio/ entry exists, false = it could not be built. */
-const cacheState = new Map<string, boolean>();
+/** @internal — shared with ./web */
+export const cacheState = new Map<string, boolean>();
 
 /**
  * Every offline source for a song, best first: the blob: URL (no network
@@ -173,8 +193,25 @@ export function getOfflineSources(id: string): string[] {
   const out: string[] = [];
   const main = urlMap.get(id);
   if (main) out.push(main);
-  const item = isNativePlatform() ? useDownloadsStore.getState().items[id] : undefined;
-  if (item) {
+  const native = isNativePlatform();
+  const item = useDownloadsStore.getState().items[id];
+  if (item && !native) {
+    // Web save: the service worker serves it with Range support. A page the
+    // worker does not control yet (first visit, a hard reload) gets a blob:
+    // handle for its next play instead; this one streams.
+    const sw = audioUrlFor(id);
+    const controlled = typeof navigator !== 'undefined' && !!navigator.serviceWorker?.controller;
+    if (cacheState.get(id) !== false) {
+      if (controlled && !out.includes(sw)) out.push(sw);
+      else if (!main) {
+        void blobUrlFromCache(id).then((u) => {
+          if (u && !urlMap.has(id)) urlMap.set(id, u);
+        });
+      }
+    }
+    return out;
+  }
+  if (item && native) {
     if (!cacheState.has(id)) void ensureCached(id);
     const sw = audioUrlFor(id);
     if (cacheState.get(id) !== false && !out.includes(sw)) out.push(sw);
@@ -196,7 +233,7 @@ function safeId(id: string): string {
 }
 
 /** The synthetic same-origin URL a downloaded song plays from. */
-function audioUrlFor(id: string): string {
+export function audioUrlFor(id: string): string {
   return `/offline-audio/${safeId(id)}`;
 }
 
@@ -206,7 +243,7 @@ function extOf(url: string): string {
   return m ? m[1].toLowerCase() : 'mp4';
 }
 
-function mimeForPath(path: string): string {
+export function mimeForPath(path: string): string {
   const ext = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase() ?? 'mp4';
   switch (ext) {
     case 'mp3':
@@ -248,7 +285,7 @@ export function downloadUrls(song: Song, pref: AudioQualityPref = currentDownloa
 /** A saved file smaller than this cannot be a real song — it's an upstream
  *  error body (CDN "Access Denied" XML, an HTML error page) that arrived
  *  with a 200. Even a 10-second 48 kbps jingle is ~60 KB. */
-const MIN_VALID_BYTES = 10 * 1024;
+export const MIN_VALID_BYTES = 10 * 1024;
 
 /** Decode base64 into bytes in bounded slices (each a multiple of 4 chars). */
 function base64ToParts(b64: string): Uint8Array[] {
@@ -423,7 +460,14 @@ async function cacheOne(id: string): Promise<boolean> {
  *   3. heavy — ensure Cache API entries and upgrade to blob: URLs.
  */
 export async function initDownloads(): Promise<void> {
-  if (!isNativePlatform()) return;
+  if (!isNativePlatform()) {
+    // Web saves: drop any the browser has cleared (Safari evicts the storage
+    // of a site not opened for a while), so they show as not saved.
+    if (webSaveSupported() && Object.keys(useDownloadsStore.getState().items).length) {
+      await import('./web').then((m) => m.checkWebSaves()).catch(() => undefined);
+    }
+    return;
+  }
   const items = useDownloadsStore.getState().items;
   const ids = Object.keys(items);
   if (!ids.length) return;
@@ -462,15 +506,24 @@ const inFlight = new Map<string, Promise<boolean>>();
 
 export async function downloadSong(song: Song): Promise<boolean> {
   void import('@/services/analytics/telemetry').then((m) => m.trackDownload(song)).catch(() => undefined);
-  if (!isNativePlatform()) return false;
+  const native = isNativePlatform();
+  if (!native && !webSaveSupported()) return false;
   if (useDownloadsStore.getState().items[song.id]) return true;
   // A double tap, or "download all" racing a single-song tap, must not write
   // the same file twice at once — later callers share the first attempt.
   const running = inFlight.get(song.id);
   if (running) return running;
-  const job = runDownload(song).finally(() => inFlight.delete(song.id));
+  const job = (native ? runDownload(song) : saveOnWeb(song)).finally(() => inFlight.delete(song.id));
   inFlight.set(song.id, job);
   return job;
+}
+
+/** The web save code loads on the first save (it is never first-load code). */
+function saveOnWeb(song: Song): Promise<boolean> {
+  return import('./web').then(
+    (m) => m.saveWebSong(song),
+    (e: unknown) => fail(song, isOffline() ? 'offline' : 'unknown', `save code did not load: ${e instanceof Error ? e.message : String(e)}`),
+  );
 }
 
 /**
@@ -522,7 +575,7 @@ const SAVE_DIRS: DownloadDir[] = ['DATA', 'EXTERNAL'];
  * URLs — playback looks them up on play, and so must a download, or it fails
  * with "no audio variants" (most of the download reports in App Errors).
  */
-async function withStreams(song: Song): Promise<Song> {
+export async function withStreams(song: Song): Promise<Song> {
   if (downloadUrls(song).length || isOffline()) return song;
   try {
     const { getSong } = await import('@/services/api');
@@ -576,7 +629,7 @@ async function runDownload(original: Song): Promise<boolean> {
   }
 }
 
-function fail(song: Song, reason: DownloadFailure, detail: string): false {
+export function fail(song: Song, reason: DownloadFailure, detail: string): false {
   lastFailure.set(song.id, reason);
   // Surface the real device error in Technical Monitoring instead of dying silently.
   // The title is quoted so App Errors groups the same failure across songs
@@ -603,14 +656,14 @@ async function finishSave(song: Song, path: string, dirTag: DownloadDir, { Files
   void ensureCached(song.id);
 }
 
-/** Download a list of songs sequentially (native only). Already-saved tracks
+/** Download a list of songs sequentially (Android app or a browser that can save). Already-saved tracks
  *  are skipped. `reason` is why the failures failed (the first failure's);
  *  once the device is offline the rest are counted as failed without trying. */
 export async function downloadMany(
   songs: Song[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ saved: number; failed: number; reason?: DownloadFailure }> {
-  if (!isNativePlatform()) return { saved: 0, failed: 0 };
+  if (!canSaveOffline()) return { saved: 0, failed: 0 };
   let saved = 0;
   let failed = 0;
   let reason: DownloadFailure | undefined;

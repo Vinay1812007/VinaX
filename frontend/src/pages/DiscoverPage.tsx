@@ -8,7 +8,7 @@ import { MediaCard } from '@/components/MediaCard';
 import { Chip } from '@/components/Chip';
 import { ShelfSkeleton } from '@/components/Skeletons';
 import { ErrorState, InlineError } from '@/components/States';
-import { MOODS } from '@/constants/seeds';
+import { MOODS, moodSeed } from '@/constants/seeds';
 import { HUB_LANGUAGES, LANGUAGES, languageLabel } from '@/constants/languages';
 import { useAdventurousCorner, useFilmSoundtracks, useMoodSongs, useEditorialPlaylists } from '@/features/discover/useDiscover';
 import { useNewForLanguage, useTrendingForLanguage } from '@/features/home/useHomeShelves';
@@ -22,6 +22,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { BrowseTile, TileGlyph } from '@/features/discover/BrowseTile';
 import { moodTone } from '@/features/discover/tones';
 import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
+import { DecadeRadio, SurpriseAlbumButton, YearPicker } from '@/features/discover/EraPlay';
 import type { Song } from '@/types';
 import '@/styles/pages/browse.css';
 
@@ -42,6 +43,10 @@ function SongShelf({ title, songs, seeAllTo, explanation }: { title: string; son
  * covers, Languages in their scripts, Moods by their faces) and the other
  * destinations, the language hubs, then shelves tuned to one language and
  * one mood the listener picks here.
+ *
+ * Explore folded into Discover: Decade radio and Pick a year follow the
+ * picked language too, Surprise album sits in the header, and the mood picks
+ * open the full mood × language search (where Explore's mood grid went).
  */
 export default function DiscoverPage() {
   usePageTitle('Discover');
@@ -62,7 +67,7 @@ export default function DiscoverPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Discover" subtitle="Charts, moods, languages and new music, all in one place." />
+      <PageHeader title="Discover" subtitle="Charts, moods, languages and new music, all in one place." actions={<SurpriseAlbumButton />} />
       <DestinationGrid area="discover" chartSongs={trending.data} />
       <FlowEntryCard />
       <LanguageGrid />
@@ -116,13 +121,16 @@ export default function DiscoverPage() {
         ) : moodSongs.isError && !moodSongs.data?.length ? (
           <InlineError label={`${moodLabel ?? 'mood'} picks`} retry={() => void moodSongs.refetch()} />
         ) : (moodSongs.data?.length ?? 0) > 0 ? (
-          <SongShelf title={`${moodLabel} picks`} songs={moodSongs.data ?? []} />
+          <SongShelf title={`${moodLabel} picks`} songs={moodSongs.data ?? []} seeAllTo={`/search/${encodeURIComponent(moodSeed(mood, lang))}`} />
         ) : (
           <p className="vx-meta-line">
             No {moodLabel?.toLowerCase()} picks in {label} right now — try another mood or language.
           </p>
         )}
       </section>
+
+      <DecadeRadio lang={lang} />
+      <YearPicker lang={lang} />
 
       {editorial.data && editorial.data.length > 0 && (
         <Shelf title="Playlists for the vibe">

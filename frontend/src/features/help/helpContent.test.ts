@@ -87,7 +87,8 @@ describe('Help text matches the app', () => {
     const all = helpTexts().join('\n');
     // 1.15: one black-and-green look (no Black/Auto theme, accents or Dynamic theme);
     // Move to a new device (the QR handoff) gave way to account sync.
-    for (const gone of [/\bBlack\b/, /\bAuto\b/, /accent/i, /dynamic theme/i, /plum|amber/i, /move to a new device|move from old device|handoff/i]) {
+    // Round 5: Pin a mood folded into Tune this queue (no 45-minute hold, no unpin).
+    for (const gone of [/\bBlack\b/, /\bAuto\b/, /accent/i, /dynamic theme/i, /plum|amber/i, /move to a new device|move from old device|handoff/i, /pin holds|unpin|pinned a mood/i]) {
       expect(all, String(gone)).not.toMatch(gone);
     }
   });

@@ -11,7 +11,8 @@
  *     models: { "<model id>": { enabled, order } },
  *     discover: true,             // off by default; true = free models found in the providers' lists join the picker;
  *                                 // false = none, { "<provider>": false } = not that provider's
- *     dailyLimit: 25 }            // messages per person per day (UTC); missing = no limit
+ *     dailyLimit: 25,             // messages per person per day (UTC); missing = no limit
+ *     images: { enabled, perDay } } // Create image (images.ts): off unless enabled; perDay per person (default 10)
  *
  * Values are sanitised here, so a bad value can never break the chat.
  */
@@ -19,6 +20,7 @@ import { setting } from '../settings';
 import type { DbEnv } from '../db';
 import { applyOverrides, isApproved, modelById, MODELS, PAUSED_MODELS } from './models';
 import { DISCOVERY_PROVIDERS, discoveredModels, openRouterListed, type DiscoverOptions } from './discovery';
+import { sanitizeImages, type ImageSettings } from './images';
 import type { AiEnv, ModelSpec, ProviderId } from './types';
 
 export interface AiSettings {
@@ -35,6 +37,8 @@ export interface AiSettings {
   discover: boolean | Partial<Record<ProviderId, false>>;
   /** Paused models whose latest daily check passed (modelCheck.ts): in the model menu again, never in a ladder. */
   revived: string[];
+  /** Create image (images.ts): off unless the owner switches it on; a daily cap per person. */
+  images: ImageSettings;
 }
 
 /** The owner's limits for VinaX AI; each is clamped to its range, and a missing or bad value is the default. */
@@ -109,7 +113,7 @@ export function sanitizeAiSettings(raw: unknown, check: unknown = null, now = Da
   const testers = Array.isArray(v.testers) ? v.testers.filter((t): t is string => typeof t === 'string' && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === 'object' && !Array.isArray(v.models) ? (v.models as Record<string, unknown>) : {};
   const lim = typeof v.dailyLimit === 'number' && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(10_000, Math.floor(v.dailyLimit)) : null;
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now) };
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now), images: sanitizeImages(v.images) };
 }
 
 const DISCOVER_KEYS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];

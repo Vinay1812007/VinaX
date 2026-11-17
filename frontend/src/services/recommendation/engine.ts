@@ -14,7 +14,6 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { kidModeOn } from '@/services/kidMode';
 import type { ArcShape } from './sequencer';
 import { tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
-import type { Mood } from './mood';
 import { activeWeightsVersion, STYLE_MIN_SHARE } from './weights';
 import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, styleWhy, type StylePlay } from './style';
 import { isSkippedPlay } from '@/utils/plays';
@@ -137,13 +136,6 @@ export async function buildRecommendations(rawCtx: RecommendationContext): Promi
 
 export function invalidateRecommendationCache(): void {
   memo = null;
-}
-
-/** The catalogue query for a pinned mood (same table the tune intents use). */
-function moodPinQuery(mood: Mood, language: string | null): string | null {
-  const asIntent: Partial<Record<Mood, TuneIntent>> = { romantic: 'romantic', energetic: 'energetic', chill: 'chill', melancholy: 'heartbreak', devotional: 'devotional' };
-  const intent = asIntent[mood];
-  return intent ? tuneSearchQuery(intent, language) : null;
 }
 
 /** Share of a queue that may go to artists the listener has never played, per discovery mode. */
@@ -306,8 +298,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // Opt-in per context: a caller that says nothing (tests, the offline evaluation) keeps the 7.1 rule.
   const mix = ctx.queueLanguages === 'mix' && listenerLanguages.filter((l) => l !== seedLanguage).length > 0;
   const allowedLanguages = mix ? new Set<string>([...(seedLanguage ? [seedLanguage] : []), ...listenerLanguages]) : undefined;
-  // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
-  const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
+  // v7.1.0 — an active tune gathers its own candidates, in the queue's language.
+  const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : null;
   // 8.3.0 — the style the listener is in (DJ remixes, folk, devotional): from
   // the tune, the seed, and the plays behind it (./style.ts). It brings its own
   // candidates, lifts songs in it, and holds most of the stretch to it.
@@ -322,7 +314,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     edge = e.ts;
   }
   const heard = ctx.history.slice(0, 12).filter((e) => e?.song && !skippedNow(e)).slice(0, 6).map((e) => e.song);
-  const activeStyle = sessionStyle({ seed, recent: heard, sitting, previous, tune, moodPin: ctx.moodPin });
+  const activeStyle = sessionStyle({ seed, recent: heard, sitting, previous, tune });
   const style = activeStyle?.style ?? null;
   const isStyled = (s: Song): boolean => !!style && matchesStyle(s, style);
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).

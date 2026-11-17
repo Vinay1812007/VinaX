@@ -207,6 +207,11 @@ export async function updateRoom(
   }
 }
 
+/** v23 — the host token this device holds for `code`, for "Let people I follow join my room" (api/profile checks it). */
+export function hostTokenFor(code: string): string | null {
+  return getHostToken(code);
+}
+
 /** True when this device holds the host token for `code` (survives a reload). */
 export function isHostOf(code: string): boolean {
   return !!getHostToken(code);

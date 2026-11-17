@@ -8,12 +8,16 @@
  * With a session, `following` says whether the caller follows this profile.
  * The account id never leaves; `name` and `picture` come from the account
  * only when the profile is public.
+ *
+ * v23 — `jamCode`, the room to join, only when the caller and the profile
+ * follow each other, the owner lets people they follow join, and the room
+ * is live (social.ts jamFor).
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, accountOf, json } from '../../_lib/authShared';
 import { rateLimit } from '../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../_lib/db';
-import { isFollowing, normalizeHandle, profileByHandle, publicProfile, type SocialEnv } from '../../_lib/social';
+import { isFollowing, jamFor, liveRoomCodes, normalizeHandle, profileByHandle, publicProfile, type SocialEnv } from '../../_lib/social';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
@@ -31,11 +35,16 @@ export const onRequestGet = async (ctx: { request: Request; env: SocialEnv; para
   const self = viewer === p.account_id;
   let following: boolean | undefined;
   if (viewer && !self) following = (await isFollowing(ctx.env, viewer, p.account_id)) ?? false;
-  if (!p.public && !self) {
-    // Private: visible to people they follow who follow them back.
-    const back = viewer ? await isFollowing(ctx.env, p.account_id, viewer) : false;
-    if (!back || !following) return json({ error: 'not_found' }, 404);
-  }
-  const [acc, followers] = await Promise.all([accountOf(ctx.env, p.account_id), db.count(ctx.env, 'follows', q().eq('followee_id', p.account_id))]);
-  return json({ profile: publicProfile(p, { following, followers: followers.ok ? followers.value : 0, name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null }) });
+  // Does the profile follow the caller back? Asked only when it matters.
+  let back = false;
+  if (viewer && !self && following && (!p.public || (p.share_jam === true && !!p.jam_code))) back = (await isFollowing(ctx.env, p.account_id, viewer)) ?? false;
+  // Private: visible to people they follow who follow them back.
+  if (!p.public && !self && (!back || !following)) return json({ error: 'not_found' }, 404);
+  const mutual = !!following && back;
+  const [acc, followers, live] = await Promise.all([
+    accountOf(ctx.env, p.account_id),
+    db.count(ctx.env, 'follows', q().eq('followee_id', p.account_id)),
+    mutual && p.share_jam === true ? liveRoomCodes(ctx.env, [p.jam_code]) : Promise.resolve(new Set<string>()),
+  ]);
+  return json({ profile: publicProfile(p, { following, followers: followers.ok ? followers.value : 0, name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null, jamCode: jamFor(p, mutual, live) }) });
 };

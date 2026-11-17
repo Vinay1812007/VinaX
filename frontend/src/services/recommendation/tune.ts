@@ -84,9 +84,9 @@ export function tuneShape(intent: TuneIntent): ArcShape | null {
  * on title cues and otherwise stay neutral.
  */
 /**
- * v7.1.0 — the catalogue search that FETCHES songs for an intent. A tune (or a
- * pinned mood) used to re-score whatever the seed's pool happened to contain;
- * a romantic seed's pool holds almost nothing devotional, so the rebuilt list
+ * v7.1.0 — the catalogue search that FETCHES songs for an intent. A tune
+ * used to re-score whatever the seed's pool happened to contain; a romantic
+ * seed's pool holds almost nothing devotional, so the rebuilt list
  * barely changed. Now every intent also brings its own candidates, in the
  * queue's language. null = the intent needs no pool of its own.
  */
@@ -96,8 +96,8 @@ export function tuneSearchQuery(intent: TuneIntent, language: string | null): st
   // "dance songs", "melody songs", "sad songs", "evergreen hits" each return
   // 20 of 20 songs in that language, while the previous longer phrases
   // ("romantic love songs", "high energy dance hits", "chill soothing
-  // melodies", "sad heartbreak songs") returned NOTHING, so Pin a mood and
-  // four of the Tune chips rebuilt the queue from an empty pool.
+  // melodies", "sad heartbreak songs") returned NOTHING, so the old mood
+  // pins and four of the Tune chips rebuilt the queue from an empty pool.
   const lang = language && language !== 'unknown' ? `${language} ` : '';
   switch (intent) {
     case 'energetic': return `${lang}dance songs`;

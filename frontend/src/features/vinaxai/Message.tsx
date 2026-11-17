@@ -9,11 +9,11 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Markdown } from './Markdown';
 import { copyText } from './CodeBlock';
-import { siblingsOf } from './chatState';
-import { selectBranch, useChatStore, type ModelChoice } from './store';
+import { isImageReply, siblingsOf } from './chatState';
+import { IMAGE_REQUEST_PREFIX, selectBranch, useChatStore, type ModelChoice } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
 import { ProgressLine, SearchStatusLine, SourcesRow } from './Sources';
-import { MessageFiles } from './FileChips';
+import { MadeImages, MakingImage, MessageFiles } from './FileChips';
 import { ArtifactCard } from './ArtifactPanel';
 import { parseArtifacts, runsInSandbox, type Artifact, mayHaveArtifacts } from './artifacts';
 import { InlinePreview } from './InlinePreview';
@@ -292,7 +292,14 @@ export function RouteInfo({ message }: { message: ChatMessage }): ReactNode {
 
 export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, onFixArtifact, canReadAloud, onAnswer }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
-  const waiting = live && !text && !message.thinking && !error && !message.status && !message.progress;
+  // Create image: the picture, not prose; Retry and Read aloud would treat it as a chat reply.
+  const picture = isImageReply(message);
+  const prompt = useChatStore((s) => {
+    const q = picture && message.parentId ? s.messages[message.parentId] : undefined;
+    const t = q?.text ?? '';
+    return t.startsWith(IMAGE_REQUEST_PREFIX) ? t.slice(IMAGE_REQUEST_PREFIX.length) : t;
+  });
+  const waiting = live && !picture && !text && !message.thinking && !error && !message.status && !message.progress;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
   const actions = useMemo(() => ({ live, answer: onAnswer }), [live, onAnswer]);
@@ -303,6 +310,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
       {live && !text && !message.thinking && !message.status && message.progress && <ProgressLine progress={message.progress} />}
       <ThinkingFold message={message} live={live} waiting={waiting} />
+      {picture && live && message.imaging && <MakingImage />}
       {waiting && <span className="sr-only" role="status">VinaX AI is thinking</span>}
       {text && (mayHaveArtifacts(text)
         ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
@@ -314,6 +322,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
             </div>
           )))
         : <Markdown text={text} sources={message.sources?.items} />)}
+      {picture && message.files?.length ? <MadeImages files={message.files} prompt={prompt} /> : null}
       {live && text && <span className="vx-ai-cursor" aria-hidden />}
       {!live && message.sources && <SourcesRow sources={message.sources} />}
       {!live && stopReason === 'length' && !error && <p className="vx-ai-note">The reply was cut short.</p>}
@@ -348,13 +357,13 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
       {!live && (text || model) && (
         <div className="vx-ai-actions">
           <BranchSwitcher message={message} />
-          {text && (
+          {text && !picture && (
             <button type="button" className="vx-ai-act" onClick={() => void copyText(text)} aria-label="Copy reply" title="Copy">
               <CopyIcon className="w-4 h-4" />
             </button>
           )}
-          {canReadAloud && text && <ReadAloudButton id={message.id} text={text} />}
-          {onRetry && !error && <RetryMenu models={models} onRetry={onRetry} />}
+          {canReadAloud && text && !picture && <ReadAloudButton id={message.id} text={text} />}
+          {onRetry && !error && !picture && <RetryMenu models={models} onRetry={onRetry} />}
           {cutOff && !error && onContinue && (
             <button type="button" className="vx-ai-chip vx-ai-continue" onClick={onContinue}>
               <ContinueIcon className="w-4 h-4" /> Continue

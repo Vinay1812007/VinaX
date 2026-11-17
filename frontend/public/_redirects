@@ -34,8 +34,17 @@ https://vinaxmusic.online/* https://www.vinaxmusic.online/:splat 301
 /ai-playlist/*  /  301
 /ai/shared/*  /  301
 # The Festivals page is retired with the festival themes; old links and the
-# copy search engines hold land on Explore.
-/festivals  /explore  301
+# copy search engines hold land on Discover (Explore, where they went first,
+# folded into Discover).
+/festivals  /discover/  301
+# Explore folded into Discover and Regions into Languages. Both were
+# prerendered with their own canonical and listed in the sitemap, so the
+# static host answers a 301 to the trailing-slash page search engines index;
+# the app's router redirects too (installed apps, in-app links).
+/explore    /discover/   301
+/explore/*  /discover/   301
+/regions    /languages/  301
+/regions/*  /languages/  301
 
 # Status page — status.vinaxmusic.online serves the standalone status page
 # (public/status/, plain static files, no sign-in) at its own root. This is

@@ -28,7 +28,7 @@ import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
 import { usePrefs } from './prefs';
 import { SideRail, Sidebar } from './Sidebar';
-import { continueReply, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
+import { continueReply, createImage, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
@@ -220,7 +220,21 @@ export function ChatView(): ReactNode {
   const pickedModel = prefs.model === 'auto' ? null : pickerModels.find((m) => m.id === prefs.model) ?? null;
   const cannotSee = tray.hasImages && !!pickedModel && !pickedModel.flags.vision;
   const visionModel = pickerModels.find((m) => m.flags.vision && m.available);
+  // Create image (the + menu), when the owner has it on: the next Send makes a picture.
+  const imagesInfo = models.data?.images?.enabled ? models.data.images : null;
+  const [imageMode, setImageMode] = useState(false);
+  useEffect(() => { if (!imagesInfo) setImageMode(false); }, [imagesInfo]);
+  const makeImage = async () => {
+    const text = draft;
+    setDraft('');
+    haptic('light');
+    stick.current = true;
+    const out = await createImage(text, { perDay: imagesInfo?.perDay, ...(view === 'project' && projectPage ? { projectId: projectPage } : {}) });
+    if (out.ok) setImageMode(false);
+    else if (out.beforeStart) setDraft((d) => d || text);
+  };
   const send = async () => {
+    if (imageMode && imagesInfo) return makeImage();
     const text = draft;
     const files = tray.take();
     setDraft('');
@@ -335,6 +349,7 @@ export function ChatView(): ReactNode {
     resetChat();
     tray.clear();
     setDraft('');
+    setImageMode(false);
     setDrawer(false);
     navigate('/vinaxai');
     composer.current?.focus();
@@ -362,6 +377,7 @@ export function ChatView(): ReactNode {
       dictation={voice?.dictation ? dictation : undefined}
       onLive={voice?.live && view === 'chat' ? openLive : undefined}
       onSettings={() => setSettings(voice && (voice.dictation || voice.readAloud || voice.live) ? 'voice' : 'chat')}
+      image={imagesInfo ? { on: imageMode, maxPrompt: imagesInfo.maxPrompt, onChange: (on) => { setImageMode(on); requestAnimationFrame(() => composer.current?.focus()); } } : undefined}
     />
   );
   const visionChip = cannotSee && (

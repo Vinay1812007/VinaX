@@ -10,7 +10,7 @@
  * still need the account.
  *
  * 13.9 — browse first, sign in to listen. A visitor may open the live app on
- * every browse page (Explore, Discover, Charts, Search, songs, albums,
+ * every browse page (Discover, Charts, Search, songs, albums,
  * artists, videos and the language and mood hubs); tapping play, like or
  * save asks them to sign in right there (services/auth/gate, SignInPrompt).
  * The personal pages (Library, Settings…) send the visitor to /login?next=…
@@ -46,7 +46,8 @@ export const PUBLIC_PATHS = new Set(['/privacy', '/terms', '/contact', '/about',
  *  server's text (13.5.0). */
 const LIVE_PUBLIC_PATHS = new Set(['/help', '/download']);
 
-/** 13.9 — pages a visitor may browse signed out; playing and saving ask them to sign in. */
+/** 13.9 — pages a visitor may browse signed out; playing and saving ask them to sign in.
+ *  /explore and /regions are old addresses that redirect to Discover and Languages. */
 const BROWSE_PATHS = new Set(['/explore', '/discover', '/charts', '/top-songs', '/trending', '/most-searched', '/search', '/languages', '/moods', '/movies', '/regions', '/videos', '/podcasts', '/new-releases', '/top-artists', '/top-playlists']);
 // 15.0 — shared playlist pages (/p/<id>) and profiles (/u/<handle>) open from a link signed out;
 // so do shared VinaX AI chats (/vinaxai/share/<id>).

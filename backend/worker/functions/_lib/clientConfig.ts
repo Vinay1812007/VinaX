@@ -277,7 +277,9 @@ export interface Banner {
 
 /** Console rebuild — what a banner can open. `charts` needs no id; `page` takes one of these app pages. */
 export const BANNER_LINK_TYPES = ['song', 'album', 'playlist', 'artist', 'charts', 'page'] as const;
-export const BANNER_PAGES = ['/charts', '/discover', '/explore', '/radio', '/mixes', '/made-for-you', '/weekly', '/vinaxai', '/library', '/search'] as const;
+export const BANNER_PAGES = ['/charts', '/discover', '/radio', '/mixes', '/made-for-you', '/weekly', '/vinaxai', '/library', '/search'] as const;
+/** Pages that were retired after banners could name them: a saved banner opens the page that took over. */
+const BANNER_PAGE_MOVED: Record<string, string> = { '/explore': '/discover' };
 
 /** Banners live today (inside their optional start/end dates), at most 10, fields clipped. */
 export function activeBanners(value: unknown, now = new Date()): Banner[] {
@@ -295,7 +297,8 @@ export function activeBanners(value: unknown, now = new Date()): Banner[] {
     const id = str(b.id, 40); if (id) banner.id = id;
     const subtitle = str(b.subtitle, 160); if (subtitle) banner.subtitle = subtitle;
     const linkType = str(b.linkType, 16);
-    const linkId = str(b.linkId, 80);
+    const rawLinkId = str(b.linkId, 80);
+    const linkId = linkType === 'page' ? BANNER_PAGE_MOVED[rawLinkId] ?? rawLinkId : rawLinkId;
     if (linkType === 'charts') banner.linkType = 'charts';
     else if (linkType === 'page') { if ((BANNER_PAGES as readonly string[]).includes(linkId)) { banner.linkType = 'page'; banner.linkId = linkId; } }
     else if (['song', 'album', 'playlist', 'artist'].includes(linkType)) { banner.linkType = linkType; if (linkId) banner.linkId = linkId; }

@@ -28,6 +28,11 @@ export interface PublicProfile {
   followers?: number;
   /** Only on the owner's own profile. */
   shareNow?: boolean;
+  /** v23 — only on the owner's own profile: "Let people I follow join my room". */
+  shareJam?: boolean;
+  /** v23 — the room this friend hosts, to join at /together?code=. The server
+   *  sends it only to a mutual follower, and only while the room is live. */
+  jamCode?: string;
 }
 
 /** What the server keeps of a song: enough to show and to look up again. */
@@ -72,7 +77,16 @@ function profileOrNull(raw: unknown): PublicProfile | null {
     badges: Array.isArray(p.badges) ? p.badges.filter((b): b is string => typeof b === 'string') : [],
     nowPlaying: p.nowPlaying && typeof p.nowPlaying.id === 'string' ? p.nowPlaying : null,
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date(0).toISOString(),
+    jamCode: typeof p.jamCode === 'string' && JAM_CODE.test(p.jamCode) ? p.jamCode : undefined,
   };
+}
+
+/** A room code as the server hands it out (rooms.code). */
+const JAM_CODE = /^[A-Z0-9]{4,8}$/;
+
+/** v23 — where a friend's Join goes: the Listen Together page with their room's code. */
+export function jamPath(code: string): string {
+  return `/together?code=${encodeURIComponent(code)}`;
 }
 
 function isPlaylist(raw: unknown): raw is SharedPlaylist {
@@ -106,7 +120,7 @@ export function liteSong(s: Song): LiteSong {
 }
 
 // ---------------------------------------------------------------- profile
-export interface ProfileWrite { handle?: string; public?: boolean; bio?: string | null; summary?: { topArtists: Array<{ name: string; plays: number }>; topLanguages: Array<{ id: string; pct: number }>; recentLikes: LiteSong[]; badges?: string[] }; nowPlaying?: LiteSong | null; shareNow?: boolean }
+export interface ProfileWrite { handle?: string; public?: boolean; bio?: string | null; summary?: { topArtists: Array<{ name: string; plays: number }>; topLanguages: Array<{ id: string; pct: number }>; recentLikes: LiteSong[]; badges?: string[] }; nowPlaying?: LiteSong | null; shareNow?: boolean; shareJam?: boolean; jam?: { code: string; hostToken: string } | null }
 
 export const getMyProfile = () => call<{ profile?: PublicProfile } | null>('/profile', { auth: true }).then((r) => profileOrNull(r?.profile));
 export const putMyProfile = (patch: ProfileWrite) => call<{ profile?: PublicProfile }>('/profile', { method: 'PUT', body: JSON.stringify(patch), auth: true }).then((r) => profileOrNull(r?.profile));

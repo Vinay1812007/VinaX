@@ -190,10 +190,12 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
       if (direct) {
         const url = direct.replace(/_(?:12|48|96|160|320)(\.\w+)$/, `_${rate}$1`);
         // Deterministic mapping (no expiring token), so the redirect is
-        // cacheable at the edge.
+        // cacheable at the edge. 1.16 — ACAO lets a web save (a CORS fetch,
+        // services/downloads/web.ts) follow it from any VinaX host; the CDN
+        // itself answers `*`. Still no audio bytes through the Worker.
         return new Response(null, {
           status: 302,
-          headers: { location: url, 'cache-control': 'public, max-age=86400' },
+          headers: { location: url, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*' },
         });
       }
       // Fallback for inputs the decryptor can't parse: upstream auth token.
@@ -205,7 +207,7 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
       // CDN's signed URL. Emit the Location header byte-for-byte.
       return new Response(null, {
         status: 302,
-        headers: { location: auth.replace(/^http:/, 'https:'), 'cache-control': 'no-store' },
+        headers: { location: auth.replace(/^http:/, 'https:'), 'cache-control': 'no-store', 'access-control-allow-origin': '*' },
       });
     }
 

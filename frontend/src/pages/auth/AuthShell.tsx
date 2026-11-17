@@ -66,7 +66,7 @@ export function AuthShell({ title, lede, next, google = false, children, switche
           <p>
             Free, with nothing to pay. By continuing you agree to the <Link to="/terms">Terms</Link> and the <Link to="/privacy">Privacy policy</Link>.
           </p>
-          <Link to="/explore" className="vx-auth-explore" onClick={rememberGuestBrowse}>
+          <Link to="/discover" className="vx-auth-explore" onClick={rememberGuestBrowse}>
             Explore VinaX first <span aria-hidden>→</span>
           </Link>
           <nav className="vx-auth-links" aria-label="About VinaX">

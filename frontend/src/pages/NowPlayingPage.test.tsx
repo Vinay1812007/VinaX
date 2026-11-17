@@ -2,8 +2,9 @@
 /**
  * 9.0 "Encore" — the full-screen player's contracts: toggles say their state
  * (aria-pressed, the repeat-one marker), the panel tabs are a real tablist
- * driven by arrow keys, Up next says who queued each song in words, the
- * sleep timer's button names how long is left, lyrics have an empty state,
+ * driven by arrow keys, Up next says who queued each song in words and
+ * carries the Tune this queue chips, the sleep timer's button names how long
+ * is left, lyrics have an empty state,
  * and the two "More options" buttons keep their order (the song menu first,
  * the playback options last — tutorials and e2e specs rely on it).
  */
@@ -121,7 +122,25 @@ describe('NowPlayingPage', { timeout: 20_000 }, () => {
     // The listener's own list carries no marker.
     expect(within(rowFor('Alpha')).queryByText('VinaX pick')).toBeNull();
     expect(within(rowFor('Alpha')).queryByText('Added by you')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Pin a mood' })).toBeTruthy();
+  });
+
+  it('Up next carries Tune this queue (Pin a mood is gone), and a tap tunes the queue', () => {
+    const real = usePlayerStore.getState().tuneQueue;
+    const tuneQueue = vi.fn(async () => undefined);
+    usePlayerStore.setState({ tuneQueue });
+    try {
+      mount();
+      const panel = screen.getByRole('tabpanel', { name: 'Up next' });
+      expect(within(panel).queryByRole('group', { name: 'Pin a mood' })).toBeNull();
+      const tune = within(panel).getByRole('group', { name: 'Tune this queue' });
+      for (const label of ['More romantic', 'More chill', 'Devotional', 'Heartbreak', 'More energetic']) {
+        expect(within(tune).getByRole('button', { name: `Tune queue: ${label}` })).toBeTruthy();
+      }
+      fireEvent.click(within(tune).getByRole('button', { name: 'Tune queue: Devotional' }));
+      expect(tuneQueue).toHaveBeenCalledWith('devotional');
+    } finally {
+      usePlayerStore.setState({ tuneQueue: real });
+    }
   });
 
   it('the sleep timer button names how long is left, and opens its own sheet', () => {

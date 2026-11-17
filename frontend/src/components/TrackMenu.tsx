@@ -11,11 +11,10 @@ import { shareLink } from '@/utils/share';
 import { shareSongCard, shareSongStoryCard } from '@/utils/songCard';
 import { toast } from '@/store/toastStore';
 import { songsLikeThis } from '@/services/recs/similar';
-import { isNativePlatform } from '@/services/native';
 import { sendFeedback } from '@/services/feedback';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
-import { downloadFailureMessage, downloadSong, lastDownloadFailure, removeDownload } from '@/services/downloads';
+import { canSaveOffline, downloadFailureMessage, downloadSong, lastDownloadFailure, removeDownload } from '@/services/downloads';
 import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
 import { SNOOZE_DAYS, snoozeSong } from '@/services/recommendation/exposure';
 import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
@@ -457,7 +456,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     { label: 'Song details', icon: 'details', action: () => navigate(songPath(song)) },
     // v5.17.0 — your own history with this song, from on-device data.
     { label: 'Your history with this song', icon: 'history', action: onShowMemories },
-    isNativePlatform()
+    // 1.16 — the web app saves too (the save code loads on the first tap).
+    canSaveOffline()
       ? {
           label: downloading ? 'Downloading…' : downloaded ? 'Remove download' : 'Download',
           icon: 'download' as const,

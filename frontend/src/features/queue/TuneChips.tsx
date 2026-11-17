@@ -5,20 +5,24 @@ import { cn } from '@/utils/cn';
 
 /**
  * v6.5.0 — "Tune this queue": one tap reshapes what plays next. The chips
- * ride the Queue page and the Now Playing extras; the intent stays active
+ * ride the Queue page, Now Playing's Up next tab and its Player tools; the intent stays active
  * until the next fresh play.
  *
  * 7.2 — the chips follow the medium control scale: 36px to look at, 44px to
  * hit (the invisible pad, as on `Chip`), and the hairline is a token so it
  * survives the light theme.
+ *
+ * `onTune` lets the host react to a tap (Now Playing shows "Finding what
+ * follows this song…" until the rebuilt list lands).
  */
-export function TuneChips({ className, compact = false }: { className?: string; compact?: boolean }) {
+export function TuneChips({ className, compact = false, onTune }: { className?: string; compact?: boolean; onTune?: (intent: TuneIntent) => void }) {
   const tuneQueue = usePlayerStore((s) => s.tuneQueue);
   const active = usePlayerStore((s) => s.tuneIntent);
   const hasSong = usePlayerStore((s) => s.queue.length > 0);
   if (!hasSong) return null;
   const tune = (intent: TuneIntent, label: string): void => {
     tuneQueue(intent);
+    onTune?.(intent);
     toast(intent === 'surprise' ? 'Surprise coming up ✦' : `${label} — retuning what's next. Songs you added stay.`);
   };
   return (

@@ -8,6 +8,7 @@ import { HUB_LANGUAGES } from '@/constants/languages';
 import { MOOD_HUBS } from '@/constants/hubs';
 import { isNativePlatform } from '@/services/native';
 import { useDownloadsStore } from '@/store/downloadsStore';
+import { standaloneWeb } from '@/utils/platform';
 
 /**
  * v5.5.2 — native offline boot: opening the Android app with no internet used
@@ -16,10 +17,12 @@ import { useDownloadsStore } from '@/store/downloadsStore';
  * one place the app is fully useful offline. Runs before the router is
  * created so the first render already IS the Downloads page (no flash, no
  * history entry back to a dead Home).
+ * 1.16 — the same for the web app opened from the Home Screen, which saves
+ * songs too.
  */
 function offlineBootRedirect(): void {
   try {
-    if (!isNativePlatform()) return;
+    if (!isNativePlatform() && !standaloneWeb()) return;
     if (navigator.onLine) return;
     if (window.location.pathname !== '/') return;
     const hasDownloads = Object.keys(useDownloadsStore.getState().items).length > 0;
@@ -77,10 +80,8 @@ const NowPlayingPage = lazy(() => import('@/pages/NowPlayingPage'));
 const LanguagesPage = lazy(() => import('@/pages/LanguagesPage'));
 const LanguageHubPage = lazy(() => import('@/pages/LanguageHubPage'));
 const MoodHubPage = lazy(() => import('@/pages/MoodHubPage'));
-const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 const MoviesPage = lazy(() => import('@/pages/MoviesPage'));
 const MoodsPage = lazy(() => import('@/pages/MoodsPage'));
-const RegionsPage = lazy(() => import('@/pages/RegionsPage'));
 const TasteProfilePage = lazy(() => import('@/pages/TasteProfilePage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const CacheInfoPage = lazy(() => import('@/pages/CacheInfoPage'));
@@ -187,20 +188,22 @@ export const router = createBrowserRouter([
       { path: 'flow', element: <FlowPage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
-      // The Festivals page is retired; old links land on Explore.
-      { path: 'festivals', element: <Navigate to="/explore" replace /> },
+      // The Festivals page is retired; old links land on Discover.
+      { path: 'festivals', element: <Navigate to="/discover" replace /> },
       ...HUB_LANGUAGES.map((l) => ({ path: `${l}-songs`, element: <LanguageHubPage language={l} /> })),
       // Mood x language landing pages (SEO category layer) — 72 routes.
       ...HUB_LANGUAGES.flatMap((l) =>
         MOOD_HUBS.map((m) => ({ path: `${l}-${m.slug}-songs`, element: <MoodHubPage language={l} mood={m} /> })),
       ),
-      { path: 'explore', element: <ExplorePage /> },
+      // Explore folded into Discover and Regions into Languages; old links,
+      // shared URLs and installed apps land there (frontend/public/_redirects 301s them too).
+      { path: 'explore', element: <Navigate to="/discover" replace /> },
       { path: 'movies', element: <MoviesPage /> },
       { path: 'moods', element: <MoodsPage /> },
       { path: 'browse/:id', element: <BrowseCategoryPage /> },
       { path: 'podcasts', element: <PodcastsPage /> },
       { path: 'podcast/:id', element: <PodcastPage /> },
-      { path: 'regions', element: <RegionsPage /> },
+      { path: 'regions', element: <Navigate to="/languages" replace /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
       { path: 'videos', element: <VideosPage /> },
       { path: 'video/:id', element: <VideoPage /> },
