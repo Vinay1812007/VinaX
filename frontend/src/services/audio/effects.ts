@@ -1,8 +1,9 @@
 /**
  * v5.19.0 — Web Audio effects chain (lazy module; never on the first-load path).
  *
- *   MediaElementSource → 5-band EQ (60 / 250 / 1k / 4k / 12k) → mono mix →
- *   StereoPanner (balance) → DynamicsCompressor (loudness) → Analyser → out
+ *   MediaElementSource → vocals (karaoke) → 5-band EQ (60 / 250 / 1k / 4k /
+ *   12k) → mono mix → StereoPanner (balance) → DynamicsCompressor (loudness)
+ *   → Analyser → out
  *
  * One AudioContext per page, one source node per element (the Web Audio API
  * binds an element to its context permanently — the engine swaps in a fresh
@@ -13,6 +14,12 @@
  * Mono sits BEFORE the panner on purpose: a listener with hearing in one ear
  * turns on mono and then steers the whole mix to that side with balance —
  * panning first and mixing after would throw the balance away.
+ *
+ * Vocals sits first, while the song is still the stereo the file holds: it
+ * works by cancelling what is identical in both channels, so nothing that
+ * mixes the channels may run before it. Karaoke is its only user, and it is
+ * not one of the listener's sound effects (it runs even when the chain is
+ * flat for disco lights).
  *
  * Tainted sources: a cross-origin file loaded without CORS reaches the graph
  * as digital silence. The probe watches the analyser while the element is
@@ -105,9 +112,142 @@ export function rmsOf(buf: Float32Array): number {
   return Math.sqrt(sum / Math.max(1, buf.length));
 }
 
+// ── Karaoke vocals ────────────────────────────────────────────────────────
+// A lead voice is usually mixed dead centre: the same signal in left and
+// right. (L − R) cancels it, along with everything else in the centre — so
+// bass and kick, also centred, come back from a low-passed mono copy of the
+// original. A mono song is centre only and goes almost silent with vocals off.
+// Off plays the side signal alike in both speakers (a phone's mono speaker
+// would cancel an anti-phase pair); Low blends the dry song with the side
+// signal in anti-phase, since a same-sign blend would tilt the mix to the left.
+// On a mono speaker, Low therefore only lowers the whole song.
+
+export type VocalMode = 'full' | 'low' | 'off';
+
+export const VOCAL_MODES: ReadonlyArray<{ id: VocalMode; label: string }> = [
+  { id: 'full', label: 'Full' },
+  { id: 'low', label: 'Low' },
+  { id: 'off', label: 'Off' },
+];
+
+/** Cut-off (Hz) of the low-passed copy that keeps bass and kick with the voice taken out. */
+export const VOCAL_BASS_HZ = 180;
+/** Gain on each leg of (L − R): 0.7 sits ~3 dB above the plain (L − R) / 2 side signal, since taking the centre out leaves the song quieter. */
+export const VOCAL_SIDE_GAIN = 0.7;
+/** Gain glide time constant (s) for a mode change, so switching never clicks. */
+const VOCAL_GLIDE_S = 0.05;
+
+export interface VocalMix {
+  /** The untouched song. */
+  dry: number;
+  /** The (L − R) side signal, where a centred voice cancels, into the left output… */
+  sideL: number;
+  /** …and into the right. Off sends it to both alike (it survives a phone's mono
+   *  speaker); Low sends it in anti-phase (R − L on the right) so the blend with
+   *  the dry song stays balanced instead of leaning left. */
+  sideR: number;
+  /** The low-passed mono copy that keeps bass and kick. */
+  bass: number;
+}
+
+/** How much of each path a mode mixes. Full is the song as it is; Low leaves the voice about 9 dB down; Off cancels it. */
+export function vocalMix(mode: VocalMode): VocalMix {
+  if (mode === 'off') return { dry: 0, sideL: 1, sideR: 1, bass: 1 };
+  if (mode === 'low') return { dry: 0.35, sideL: 0.65, sideR: -0.65, bass: 0.65 };
+  return { dry: 1, sideL: 0, sideR: 0, bass: 0 };
+}
+
+function isVocalMode(v: unknown): v is VocalMode {
+  return v === 'full' || v === 'low' || v === 'off';
+}
+
+interface VocalNodes {
+  /** Entry: forces two channels, so a mono source arrives as L = R. */
+  input: GainNode;
+  dry: GainNode;
+  splitter: ChannelSplitterNode;
+  /** +left and −right legs (fixed at ±VOCAL_SIDE_GAIN), summed in `side`. */
+  left: GainNode;
+  right: GainNode;
+  /** One channel: the (L − R) side signal. */
+  side: GainNode;
+  /** How much side goes to each output channel (the mode sets these). */
+  toLeft: GainNode;
+  toRight: GainNode;
+  merger: ChannelMergerNode;
+  /** One channel: down-mixes L + R, then keeps only the low end. */
+  low: BiquadFilterNode;
+  bass: GainNode;
+  output: GainNode;
+}
+
+function buildVocals(c: AudioContext): VocalNodes {
+  const channels = (n: AudioNode, count: number) => {
+    n.channelCountMode = 'explicit';
+    n.channelInterpretation = 'speakers';
+    n.channelCount = count;
+  };
+  const input = c.createGain();
+  channels(input, 2);
+  const dry = c.createGain();
+  const splitter = c.createChannelSplitter(2);
+  const left = c.createGain();
+  left.gain.value = VOCAL_SIDE_GAIN;
+  const right = c.createGain();
+  right.gain.value = -VOCAL_SIDE_GAIN;
+  const side = c.createGain();
+  channels(side, 1);
+  const toLeft = c.createGain();
+  const toRight = c.createGain();
+  const merger = c.createChannelMerger(2);
+  const low = c.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = VOCAL_BASS_HZ;
+  low.Q.value = Math.SQRT1_2;
+  channels(low, 1);
+  const bass = c.createGain();
+  const output = c.createGain();
+  channels(output, 2);
+
+  input.connect(dry);
+  dry.connect(output);
+  input.connect(splitter);
+  splitter.connect(left, 0);
+  splitter.connect(right, 1);
+  left.connect(side);
+  right.connect(side);
+  side.connect(toLeft);
+  side.connect(toRight);
+  toLeft.connect(merger, 0, 0);
+  toRight.connect(merger, 0, 1);
+  merger.connect(output);
+  input.connect(low);
+  low.connect(bass);
+  bass.connect(output);
+  return { input, dry, splitter, left, right, side, toLeft, toRight, merger, low, bass, output };
+}
+
+function setParam(p: AudioParam, v: number, glide: boolean): void {
+  if (glide && ctx && typeof p.setTargetAtTime === 'function') {
+    p.cancelScheduledValues(ctx.currentTime);
+    p.setTargetAtTime(v, ctx.currentTime, VOCAL_GLIDE_S);
+  } else {
+    p.value = v;
+  }
+}
+
+function applyVocals(v: VocalNodes, mode: VocalMode, glide: boolean): void {
+  const mix = vocalMix(mode);
+  setParam(v.dry.gain, mix.dry, glide);
+  setParam(v.toLeft.gain, mix.sideL, glide);
+  setParam(v.toRight.gain, mix.sideR, glide);
+  setParam(v.bass.gain, mix.bass, glide);
+}
+
 interface Graph {
   el: HTMLAudioElement;
   source: MediaElementAudioSourceNode;
+  vocals: VocalNodes;
   eq: BiquadFilterNode[];
   mono: GainNode;
   panner: StereoPannerNode;
@@ -125,6 +265,8 @@ let graph: Graph | null = null;
 let current: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
 /** False while the chain runs only so disco lights can hear the beat: every stage stays flat. */
 let processing = true;
+/** Karaoke's vocals level; not a sound effect, so `processing` never flattens it. */
+let vocals: VocalMode = 'full';
 const FLAT: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
 
 function getContext(): AudioContext | null {
@@ -255,8 +397,10 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
   const compressor = c.createDynamicsCompressor();
   const analyser = c.createAnalyser();
   analyser.fftSize = 1024;
+  const vocalNodes = buildVocals(c);
 
-  let node: AudioNode = source;
+  source.connect(vocalNodes.input);
+  let node: AudioNode = vocalNodes.output;
   for (const f of eq) {
     node.connect(f);
     node = f;
@@ -270,6 +414,7 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
   graph = {
     el,
     source,
+    vocals: vocalNodes,
     eq,
     mono,
     panner,
@@ -282,6 +427,7 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
     onBypass: opts.onBypass,
   };
   applyTo(graph, current);
+  applyVocals(vocalNodes, vocals, false);
   const sink = (el as HTMLAudioElement & { sinkId?: string }).sinkId;
   if (sink) setEffectsSink(sink);
   resumeContext();
@@ -295,6 +441,28 @@ export function setProcessing(on: boolean): void {
   if (processing === on) return;
   processing = on;
   if (graph) applyTo(graph, current);
+}
+
+/**
+ * Karaoke's vocals level. Takes effect at once on an attached chain (with a
+ * short glide) and is remembered for the next attach; karaoke puts it back
+ * to Full when it closes, so normal listening is never affected.
+ */
+export function setVocals(mode: VocalMode): void {
+  const next = isVocalMode(mode) ? mode : 'full';
+  if (next === vocals) return;
+  vocals = next;
+  if (graph) applyVocals(graph.vocals, vocals, true);
+}
+
+export function getVocals(): VocalMode {
+  return vocals;
+}
+
+/** Web Audio exists in this browser at all (the chain can be built). */
+export function hasWebAudio(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !!(window.AudioContext ?? (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext);
 }
 
 /** Frequency-data smoothing for the beat reader. The probe reads time-domain
@@ -332,6 +500,7 @@ export function detachEffects(): void {
   stopProbe(g);
   try {
     g.source.disconnect();
+    Object.values(g.vocals).forEach((n: AudioNode) => n.disconnect());
     g.eq.forEach((f) => f.disconnect());
     g.mono.disconnect();
     g.panner.disconnect();

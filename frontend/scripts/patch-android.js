@@ -89,6 +89,10 @@ public class MainActivity extends BridgeActivity {
         // 1.16 — disco lights: the flashlight on the beat, full brightness and
         // no system bars while the lights are open (native-android/DiscoPlugin.java).
         registerPlugin(DiscoPlugin.class);
+        // 1.16 — Google Cast from the app (native-android/VinaxCastPlugin.java).
+        // Registering touches no Cast class: the framework loads only when the
+        // page asks, and a phone without Google Play services just has no Cast.
+        registerPlugin(VinaxCastPlugin.class);
         super.onCreate(savedInstanceState);
         allowSignInCheck();
         maybeOpenPlayer(getIntent());
@@ -201,7 +205,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin, VinaxPushPlugin and DiscoPlugin, with the sign-in check allowed');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin, VinaxPushPlugin, DiscoPlugin and VinaxCastPlugin, with the sign-in check allowed');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }
@@ -269,6 +273,11 @@ if (fs.existsSync(manifestPath)) {
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+
+        <!-- 1.16: Google Cast settings (VinaxCastOptionsProvider.java). -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="${PKG}.VinaxCastOptionsProvider" />
 
         <receiver android:name="androidx.media.session.MediaButtonReceiver" android:exported="true">
             <intent-filter>
@@ -371,6 +380,8 @@ if (fs.existsSync(manifestPath)) {
   manifest = manifest.replace(oldMetaRegex, '');
   const oldFcmMetaRegex = /<meta-data[^>]*android:name="com\.google\.firebase\.messaging\.default_notification_(?:icon|color|channel_id)"[^>]*\/>/gs;
   manifest = manifest.replace(oldFcmMetaRegex, '');
+  manifest = manifest.replace(/<!-- 1\.16: Google Cast settings[^>]*-->\s*/g, '');
+  manifest = manifest.replace(/<meta-data[^>]*android:name="com\.google\.android\.gms\.cast\.framework\.OPTIONS_PROVIDER_CLASS_NAME"[^>]*\/>/gs, '');
 
   const oldReceiverRegex = /<receiver[^>]*android:name="androidx\.media\.session\.MediaButtonReceiver"[^>]*>.*?<\/receiver>/gs;
   manifest = manifest.replace(oldReceiverRegex, '');
@@ -398,7 +409,7 @@ if (fs.existsSync(manifestPath)) {
   console.error('[manifest] AndroidManifest.xml not found');
 }
 
-// 3. Patch build.gradle — androidx.media dependency + stable signing config.
+// 3. Patch build.gradle — androidx.media, Firebase Messaging and Google Cast dependencies + stable signing config.
 if (fs.existsSync(buildGradlePath)) {
   let buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
   let changed = false;
@@ -414,6 +425,13 @@ if (fs.existsSync(buildGradlePath)) {
     buildGradle = buildGradle.replace('dependencies {', 'dependencies {\n    implementation "com.google.firebase:firebase-messaging:25.0.1"');
     changed = true;
     console.log('[gradle] Added firebase-messaging dependency to build.gradle');
+  }
+  // 1.16 — Google Cast (VinaxCastPlugin / VinaxCastOptionsProvider). Brings
+  // androidx.mediarouter (the device list) with it. 22.3.1 needs minSdk 23.
+  if (!buildGradle.includes('com.google.android.gms:play-services-cast-framework')) {
+    buildGradle = buildGradle.replace('dependencies {', 'dependencies {\n    implementation "com.google.android.gms:play-services-cast-framework:22.3.1"');
+    changed = true;
+    console.log('[gradle] Added play-services-cast-framework dependency to build.gradle');
   }
 
   // Sign every DEBUG build with one committed keystore. The default debug

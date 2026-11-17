@@ -1,192 +1,148 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from 'zustand';
+import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
-import { usePlayerStore } from '@/store/playerStore';
-import { audioEngine, orderedSources } from '@/services/audio/engine';
 import { useSettingsStore } from '@/store/settingsStore';
-import { bestImage } from '@/utils/images';
+import { castMediaFor, type CastMedia } from './media';
 
+export { castMime } from './media';
+export type { CastMedia } from './media';
+
+/**
+ * Casting, the part the first load needs: the store, the player's intercepts
+ * and the song handoff. The senders load on demand: the Cast web SDK glue
+ * (./web.ts, when the device sheet opens) and the Android app's VinaxCast
+ * plugin (./native.ts); what they share about a session is ./session.ts.
+ */
 export interface CastState {
   available: boolean;
   connected: boolean;
   deviceName: string | null;
-  init: () => void;
+  /** Casting through the Android app's own plugin (no web SDK button). */
+  native: boolean;
+  /** Android app: a TV or speaker was found nearby (the web SDK's button hides itself). */
+  nearby: boolean;
 }
 
-// Minimal globals for Google Cast SDK
-declare global {
-  interface Window {
-    __onGCastApiAvailable: (isAvailable: boolean) => void;
-    cast: any;
-    chrome: any;
-  }
+/**
+ * One way of talking to a receiver: the Cast web SDK or the Android app's
+ * plugin. While casting, the receiver plays and the phone's own <audio>
+ * element plays muted as the clock that moves the queue on when a song ends.
+ */
+export interface CastTransport {
+  load(media: CastMedia, opts: { autoplay: boolean; startTime: number }): Promise<unknown>;
+  setPlaying(play: boolean): void;
+  seek(seconds: number): void;
+  setVolume(level: number): void;
+  requestSession(): void;
 }
 
-let player: any = null;
-let controller: any = null;
-let context: any = null;
-let castBootstrapped = false;
+let transport: CastTransport | null = null;
 
-/** Lazily inject the Google Cast SDK — only when the user opens the device
- *  picker — so it never loads on initial page load (faster, no console noise). */
-let sdkRequested = false;
-export function ensureCastSdk(): void {
-  if (isNativePlatform() || sdkRequested || typeof document === 'undefined') return;
-  sdkRequested = true;
-  const s = document.createElement('script');
-  s.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
-  s.async = true;
-  document.head.appendChild(s);
-}
+/** Shared with ./session.ts: what the receiver was told, to tell its fresh reports from stale ones. */
+export const castSync = {
+  /** The stream the receiver was last sent: its reports about anything else are stale. */
+  sentUrl: null as string | null,
+  /** What the receiver last said (or was last told): only a change is acted on. */
+  remotePlaying: null as boolean | null,
+  /** Reports until then may predate the last load, seek or play/pause. */
+  quietUntil: 0,
+};
+const QUIET_MS = 2500;
+const hush = (): void => {
+  castSync.quietUntil = Date.now() + QUIET_MS;
+};
 
-export const useCastStore = create<CastState>((set, get) => ({
+export const useCastStore = create<CastState>(() => ({
   available: false,
   connected: false,
   deviceName: null,
-
-  init: () => {
-    if (isNativePlatform()) return; // Disable Cast inside Capacitor Android (unstable)
-
-    window.__onGCastApiAvailable = (isAvailable: boolean) => {
-      if (!isAvailable || castBootstrapped) return;
-      castBootstrapped = true;
-      
-      context = window.cast.framework.CastContext.getInstance();
-      context.setOptions({
-        receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-        autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-      });
-
-      player = new window.cast.framework.RemotePlayer();
-      controller = new window.cast.framework.RemotePlayerController(player);
-
-      set({ available: true });
-
-      // Listen for connection state changes
-      context.addEventListener(
-        window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
-        (event: any) => {
-          const session = event.sessionState;
-          if (session === window.cast.framework.SessionState.SESSION_STARTED || session === window.cast.framework.SessionState.SESSION_RESUMED) {
-            const castSession = context.getCurrentSession();
-            set({ connected: true, deviceName: castSession.getCastDevice().friendlyName });
-            
-            // Sync currently playing song to Cast device
-            const { queue, index } = usePlayerStore.getState();
-            const song = queue[index];
-            if (song) {
-              const url = orderedSources(song, useSettingsStore.getState().audioQuality)[0];
-              if (url) {
-                const mediaInfo = new window.chrome.cast.media.MediaInfo(url, castMime(url));
-                mediaInfo.metadata = new window.chrome.cast.media.MusicTrackMediaMetadata();
-                mediaInfo.metadata.title = song.title;
-                mediaInfo.metadata.artist = song.subtitle;
-                mediaInfo.metadata.images = [{ url: bestImage(song.images, 500) }];
-                
-                const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
-                request.autoplay = usePlayerStore.getState().isPlaying;
-                request.currentTime = usePlayerStore.getState().currentTime;
-
-                // Mute local BEFORE the receiver actually starts to avoid the
-                // brief interval where both the phone and the TV play the same
-                // audio (double-audio during handoff). If the loadMedia call
-                // fails, restore the previous local volume so we don't leave
-                // the user silently muted.
-                const prevVolume = usePlayerStore.getState().volume;
-                audioEngine.setVolume(0);
-                castSession.loadMedia(request).then(
-                  () => {
-                    // Keep local muted — playback is on the receiver.
-                  },
-                  (error: any) => {
-                    audioEngine.setVolume(prevVolume);
-                    if (import.meta.env.DEV) console.error('Cast load failed:', error);
-                  }
-                );
-              }
-            }
-          } else if (session === window.cast.framework.SessionState.SESSION_ENDED) {
-            set({ connected: false, deviceName: null });
-            // Restore local playback volume
-            audioEngine.setVolume(usePlayerStore.getState().volume);
-          }
-        }
-      );
-
-      // Listen for Cast remote player time updates to sync local store
-      controller.addEventListener(
-        window.cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
-        () => {
-          if (get().connected && player.isMediaLoaded) {
-            usePlayerStore.setState({ currentTime: player.currentTime });
-          }
-        }
-      );
-      
-      controller.addEventListener(
-        window.cast.framework.RemotePlayerEventType.IS_PAUSED_CHANGED,
-        () => {
-          if (get().connected && player.isMediaLoaded) {
-            usePlayerStore.setState({ isPlaying: !player.isPaused });
-          }
-        }
-      );
-    };
-
-    // Race guard: cast_sender.js is a classic (non-deferred) script and may
-    // load + fire before this handler is attached. If the framework globals
-    // already exist, invoke the handler now so Cast still initializes.
-    if (window.cast?.framework && window.chrome?.cast) {
-      window.__onGCastApiAvailable(true);
-    }
-
-    // 4.18.0 (PSI unused-JS pass): the SDK used to auto-inject at idle so
-    // discovery was pre-armed — which meant EVERY web visit downloaded and
-    // parsed Google's whole Cast framework (and logged a console error when
-    // it couldn't phone home) for a picker almost no visit opens. It now
-    // loads only when DeviceSheet opens (ensureCastSdk() there); discovery
-    // arms a beat after the sheet appears instead of pre-emptively.
-  },
+  native: false,
+  nearby: false,
 }));
 
-export function castMime(url: string): string {
-  const m = url.match(/\.(mp4|m4a|aac|mp3|ogg|webm|flac|wav)(?:[?#]|$)/i);
-  const ext = m ? m[1].toLowerCase() : '';
-  if (ext === 'mp3') return 'audio/mpeg';
-  if (ext === 'ogg') return 'audio/ogg';
-  if (ext === 'webm') return 'audio/webm';
-  if (ext === 'flac') return 'audio/flac';
-  if (ext === 'wav') return 'audio/wav';
-  return 'audio/mp4'; // m4a/mp4/aac, and the upstream default
+export function setCastTransport(t: CastTransport | null): void {
+  transport = t;
 }
 
-/** Helper to intercept local player actions if casting */
-export function castInterceptPlayPause(): boolean {
-  const { connected } = useCastStore.getState();
-  if (connected && controller) {
-    controller.playOrPause();
-    return true; // Intercepted
+export const castDevError = (what: string, e: unknown): void => {
+  if (import.meta.env.DEV) console.error(what, e);
+};
+
+/** Send a song to the receiver; null when there is no receiver or no stream it can fetch. */
+export function castSend(song: Song, autoplay: boolean, startTime: number): Promise<unknown> | null {
+  const media = transport ? castMediaFor(song, useSettingsStore.getState().audioQuality) : null;
+  if (!transport || !media) return null;
+  castSync.sentUrl = media.url;
+  castSync.remotePlaying = null;
+  hush();
+  try {
+    return transport.load(media, { autoplay, startTime: Math.max(0, startTime || 0) });
+  } catch (e) {
+    return Promise.reject(e);
   }
-  return false;
+}
+
+/** The player started a song while casting: the receiver plays it too. */
+export function castLoadSong(song: Song, autoplay: boolean, startTime = 0): void {
+  if (!useCastStore.getState().connected) return;
+  castSend(song, autoplay, startTime)?.catch((e) => castDevError('Cast load failed:', e));
+}
+
+/** Open the TV picker (or, while casting, the device's own card). False when Cast is not ready. */
+export function castRequestSession(): boolean {
+  if (!transport) return false;
+  try {
+    transport.requestSession();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Load casting when the device sheet first opens, never on an ordinary
+ *  visit or app start (4.18.0, PSI unused-JS pass; the privacy page says so):
+ *  the web SDK, or in the Android app the VinaxCast plugin. Idempotent. */
+let sdkRequested = false;
+export function ensureCastSdk(): void {
+  if (sdkRequested || typeof document === 'undefined') return;
+  sdkRequested = true;
+  if (isNativePlatform()) {
+    void import('./native').then((m) => m.startNativeCast()).catch(() => undefined);
+    return;
+  }
+  void import('./web')
+    .then((m) => {
+      m.bootWebCast();
+      const s = document.createElement('script');
+      s.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+      s.async = true;
+      document.head.appendChild(s);
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Local play / pause while casting goes to the receiver (`play` is what the
+ * listener asked for). The caller keeps the silent local clock in step.
+ */
+export function castInterceptPlayPause(play: boolean): boolean {
+  if (!useCastStore.getState().connected || !transport) return false;
+  transport.setPlaying(play);
+  castSync.remotePlaying = play;
+  hush();
+  return true; // Intercepted
 }
 
 export function castInterceptSeek(seconds: number): boolean {
-  const { connected } = useCastStore.getState();
-  if (connected && player && controller) {
-    player.currentTime = seconds;
-    controller.seek();
-    return true; // Intercepted
-  }
-  return false;
+  if (!useCastStore.getState().connected || !transport) return false;
+  transport.seek(seconds);
+  hush();
+  return true; // Intercepted
 }
 
 /** Volume goes to the receiver while casting — the local element stays silent. */
 export function castInterceptVolume(v: number): boolean {
-  const { connected } = useCastStore.getState();
-  if (connected && player && controller) {
-    player.volumeLevel = Math.min(1, Math.max(0, v));
-    controller.setVolumeLevel();
-    return true; // Intercepted
-  }
-  return false;
+  if (!useCastStore.getState().connected || !transport) return false;
+  transport.setVolume(Math.min(1, Math.max(0, v)));
+  return true; // Intercepted
 }

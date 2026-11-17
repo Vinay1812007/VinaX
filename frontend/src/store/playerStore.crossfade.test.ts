@@ -23,7 +23,7 @@ vi.mock('@/services/media-session', () => ({ setMediaHandlers: vi.fn(), updateMe
 vi.mock('@/services/personalization/updater', () => ({ recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn() }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false }));
 const cast = vi.hoisted(() => ({ connected: false }));
-vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => cast }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn() }));
+vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => cast }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(), castLoadSong: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComplete: vi.fn() }));
 vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 vi.mock('@/services/nextup/engine', () => ({

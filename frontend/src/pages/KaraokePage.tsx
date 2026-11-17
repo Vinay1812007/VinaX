@@ -13,6 +13,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ChevronDownIcon, WaveformIcon } from '@/components/Icons';
 import { Seekbar } from '@/components/Seekbar';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { VocalsControl } from '@/features/karaoke/VocalsControl';
 import '@/styles/pages/player.css';
 
 /**
@@ -121,8 +122,9 @@ export default function KaraokePage() {
           )}
         </div>
       </div>
-      {/* canvas 4b — bottom progress + controls + Meaning */}
+      {/* canvas 4b — bottom Vocals + progress + controls + Meaning */}
       <div className="vx-karaoke-bottom">
+        <VocalsControl />
         <KaraokeProgress />
         <div className="vx-karaoke-bar">
           <Link to={`/lyrics/${song.id}`} className="vx-np-pill">

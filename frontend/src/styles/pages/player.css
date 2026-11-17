@@ -1299,6 +1299,13 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-karaoke-skip svg { width: 22px; height: 22px; }
 .vx-karaoke .vx-np-pill { background: rgb(var(--ink-100) / 0.1); }
 .vx-karaoke .vx-np-seek { margin-top: 0; }
+/* Vocals (Full / Low / Off) above the seekbar, with its one-line hint or reason. */
+.vx-karaoke-vocals { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.vx-karaoke-vocals-row { display: flex; align-items: center; gap: 8px; }
+.vx-karaoke-vocals-label { margin-right: 4px; color: rgb(var(--ink-200)); font-size: 13px; font-weight: 650; }
+.vx-karaoke-vocals .vx-np-pill:disabled { opacity: 0.45; cursor: not-allowed; }
+.vx-karaoke-vocals .vx-np-pill:disabled:hover { background: rgb(var(--ink-100) / 0.08); }
+.vx-karaoke-vocals-note { max-width: 420px; color: rgb(var(--ink-300)); font-size: 12px; line-height: 1.4; }
 
 .vx-drive { align-items: center; justify-content: center; padding: max(24px, var(--safe-top)) max(24px, var(--safe-right)) max(24px, var(--safe-bottom)) max(24px, var(--safe-left)); text-align: center; }
 .vx-drive-close { position: absolute; top: max(12px, var(--safe-top)); left: max(12px, var(--safe-left)); width: 56px; height: 56px; color: rgb(var(--ink-300)); }

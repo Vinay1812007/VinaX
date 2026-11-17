@@ -16,7 +16,7 @@ import { requireAccount } from '@/services/auth/gate';
 import { toast, toastNavigate } from './toastStore';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
-import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castMime } from '@/services/cast';
+import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castLoadSong } from '@/services/cast';
 import { bestImage } from '@/utils/images';
 import { crossfadePlan, isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { useTogether } from '@/services/together/session';
@@ -525,28 +525,12 @@ export const usePlayerStore = create<PlayerState>()(
         if (autoplay && useSettingsStore.getState().crossfade) audioEngine.fadeIn(overlapMs || 1200);
         updateMediaMetadata(song);
         
-        // Cast integration
-        const castState = useCastStore.getState();
-        if (castState.connected) {
+        // Cast: the receiver plays the song; the local element stays the silent clock.
+        if (useCastStore.getState().connected) {
           audioEngine.setVolume(0);
-          try {
-            const url = orderedSources(song, quality)[0];
-            if (url) {
-              const mediaInfo = new window.chrome.cast.media.MediaInfo(url, castMime(url));
-              mediaInfo.metadata = new window.chrome.cast.media.MusicTrackMediaMetadata();
-              mediaInfo.metadata.title = song.title;
-              mediaInfo.metadata.artist = song.subtitle;
-              mediaInfo.metadata.images = [{ url: bestImage(song.images, 500) }];
-              const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
-              request.autoplay = autoplay;
-              const castSession = window.cast.framework.CastContext.getInstance().getCurrentSession();
-              castSession?.loadMedia(request);
-            }
-          } catch (e) {
-            if (import.meta.env.DEV) console.error('Cast startTrack failed:', e);
-          }
+          castLoadSong(song, autoplay, opts.startAt ?? 0);
         }
-        
+
         if (autoplay) {
           // V2 — the no-repeat ledger outlives the 150-entry history.
           void loadNextUp().then((m) => m.notePlayed(song)).catch(() => undefined);
@@ -694,7 +678,7 @@ export const usePlayerStore = create<PlayerState>()(
           startTrack(song, true);
           return;
         }
-        if (castInterceptPlayPause()) {
+        if (castInterceptPlayPause(true)) {
           // v7.0.0 — the silent local element is the clock that drives
           // 'ended' → next while casting, so it follows the receiver.
           audioEngine.play();
@@ -712,7 +696,7 @@ export const usePlayerStore = create<PlayerState>()(
           audioEngine.lastInterruptionAt = 0;
           return;
         }
-        if (castInterceptPlayPause()) {
+        if (castInterceptPlayPause(false)) {
           audioEngine.pause();
           set({ isPlaying: false });
           return;
@@ -1173,7 +1157,7 @@ export const usePlayerStore = create<PlayerState>()(
             startTrack(song, true);
             return;
           }
-          if (castInterceptPlayPause()) {
+          if (castInterceptPlayPause(!isPlaying)) {
             // Keep the silent local clock in step with the receiver: left
             // running, it reached the end of a paused song and started the next one.
             if (isPlaying) audioEngine.pause();

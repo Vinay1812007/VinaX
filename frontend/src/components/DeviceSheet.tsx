@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { audioEngine } from '@/services/audio/engine';
 import { useOutputStore } from '@/store/outputStore';
-import { useCastStore, ensureCastSdk } from '@/services/cast';
+import { useCastStore, ensureCastSdk, castRequestSession } from '@/services/cast';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
 import { Sheet, SheetHeader } from './Sheet';
@@ -13,8 +13,8 @@ interface Device {
   label: string;
 }
 
-/** A TV glyph for casting (local: the shared icon set has none). */
-function TvIcon() {
+/** A TV glyph for casting (the shared icon set has none; Now Playing's Android cast button uses it too). */
+export function TvIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden>
       <rect x="3" y="5" width="18" height="12" rx="2.5" />
@@ -76,15 +76,10 @@ export function DeviceSheet({ open, onClose }: { open: boolean; onClose: () => v
     }
   };
 
+  // The web SDK's picker, or in the Android app the phone's own list of TVs
+  // (while casting: the TV's card, with Stop casting).
   const castToTv = () => {
-    const w = window as unknown as {
-      cast?: { framework?: { CastContext?: { getInstance?: () => { requestSession?: () => void } } } };
-    };
-    try {
-      w.cast?.framework?.CastContext?.getInstance?.().requestSession?.();
-    } catch {
-      toast('Cast unavailable');
-    }
+    if (!castRequestSession()) toast('Cast unavailable');
     onClose();
   };
 

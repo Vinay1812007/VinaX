@@ -49,7 +49,6 @@ const WhatsNewSheet = lazy(() => import('@/components/WhatsNewSheet').then((m) =
 const SignInPrompt = lazy(() => import('@/components/SignInPrompt'));
 import { initAudioOutputWatcher } from '@/services/audio/outputWatcher';
 import { audioEngine } from '@/services/audio/engine';
-import { useCastStore } from '@/services/cast';
 import { PageSkeleton } from '@/components/Skeletons';
 import { ErrorBoundary, PlayerErrorBoundary } from '@/components/ErrorBoundary';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -308,7 +307,6 @@ export function AppLayout() {
       void import('@/services/tv/spatialNav').then((m) => m.initSpatialNav()).catch(() => undefined);
       bootAlarm(isNativePlatform());
       initAudioOutputWatcher();
-      useCastStore.getState().init();
       // Android 13+: the media notification needs the notification permission.
       // The "Allow access" sheet asks for it at start-up, after saying why.
       // Update gate (the app only) + foreground re-check, loaded on demand.

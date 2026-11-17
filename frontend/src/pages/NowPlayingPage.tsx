@@ -44,7 +44,7 @@ import {
   UsersIcon,
   VolumeIcon,
 } from '@/components/Icons';
-import { DeviceSheet } from '@/components/DeviceSheet';
+import { DeviceSheet, TvIcon } from '@/components/DeviceSheet';
 import { bestImage } from '@/utils/images';
 import { SongCanvas, SongCanvasBackdrop, useSongCanvas } from '@/components/SongCanvas';
 import { extractVibrantColor } from '@/utils/color';
@@ -52,7 +52,7 @@ import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAudioOutputStore } from '@/services/audio/outputWatcher';
 import { useLibraryStore } from '@/store/libraryStore';
-import { useCastStore } from '@/services/cast';
+import { useCastStore, castRequestSession } from '@/services/cast';
 import { useTogether } from '@/services/together/session';
 import { haptic } from '@/services/native';
 import { shareLink } from '@/utils/share';
@@ -400,6 +400,9 @@ export default function NowPlayingPage() {
   const externalDevice = useAudioOutputStore((s) => s.externalLabel);
   const castAvailable = useCastStore((s) => s.available);
   const castDeviceName = useCastStore((s) => s.deviceName);
+  // The Android app casts through its own plugin: a plain button, shown once a TV is nearby.
+  const castNative = useCastStore((s) => s.native);
+  const castNearby = useCastStore((s) => s.nearby);
   // 1.13 — a live room marks the Together tab.
   const togetherLive = useTogether((s) => s.mode !== 'idle');
   // 1.14 — new chat lines in the room, shown on the tab until a chat is opened.
@@ -790,7 +793,16 @@ export default function NowPlayingPage() {
                   >
                     <DevicesIcon />
                   </IconButton>
-                  {castAvailable && (
+                  {castAvailable && castNative && (castNearby || castDeviceName) && (
+                    <IconButton
+                      label={castDeviceName ? `Casting to ${castDeviceName}` : 'Cast to a TV'}
+                      onClick={() => { if (!castRequestSession()) toast('Cast unavailable'); }}
+                      className={cn('vx-np-tool', castDeviceName && 'is-live')}
+                    >
+                      <TvIcon />
+                    </IconButton>
+                  )}
+                  {castAvailable && !castNative && (
                     <span className="vx-np-cast">
                       {/* @ts-expect-error custom element */}
                       <cast-media-route-button style={{ width: '22px', height: '22px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'rgb(var(--ink-200))' }} />

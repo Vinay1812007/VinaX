@@ -98,7 +98,8 @@ export function PlayerBar() {
   const setRailView = useUiStore((s) => s.setRailView);
   const queueInPanel = wide && panelOn && railView === 'queue';
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const castAvailable = useCastStore((s) => s.available);
+  // The web SDK's button; the Android app casts from the device sheet and Now Playing.
+  const castAvailable = useCastStore((s) => s.available && !s.native);
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
