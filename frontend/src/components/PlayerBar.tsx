@@ -12,6 +12,7 @@ import { Marquee } from './Marquee';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUiStore } from '@/store/uiStore';
+import { useT } from '@/i18n';
 const DeviceSheet = lazy(() => import('./DeviceSheet').then(m => ({ default: m.DeviceSheet })));
 // Lazy: the live lyric line pulls the synced-lyrics hook, which the first paint never needs.
 const NowLine = lazy(() => import('./NowLine').then((m) => ({ default: m.NowLine })));
@@ -49,6 +50,7 @@ function ProgressHairline() {
 }
 
 export function PlayerBar() {
+  const t = useT();
   const [devicesOpen, setDevicesOpen] = useState(false);
   const song = useCurrentSong();
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -77,9 +79,9 @@ export function PlayerBar() {
 
   const sleepActive = sleepAt != null || sleepAfterTrack || sleepSongsLeft > 0;
   const sleepLabel = sleepAfterTrack
-    ? 'end'
+    ? t('end')
     : sleepSongsLeft > 0
-      ? `${sleepSongsLeft} song${sleepSongsLeft === 1 ? '' : 's'}`
+      ? sleepSongsLeft === 1 ? t('1 song') : t('{n} songs', { n: sleepSongsLeft })
     : sleepAt
       ? `${Math.max(1, Math.ceil((sleepAt - Date.now()) / 60_000))}m`
       : '';
@@ -161,7 +163,7 @@ export function PlayerBar() {
             <button
               onClick={() => navigate('/now-playing')}
               className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
-              aria-label="Open full screen player"
+              aria-label={t('Open full screen player')}
             >
               <span className="np-mini-thumb relative w-10 h-10 shrink-0 rounded-md overflow-hidden">
                 <img
@@ -177,7 +179,7 @@ export function PlayerBar() {
               </span>
             </button>
             {sleepActive && (
-              <button onClick={cancelSleep} aria-label="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 rounded-full bg-ink-700/60 text-[11px] font-bold text-ink-100 relative after:absolute after:inset-0 after:-m-[10px]">
+              <button onClick={cancelSleep} aria-label={t('Cancel sleep timer')} className="flex items-center gap-1 px-2 py-1 rounded-full bg-ink-700/60 text-[11px] font-bold text-ink-100 relative after:absolute after:inset-0 after:-m-[10px]">
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
@@ -187,12 +189,12 @@ export function PlayerBar() {
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>
             )}
-            <IconButton size="sm" label="Connect to a device" onClick={() => setDevicesOpen(true)} className="np-mini-tool"><DevicesIcon className="w-5 h-5" /></IconButton>
+            <IconButton size="sm" label={t('Connect to a device')} onClick={() => setDevicesOpen(true)} className="np-mini-tool"><DevicesIcon className="w-5 h-5" /></IconButton>
             <FavButton song={song} className="np-mini-tool" />
             <button
               type="button"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              title={isPlaying ? 'Pause' : 'Play'}
+              aria-label={t(isPlaying ? 'Pause' : 'Play')}
+              title={t(isPlaying ? 'Pause' : 'Play')}
               onClick={togglePlay}
               className="np-mini-play relative after:absolute after:-inset-0.5 inline-flex items-center justify-center w-10 h-10 mx-0.5 shrink-0 active:scale-95 transition-transform"
             >
@@ -210,7 +212,7 @@ export function PlayerBar() {
         <div className={cn('vx-deck vx-mat-chrome', changed && 'np-changed')}>
         <div className="vx-pb-row">
           <div className="vx-pb-track">
-            <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-pb-art group shrink-0">
+            <button onClick={() => navigate('/now-playing')} aria-label={t('Open full screen player')} className="vx-pb-art group shrink-0">
               <img
                 src={artUrl ?? FALLBACK_ART}
                 onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
@@ -228,25 +230,25 @@ export function PlayerBar() {
 
           <div className="vx-pb-center">
             <div className="flex items-center gap-4">
-              <IconButton label={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={toggleShuffle} active={shuffle} size="sm">
+              <IconButton label={t(shuffle ? 'Shuffle on' : 'Shuffle off')} onClick={toggleShuffle} active={shuffle} size="sm">
                 <ShuffleIcon className="w-4 h-4" />
               </IconButton>
-              <IconButton label="Previous" onClick={prev} size="sm" className="text-ink-100">
+              <IconButton label={t('Previous')} onClick={prev} size="sm" className="text-ink-100">
                 <PrevIcon className="w-5 h-5" />
               </IconButton>
               <button
                 type="button"
                 onClick={togglePlay}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
+                aria-label={t(isPlaying ? 'Pause' : 'Play')}
                 // 32px white circle; its ::after pad keeps the hit area at 44px (shell.css).
                 className="np-play-desktop"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
               </button>
-              <IconButton label="Next" onClick={() => next(true)} size="sm" className="text-ink-100">
+              <IconButton label={t('Next')} onClick={() => next(true)} size="sm" className="text-ink-100">
                 <NextIcon className="w-5 h-5" />
               </IconButton>
-              <IconButton label={`Repeat: ${repeat}`} onClick={cycleRepeat} active={repeat !== 'off'} size="sm" className="relative">
+              <IconButton label={t(`Repeat: ${repeat}`)} onClick={cycleRepeat} active={repeat !== 'off'} size="sm" className="relative">
                 <RepeatIcon className="w-4 h-4" />
                 {repeat === 'one' && (
                   <span className="absolute -top-0.5 right-0.5 text-[9px] font-bold text-ember-400">1</span>
@@ -268,12 +270,12 @@ export function PlayerBar() {
               </div>
             )}
             {sleepActive && (
-              <button onClick={cancelSleep} aria-label="Cancel sleep timer" title="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 mr-1 rounded-full border border-ink-600 text-[11px] font-bold text-ember-400 hover:border-ember-500 relative after:absolute after:inset-0 after:-m-[10px]">
+              <button onClick={cancelSleep} aria-label={t('Cancel sleep timer')} title={t('Cancel sleep timer')} className="flex items-center gap-1 px-2 py-1 mr-1 rounded-full border border-ink-600 text-[11px] font-bold text-ember-400 hover:border-ember-500 relative after:absolute after:inset-0 after:-m-[10px]">
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
             {wide && (
-              <button type="button" aria-label="Now playing view" title="Now playing view" aria-pressed={panelOn && railView === 'playing'} className="vx-pb-link" onClick={() => {
+              <button type="button" aria-label={t('Now playing view')} title={t('Now playing view')} aria-pressed={panelOn && railView === 'playing'} className="vx-pb-link" onClick={() => {
                 if (panelOn && railView === 'playing') setPanelOn(false);
                 else {
                   setRailView('playing');
@@ -283,9 +285,9 @@ export function PlayerBar() {
                 <PanelIcon className="w-[18px] h-[18px]" filled={panelOn && railView === 'playing'} />
               </button>
             )}
-            <Link to={`/lyrics/${song.id}`} aria-label="Lyrics" title="Lyrics" className="vx-pb-link" aria-current={pathname.startsWith('/lyrics/') ? 'page' : undefined}><MicIcon className="w-[18px] h-[18px]" /></Link>
+            <Link to={`/lyrics/${song.id}`} aria-label={t('Lyrics')} title={t('Lyrics')} className="vx-pb-link" aria-current={pathname.startsWith('/lyrics/') ? 'page' : undefined}><MicIcon className="w-[18px] h-[18px]" /></Link>
             {wide ? (
-              <button type="button" aria-label="Queue" title="Queue" aria-pressed={queueInPanel} className="vx-pb-link" onClick={() => {
+              <button type="button" aria-label={t('Queue')} title={t('Queue')} aria-pressed={queueInPanel} className="vx-pb-link" onClick={() => {
                 if (queueInPanel) setRailView('playing');
                 else {
                   setRailView('queue');
@@ -295,17 +297,17 @@ export function PlayerBar() {
                 <QueueIcon className="w-[18px] h-[18px]" />
               </button>
             ) : (
-              <Link to="/queue" aria-label="Queue" title="Queue" className="vx-pb-link" aria-current={pathname === '/queue' ? 'page' : undefined}>
+              <Link to="/queue" aria-label={t('Queue')} title={t('Queue')} className="vx-pb-link" aria-current={pathname === '/queue' ? 'page' : undefined}>
                 <QueueIcon className="w-[18px] h-[18px]" />
               </Link>
             )}
-            <IconButton size="sm" label="Connect to a device" onClick={() => setDevicesOpen(true)}><DevicesIcon className="w-[18px] h-[18px]" /></IconButton>
-            <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
+            <IconButton size="sm" label={t('Connect to a device')} onClick={() => setDevicesOpen(true)}><DevicesIcon className="w-[18px] h-[18px]" /></IconButton>
+            <IconButton label={t(muted ? 'Unmute' : 'Mute')} onClick={toggleMute} size="sm">
               <VolumeIcon className="w-4 h-4" muted={muted} />
             </IconButton>
             <input
               type="range"
-              aria-label="Volume"
+              aria-label={t('Volume')}
               aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
               min={0}
               max={1}
@@ -315,7 +317,7 @@ export function PlayerBar() {
               className="vx-volume"
               style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties}
             />
-            <Link to="/now-playing" aria-label="Full screen player" title="Full screen player" className="vx-pb-link"><ExpandIcon className="w-4 h-4" /></Link>
+            <Link to="/now-playing" aria-label={t('Full screen player')} title={t('Full screen player')} className="vx-pb-link"><ExpandIcon className="w-4 h-4" /></Link>
           </div>
         </div>
         </div>

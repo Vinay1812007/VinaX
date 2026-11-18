@@ -14,6 +14,7 @@ import { GetAppSlot } from '@/components/GetAppSlot';
 import { rememberGuestBrowse } from '@/services/auth/gate';
 import { authHref, safeNext, type AuthPath } from '@/services/auth/next';
 import { takeResume } from '@/services/auth/resume';
+import { useT } from '@/i18n';
 import '@/styles/auth.css';
 
 /** `next` and the email typed so far, read once from the address. */
@@ -25,6 +26,7 @@ export function useAuthQuery(): { next: string; email: string; setEmail: (v: str
 }
 
 export function AuthShell({ title, lede, next, google = false, children, switcher }: { title: string; lede: string; next: string; google?: boolean; children: ReactNode; switcher: ReactNode }): ReactNode {
+  const t = useT();
   const account = useAccount();
   // Signed in: back on `next`, finish what the sign-in sheet interrupted (play, like).
   // Navigate's own effect runs first, so this lands after the page change.
@@ -40,22 +42,22 @@ export function AuthShell({ title, lede, next, google = false, children, switche
     <>
       <GetAppSlot />
       <main className="vx-auth" aria-labelledby="vx-auth-title">
-        <a href="/" className="vx-auth-brand" aria-label="VinaX home">
+        <a href="/" className="vx-auth-brand" aria-label={t('VinaX home')}>
           <img src="/icons/icon.svg?v=14" alt="" width={40} height={40} />
           <span>VinaX</span>
         </a>
         <section className="vx-auth-card vx-mat-thick">
           <h1 id="vx-auth-title" className="vx-auth-title">
-            {title}
+            {t(title)}
           </h1>
-          <p className="vx-auth-lede">{forChat ? 'Sign in to chat with VinaX AI, the assistant built into VinaX. Your chats are saved with your account.' : lede}</p>
+          <p className="vx-auth-lede">{t(forChat ? 'Sign in to chat with VinaX AI, the assistant built into VinaX. Your chats are saved with your account.' : lede)}</p>
           {google && (
             <>
               <div className="vx-auth-google">
                 <GoogleSignIn emailLinks={false} />
               </div>
               <span className="vx-or" aria-hidden="true">
-                or
+                {t('or')}
               </span>
             </>
           )}
@@ -64,13 +66,13 @@ export function AuthShell({ title, lede, next, google = false, children, switche
         <p className="vx-auth-switch">{switcher}</p>
         <footer className="vx-auth-foot">
           <p>
-            Free, with nothing to pay. By continuing you agree to the <Link to="/terms">Terms</Link> and the <Link to="/privacy">Privacy policy</Link>.
+            {t('Free, with nothing to pay. By continuing you agree to the')} <Link to="/terms">{t('Terms')}</Link> {t('and the')} <Link to="/privacy">{t('Privacy policy')}</Link>.
           </p>
           <Link to="/discover" className="vx-auth-explore" onClick={rememberGuestBrowse}>
-            Explore VinaX first <span aria-hidden>→</span>
+            {t('Explore VinaX first')} <span aria-hidden>→</span>
           </Link>
-          <nav className="vx-auth-links" aria-label="About VinaX">
-            <Link to="/about">About</Link> · <Link to="/help">Help</Link> · <Link to="/download">Get the app</Link> · <Link to="/contact">Contact</Link>
+          <nav className="vx-auth-links" aria-label={t('About VinaX')}>
+            <Link to="/about">{t('About')}</Link> · <Link to="/help">{t('Help')}</Link> · <Link to="/download">{t('Get the app')}</Link> · <Link to="/contact">{t('Contact')}</Link>
           </nav>
         </footer>
       </main>

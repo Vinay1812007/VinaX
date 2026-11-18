@@ -23,9 +23,18 @@ vi.mock('@/features/tutorials/tutorials', () => {
   };
   return { tutorialById: (id: string | null) => (id === 't' ? T : id === 'w' ? W : null) };
 });
+// The Telugu Help file, cut down to the test tour: the card reads it when the app language is Telugu.
+vi.mock('@/i18n/help/te', () => ({
+  default: {
+    ui: { 'Tutorial: {title}': 'ట్యుటోరియల్: {title}', 'Step {n} of {total}.': '{total}లో {n}వ దశ.', '{n} of {total}': '{n} / {total}', Close: 'మూసివేయి', Back: 'వెనుకకు', Next: 'తర్వాత', Done: 'పూర్తి' },
+    groups: {}, guides: {}, faq: {}, shortcuts: {},
+    tutorials: { t: { title: 'టెస్ట్ టూర్', blurb: '', steps: [{ title: 'ఒకటి', body: 'మొదటిది.' }, { title: 'పోయింది', body: 'ఎప్పుడూ కనిపించదు.' }, { title: 'మూడు', body: 'మూడోది.' }] } },
+  },
+}));
 
 import TutorialRunner from './TutorialRunner';
 import { useTutorialStore } from '@/store/tutorialStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const key = (k: string, target: Element | Window = window) => fireEvent.keyDown(target, { key: k });
 
@@ -33,6 +42,7 @@ afterEach(() => {
   cleanup();
   act(() => useTutorialStore.getState().stop());
   act(() => useTutorialStore.setState({ done: [] }));
+  act(() => useSettingsStore.setState({ uiLanguage: 'en' }));
   localStorage.clear();
 });
 
@@ -99,4 +109,17 @@ describe('TutorialRunner', () => {
     expect(document.activeElement).toBe(opener);
     opener.remove();
   });
+
+  it('reads the app language’s Help file: the words change, the steps and their anchors do not', async () => {
+    act(() => useSettingsStore.setState({ uiLanguage: 'te' }));
+    act(() => useTutorialStore.getState().start('t'));
+    render(<TutorialRunner />);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('3లో 1వ దశ. ఒకటి. మొదటిది.'));
+    expect(screen.getByRole('dialog', { name: 'ట్యుటోరియల్: టెస్ట్ టూర్' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'తర్వాత' })).toBeTruthy();
+    key('ArrowRight');
+    // Step 2's anchor is still looked up from the English definition, and is still skipped.
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('3లో 3వ దశ. మూడు. మూడోది.'), { timeout: 5000 });
+    expect(screen.getByRole('button', { name: 'పూర్తి' })).toBeTruthy();
+  }, 15000);
 });

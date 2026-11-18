@@ -23,6 +23,7 @@ import { useAccount } from './useAccount';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
+import { useT } from '@/i18n';
 import '@/styles/overlays.css';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
@@ -99,6 +100,7 @@ const TOUR_STAGES: Stage[] = TOUR.map((_, i) => `t${i}` as Stage);
  * the app. Shown exactly once; skippable at any point.
  */
 export function OnboardingSheet() {
+  const t = useT();
   const account = useAccount();
   const tourOpen = useUiStore((s) => s.tourOpen);
   const closeTour = useUiStore((s) => s.closeTour);
@@ -375,13 +377,13 @@ export function OnboardingSheet() {
         <span aria-hidden className="vx-sheet-grab" />
         {seq.length > 1 && (
           <div className="vx-welcome-steps">
-            <p className="vx-welcome-count" aria-live="polite">Step {pos + 1} of {seq.length}</p>
+            <p className="vx-welcome-count" aria-live="polite">{t('Step {n} of {total}', { n: pos + 1, total: seq.length })}</p>
             <div className="vx-welcome-track" aria-hidden>
               {seq.map((id, i) => <span key={id} className={cn(i < pos && 'is-done', i === pos && 'is-on')} />)}
             </div>
             {!required && !last && (
               <button type="button" onClick={stage === 'songs' ? goNext : () => finish()} className="vx-welcome-skip">
-                {stage === 'songs' ? 'Skip' : 'Skip the rest'}
+                {t(stage === 'songs' ? 'Skip' : 'Skip the rest')}
               </button>
             )}
           </div>
@@ -400,66 +402,66 @@ export function OnboardingSheet() {
                   ))}
                 </div>
                 <img src="/icons/icon.svg?v=14" alt="" className="vx-welcome-logo" />
-                <span className="vx-welcome-badge">Free forever</span>
+                <span className="vx-welcome-badge">{t('Free forever')}</span>
               </div>
-              {title('Welcome to VinaX', true)}
-              {lede('You’re signed in. Pick the name VinaX greets you with — your library and taste follow your account to every device.')}
-              <label className="vx-welcome-label mt-5" htmlFor="vx-name">Your name</label>
+              {title(t('Welcome to VinaX'), true)}
+              {lede(t('You’re signed in. Pick the name VinaX greets you with — your library and taste follow your account to every device.'))}
+              <label className="vx-welcome-label mt-5" htmlFor="vx-name">{t('Your name')}</label>
               <input
                 id="vx-name"
                 value={name}
                 onChange={(e) => onNameChange(e.target.value)}
-                placeholder="Your name"
+                placeholder={t('Your name')}
                 maxLength={40}
                 autoComplete="given-name"
                 aria-invalid={nameErr}
                 className={cn(INPUT, nameErr && INPUT_BAD)}
               />
-              {nameErr && <p className="vx-welcome-msg is-bad">Enter a name of at least two letters.</p>}
+              {nameErr && <p className="vx-welcome-msg is-bad">{t('Enter a name of at least two letters.')}</p>}
               {(
                 <div className="mt-5 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
-                  <span>Have a VinaX backup file?</span>
-                  <button type="button" onClick={() => fileRef.current?.click()} className="vx-welcome-link">Import a file</button>
+                  <span>{t('Have a VinaX backup file?')}</span>
+                  <button type="button" onClick={() => fileRef.current?.click()} className="vx-welcome-link">{t('Import a file')}</button>
                 </div>
               )}
               <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
               {importErr && (
                 <p className="vx-welcome-msg is-bad text-center">
-                  That file could not be read. Export it from Settings → Your data on the other device, then import the .json here.
+                  {t('That file could not be read. Export it from Settings → Your data on the other device, then import the .json here.')}
                 </p>
               )}
             </>
           ) : stage === 'langs' ? (
             <>
-              {title('Choose your languages')}
-              {lede('Home, charts and the songs VinaX lines up start from these. Change them later in Settings.')}
+              {title(t('Choose your languages'))}
+              {lede(t('Home, charts and the songs VinaX lines up start from these. Change them later in Settings.'))}
               <div className="flex items-center justify-between gap-3 mt-5 mb-2.5">
-                <p className="vx-welcome-label !mb-0">{picked.length ? `${picked.length} selected` : 'None selected'}</p>
+                <p className="vx-welcome-label !mb-0">{picked.length ? t('{n} selected', { n: picked.length }) : t('None selected')}</p>
                 <button
                   type="button"
                   onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
                   className="vx-welcome-skip"
                 >
-                  {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
+                  {t(picked.length === LANGUAGES.length ? 'Clear' : 'All languages')}
                 </button>
               </div>
-              <div className="vx-welcome-langs" role="group" aria-label="Your languages">
+              <div className="vx-welcome-langs" role="group" aria-label={t('Your languages')}>
                 {shownLangs.map((l) => (
                   <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>{l.label}</Chip>
                 ))}
                 {!moreLangs && shownLangs.length < LANGUAGES.length && (
-                  <button type="button" onClick={() => setMoreLangs(true)} className="vx-welcome-more">More languages</button>
+                  <button type="button" onClick={() => setMoreLangs(true)} className="vx-welcome-more">{t('More languages')}</button>
                 )}
               </div>
               <label className="vx-welcome-consent">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-                <span>Share anonymous usage with VinaX (which song is playing, city-level location, no account) so the app can be improved. On by default — untick to keep it off, or change it anytime in Settings → Region &amp; privacy.</span>
+                <span>{t('Share anonymous usage with VinaX (which song is playing, city-level location, no account) so the app can be improved. On by default — untick to keep it off, or change it anytime in Settings → Region & privacy.')}</span>
               </label>
             </>
           ) : stage === 'songs' ? (
             <>
-              {title('Tap songs you like')}
-              {lede('Home starts from the songs you pick here. They are saved to Liked songs on this device.')}
+              {title(t('Tap songs you like'))}
+              {lede(t('Home starts from the songs you pick here. They are saved to Liked songs on this device.'))}
               {seedSongs.length === 0 ? (
                 <div className="grid grid-cols-3 gap-3 mt-5" aria-hidden>
                   {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square rounded-lg skeleton skeleton-art" />)}
@@ -474,7 +476,7 @@ export function OnboardingSheet() {
                         type="button"
                         onClick={() => toggleSeed(song.id)}
                         aria-pressed={liked}
-                        aria-label={`${liked ? 'Unlike' : 'Like'} ${song.title}`}
+                        aria-label={t(liked ? 'Unlike {title}' : 'Like {title}', { title: song.title })}
                         className={cn('vx-seed', liked && 'is-liked')}
                       >
                         <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" />
@@ -489,9 +491,9 @@ export function OnboardingSheet() {
           ) : slide ? (
             <>
               <div className="vx-tour-art" aria-hidden>{slide.icon}</div>
-              <div className="mt-5">{title(slide.title)}</div>
+              <div className="mt-5">{title(t(slide.title))}</div>
               <div className="mt-2 space-y-1.5">
-                {slide.lines.map((line) => <p key={line} className="text-[15px] leading-relaxed text-ink-300">{line}</p>)}
+                {slide.lines.map((line) => <p key={line} className="text-[15px] leading-relaxed text-ink-300">{t(line)}</p>)}
               </div>
               {slide.visual}
               {slide.shortcuts && (
@@ -499,7 +501,7 @@ export function OnboardingSheet() {
                   {slide.shortcuts.map((sc) => (
                     <span key={sc.combo} className="inline-flex items-center gap-1.5 text-[13px] text-ink-400">
                       <KeyChip>{sc.combo}</KeyChip>
-                      <span>{sc.label}</span>
+                      <span>{t(sc.label)}</span>
                     </span>
                   ))}
                 </div>
@@ -509,7 +511,7 @@ export function OnboardingSheet() {
         </div>
         <div className="vx-welcome-foot">
           {pos > 0 && (
-            <button type="button" onClick={goBack} className="h-12 px-5 rounded-full btn-secondary text-[15px]">Back</button>
+            <button type="button" onClick={goBack} className="h-12 px-5 rounded-full btn-secondary text-[15px]">{t('Back')}</button>
           )}
           {slide && last && (
             <button
@@ -517,7 +519,7 @@ export function OnboardingSheet() {
               onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
               className="flex-1 h-12 rounded-full btn-secondary text-[15px]"
             >
-              Take a tour
+              {t('Take a tour')}
             </button>
           )}
           <button
@@ -532,10 +534,8 @@ export function OnboardingSheet() {
             className="flex-1 h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-60"
           >
             {stage === 'songs' && seedLiked.length
-                ? `Continue with ${seedLiked.length} liked`
-                : slide
-                  ? last ? 'Start listening' : 'Next'
-                  : 'Continue'}
+                ? t('Continue with {n} liked', { n: seedLiked.length })
+                : t(slide ? (last ? 'Start listening' : 'Next') : 'Continue')}
           </button>
         </div>
       </div>

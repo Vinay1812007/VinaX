@@ -7,8 +7,10 @@ import { Link } from 'react-router-dom';
 import { emailAuthMessage, signInWithPassword, type EmailAuthResult } from '@/services/auth/email';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { AuthShell, useAuthQuery } from './AuthShell';
+import { useT } from '@/i18n';
 
 export default function LoginPage(): ReactNode {
+  const t = useT();
   const { next, email, setEmail, href } = useAuthQuery();
   const [password, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,22 +35,22 @@ export default function LoginPage(): ReactNode {
       google
       switcher={
         <>
-          New to VinaX? <Link to={href('/signup')}>Create an account</Link>
+          {t('New to VinaX?')} <Link to={href('/signup')}>{t('Create an account')}</Link>
         </>
       }
     >
       <form className="vx-auth-form" onSubmit={(e) => void submit(e)} noValidate>
         <label className="vx-auth-field">
-          <span>Email</span>
+          <span>{t('Email')}</span>
           <input type="email" inputMode="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         </label>
         <PasswordField
-          label="Password"
+          label={t('Password')}
           value={password}
           onChange={setPw}
           aside={
             <Link to={href('/forgot-password')} className="vx-auth-link">
-              Forgot password?
+              {t('Forgot password?')}
             </Link>
           }
         />
@@ -56,8 +58,8 @@ export default function LoginPage(): ReactNode {
           <p className="vx-auth-error" role="alert">
             {error.result === 'wrong_password' ? (
               <>
-                That email and password don’t match. Made your account with Google? Use the Google button above, or{' '}
-                <Link to={href('/forgot-password')}>set a password</Link>.
+                {t('That email and password don’t match. Made your account with Google? Use the Google button above, or')}{' '}
+                <Link to={href('/forgot-password')}>{t('set a password')}</Link>.
               </>
             ) : (
               error.text
@@ -65,7 +67,7 @@ export default function LoginPage(): ReactNode {
           </p>
         )}
         <button type="submit" className="vx-auth-submit" disabled={busy || !email.trim() || !password}>
-          {busy ? 'Signing in…' : 'Sign in'}
+          {t(busy ? 'Signing in…' : 'Sign in')}
         </button>
       </form>
     </AuthShell>

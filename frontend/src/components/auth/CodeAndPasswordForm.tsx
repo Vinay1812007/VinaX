@@ -11,11 +11,13 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { emailAuthMessage, MIN_PASSWORD, requestEmailCode, verifyEmailCode } from '@/services/auth/email';
 import { PasswordField } from './PasswordField';
+import { useT } from '@/i18n';
 
 /** Seconds before another code may go to the same address (the server's CODE_RESEND_MS). */
 export const RESEND_SECONDS = 60;
 
 export function CodeAndPasswordForm({ mode, email, onEmail }: { mode: 'signup' | 'reset'; email: string; onEmail: (v: string) => void }): ReactNode {
+  const t = useT();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -72,9 +74,10 @@ export function CodeAndPasswordForm({ mode, email, onEmail }: { mode: 'signup' |
     setError(null);
   };
 
-  const action =
+  const action = t(
     step === 'email' ? (busy ? 'Sending…' : 'Send code')
-      : mode === 'signup' ? (busy ? 'Creating…' : 'Create account') : busy ? 'Saving…' : 'Save and sign in';
+      : mode === 'signup' ? (busy ? 'Creating…' : 'Create account') : busy ? 'Saving…' : 'Save and sign in',
+  );
   const ready = step === 'email' ? !!email.trim() : code.length === 6 && password.length > 0;
 
   return (
@@ -83,26 +86,26 @@ export function CodeAndPasswordForm({ mode, email, onEmail }: { mode: 'signup' |
         <>
           {mode === 'signup' && (
             <label className="vx-auth-field">
-              <span>Name <em>(optional)</em></span>
-              <input type="text" autoComplete="name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="What should we call you?" autoFocus={!email} />
+              <span>{t('Name')} <em>{t('(optional)')}</em></span>
+              <input type="text" autoComplete="name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('What should we call you?')} autoFocus={!email} />
             </label>
           )}
           <label className="vx-auth-field">
-            <span>Email</span>
+            <span>{t('Email')}</span>
             <input type="email" inputMode="email" autoComplete="email" required value={email} onChange={(e) => onEmail(e.target.value)} placeholder="you@example.com" autoFocus={mode === 'reset' || !!email} />
           </label>
-          {mode === 'signup' && <p className="vx-auth-hint">We’ll email you a 6-digit code to check the address is yours.</p>}
+          {mode === 'signup' && <p className="vx-auth-hint">{t('We’ll email you a 6-digit code to check the address is yours.')}</p>}
         </>
       ) : (
         <>
           <div className="vx-auth-sent" role="status">
             <p>
-              We sent a 6-digit code to <strong>{email.trim()}</strong>. It works for 15 minutes. Check spam if it isn’t there.
+              {t('We sent a 6-digit code to')} <strong>{email.trim()}</strong>. {t('It works for 15 minutes. Check spam if it isn’t there.')}
             </p>
-            {mode === 'signup' && <p>Already have a VinaX account with this address, Google too? The code sets its password and signs you in to it.</p>}
+            {mode === 'signup' && <p>{t('Already have a VinaX account with this address, Google too? The code sets its password and signs you in to it.')}</p>}
           </div>
           <label className="vx-auth-field">
-            <span>Code from the email</span>
+            <span>{t('Code from the email')}</span>
             <input
               className="vx-auth-code"
               type="text"
@@ -119,7 +122,7 @@ export function CodeAndPasswordForm({ mode, email, onEmail }: { mode: 'signup' |
           </label>
           {/* Lets a password manager save the address with the new password. */}
           <input type="email" autoComplete="username" value={email.trim()} readOnly hidden />
-          <PasswordField label={mode === 'signup' ? 'Choose a password' : 'New password'} value={password} onChange={setPw} isNew />
+          <PasswordField label={t(mode === 'signup' ? 'Choose a password' : 'New password')} value={password} onChange={setPw} isNew />
         </>
       )}
       {error && <p className="vx-auth-error" role="alert">{error}</p>}
@@ -129,10 +132,10 @@ export function CodeAndPasswordForm({ mode, email, onEmail }: { mode: 'signup' |
       {step === 'code' && (
         <div className="vx-auth-row">
           <button type="button" className="vx-auth-link" disabled={busy || wait > 0} onClick={() => void sendCode()}>
-            {wait > 0 ? `Send a new code in ${wait} s` : 'Send a new code'}
+            {wait > 0 ? t('Send a new code in {n} s', { n: wait }) : t('Send a new code')}
           </button>
           <button type="button" className="vx-auth-link" onClick={back}>
-            Use a different email
+            {t('Use a different email')}
           </button>
         </div>
       )}

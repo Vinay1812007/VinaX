@@ -6,8 +6,10 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CodeAndPasswordForm } from '@/components/auth/CodeAndPasswordForm';
 import { AuthShell, useAuthQuery } from './AuthShell';
+import { useT } from '@/i18n';
 
 export default function SignupPage(): ReactNode {
+  const t = useT();
   const { next, email, setEmail, href } = useAuthQuery();
   return (
     <AuthShell
@@ -17,7 +19,7 @@ export default function SignupPage(): ReactNode {
       google
       switcher={
         <>
-          Have an account? <Link to={href('/login')}>Sign in</Link>
+          {t('Have an account?')} <Link to={href('/login')}>{t('Sign in')}</Link>
         </>
       }
     >

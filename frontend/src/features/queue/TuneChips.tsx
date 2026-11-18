@@ -2,6 +2,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { TUNE_OPTIONS, type TuneIntent } from '@/services/recommendation/tune';
 import { cn } from '@/utils/cn';
+import { useT } from '@/i18n';
 
 /**
  * v6.5.0 — "Tune this queue": one tap reshapes what plays next. The chips
@@ -16,6 +17,7 @@ import { cn } from '@/utils/cn';
  * follows this song…" until the rebuilt list lands).
  */
 export function TuneChips({ className, compact = false, onTune }: { className?: string; compact?: boolean; onTune?: (intent: TuneIntent) => void }) {
+  const t = useT();
   const tuneQueue = usePlayerStore((s) => s.tuneQueue);
   const active = usePlayerStore((s) => s.tuneIntent);
   const hasSong = usePlayerStore((s) => s.queue.length > 0);
@@ -23,10 +25,10 @@ export function TuneChips({ className, compact = false, onTune }: { className?: 
   const tune = (intent: TuneIntent, label: string): void => {
     tuneQueue(intent);
     onTune?.(intent);
-    toast(intent === 'surprise' ? 'Surprise coming up ✦' : `${label} — retuning what's next. Songs you added stay.`);
+    toast(intent === 'surprise' ? 'Surprise coming up ✦' : t("{name} — retuning what's next. Songs you added stay.", { name: t(label) }));
   };
   return (
-    <div className={cn('flex gap-2', compact ? 'overflow-x-auto pb-1 -mx-1 px-1' : 'flex-wrap', className)} role="group" aria-label="Tune this queue">
+    <div className={cn('flex gap-2', compact ? 'overflow-x-auto pb-1 -mx-1 px-1' : 'flex-wrap', className)} role="group" aria-label={t('Tune this queue')}>
       {TUNE_OPTIONS.map((opt) => {
         const on = active === opt.id;
         return (
@@ -35,7 +37,7 @@ export function TuneChips({ className, compact = false, onTune }: { className?: 
             type="button"
             onClick={() => tune(opt.id, opt.label)}
             aria-pressed={on}
-            aria-label={`Tune queue: ${opt.label}`}
+            aria-label={t('Tune queue: {name}', { name: t(opt.label) })}
             // 9.0 — the Encore chip (shell.css): a quiet fill at rest, solid Iris when chosen;
             // "Surprise me" is a VinaX moment, so it carries a Lagoon tint.
             className={cn(
@@ -47,7 +49,7 @@ export function TuneChips({ className, compact = false, onTune }: { className?: 
                   : 'vx-chip-idle border-transparent text-ink-100',
             )}
           >
-            {opt.label}
+            {t(opt.label)}
           </button>
         );
       })}

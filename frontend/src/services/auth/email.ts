@@ -8,6 +8,7 @@
  *   setPassword        → POST /api/auth/password      Settings, signed in
  */
 import { acceptSignIn, currentAccount, deviceFacts, ORIGIN, setAccount, turnstileCheck, type HumanCheck } from './google';
+import { tr } from '@/i18n';
 
 /** Each failure the forms show their own line for. */
 export type EmailAuthResult =
@@ -92,22 +93,23 @@ export async function setPassword(password: string, current?: string, fetchImpl:
 
 /** The line a form shows for an outcome; null for 'ok'. */
 export function emailAuthMessage(o: Outcome): string | null {
+  // English keys; the app language's words when its dictionary has them (../../i18n.ts).
   switch (o.result) {
     case 'ok': return null;
-    case 'offline': return 'You’re offline — connect and try again.';
-    case 'check_failed': return 'The security check didn’t finish. Try again.';
-    case 'not_configured': return 'Email sign-in isn’t available right now. Use Google for now.';
-    case 'bad_email': return 'That doesn’t look like an email address.';
-    case 'wrong_password': return 'That email and password don’t match. If you made your account with Google, sign in with Google or use “Forgot password?” to set one.';
-    case 'blocked': return 'This account can’t sign in. Write to support@vinaxmusic.online.';
-    case 'wait': return o.retryIn ? `A code was just sent. You can ask for another in ${o.retryIn} s.` : 'Too many tries — wait a minute and try again.';
-    case 'not_sent': return 'The email couldn’t be sent. Check the address and try again.';
-    case 'bad_code': return 'The code is the 6 digits in the email.';
-    case 'wrong_code': return o.triesLeft ? `That code isn’t right. ${o.triesLeft} ${o.triesLeft === 1 ? 'try' : 'tries'} left.` : 'That code isn’t right.';
-    case 'code_expired': return 'That code has run out. Ask for a new one.';
-    case 'password_short': return `Use at least ${MIN_PASSWORD} characters.`;
-    case 'password_long': return 'That password is too long — use up to 72 characters.';
-    case 'signed_out': return 'You were signed out. Sign in again.';
-    default: return 'Something went wrong. Try again in a moment.';
+    case 'offline': return tr('You’re offline — connect and try again.');
+    case 'check_failed': return tr('The security check didn’t finish. Try again.');
+    case 'not_configured': return tr('Email sign-in isn’t available right now. Use Google for now.');
+    case 'bad_email': return tr('That doesn’t look like an email address.');
+    case 'wrong_password': return tr('That email and password don’t match. If you made your account with Google, sign in with Google or use “Forgot password?” to set one.');
+    case 'blocked': return tr('This account can’t sign in. Write to {email}.', { email: 'support@vinaxmusic.online' });
+    case 'wait': return o.retryIn ? tr('A code was just sent. You can ask for another in {n} s.', { n: o.retryIn }) : tr('Too many tries — wait a minute and try again.');
+    case 'not_sent': return tr('The email couldn’t be sent. Check the address and try again.');
+    case 'bad_code': return tr('The code is the 6 digits in the email.');
+    case 'wrong_code': return o.triesLeft ? tr(o.triesLeft === 1 ? 'That code isn’t right. {n} try left.' : 'That code isn’t right. {n} tries left.', { n: o.triesLeft }) : tr('That code isn’t right.');
+    case 'code_expired': return tr('That code has run out. Ask for a new one.');
+    case 'password_short': return tr('Use at least {n} characters.', { n: MIN_PASSWORD });
+    case 'password_long': return tr('That password is too long — use up to 72 characters.');
+    case 'signed_out': return tr('You were signed out. Sign in again.');
+    default: return tr('Something went wrong. Try again in a moment.');
   }
 }

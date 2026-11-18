@@ -417,11 +417,11 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       label: 'Songs like this',
       icon: 'radio',
       action: () => {
-        toast(`Finding songs like ${song.title}…`);
+        toast(t('Finding songs like {title}…', { title: song.title }));
         void songsLikeThis(song, { limit: 10 }).then((songs) => {
           if (!songs.length) { toast('Nothing similar found right now'); return; }
           usePlayerStore.getState().enqueueAll(songs);
-          toast(`Added ${songs.length} songs like ${song.title}`);
+          toast(t('Added {n} songs like {title}', { n: songs.length, title: song.title }));
         });
       },
     },

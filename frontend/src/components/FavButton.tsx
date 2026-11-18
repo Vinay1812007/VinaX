@@ -5,6 +5,7 @@ import { cn } from '@/utils/cn';
 import { isFavoriteIn } from '@/utils/favIndex';
 import { bestImage } from '@/utils/images';
 import { requireAccount } from '@/services/auth/gate';
+import { useT } from '@/i18n';
 /** The like control's glyph: ⊕ to add, a filled green disc with a black ✓ once liked. */
 export function LikeGlyph({ on, className }: { on: boolean; className?: string }) {
   return on ? (
@@ -41,10 +42,11 @@ export function toggleLike(song: Song): void {
 
 export function FavButton({ song, className }: { song: Song; className?: string }) {
   const isFav = useLibraryStore((s) => isFavoriteIn(s.favorites, song.id));
+  const t = useT();
   return (
     <button
       type="button"
-      aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+      aria-label={t(isFav ? 'Remove from favorites' : 'Add to favorites')}
       aria-pressed={isFav}
       onClick={(e) => {
         e.stopPropagation();

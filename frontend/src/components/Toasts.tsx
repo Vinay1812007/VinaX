@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useInRouterContext, useNavigate } from 'react-router-dom';
 import { setToastNavigator, useToastStore, type Toast } from '@/store/toastStore';
+import { useT } from '@/i18n';
 
 /** How long a dismissed snackbar takes to sink away (shell.css `vx-snack-out`). */
 export const SNACK_EXIT_MS = 180;
@@ -38,6 +39,9 @@ export function Toasts() {
   const resume = useToastStore((s) => s.resume);
   const inRouter = useInRouterContext();
   const region = useRef<HTMLDivElement>(null);
+  // Messages are English keys; a known one shows in the app language (a
+  // message with numbers or names was translated where it was made, with tr() from @/i18n).
+  const tx = useT();
 
   // Dismissed snackbars stay mounted for the exit motion (not under either
   // reduced-motion switch), hidden from assistive tech while they go.
@@ -139,7 +143,7 @@ export function Toasts() {
           onPointerCancel={out ? undefined : onPointerEnd}
         >
           {t.image && <img className="vx-snack-art" src={t.image} alt="" width={36} height={36} decoding="async" />}
-          <p className="vx-snack-text">{t.message}</p>
+          <p className="vx-snack-text">{tx(t.message)}</p>
           {t.action && (
             <button
               type="button"
@@ -150,7 +154,7 @@ export function Toasts() {
               }}
               className="vx-snack-action"
             >
-              {t.action.label}
+              {tx(t.action.label)}
             </button>
           )}
         </div>

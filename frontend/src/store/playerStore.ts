@@ -14,6 +14,7 @@ import { recordComplete, recordPlay, recordQueueAdd, recordSkip } from '@/servic
 import { checkNotificationOnFirstPlay, haptic, isNativePlatform } from '@/services/native';
 import { requireAccount } from '@/services/auth/gate';
 import { toast, toastNavigate } from './toastStore';
+import { tr } from '@/i18n';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castLoadSong } from '@/services/cast';
@@ -522,7 +523,7 @@ export const usePlayerStore = create<PlayerState>()(
               if (playback === instance && get().queue[get().index]?.id === song.id) {
                 noteSeek(instance, at);
                 audioEngine.seek(at);
-                toast(`Resumed from ${Math.floor(at / 60)}:${String(Math.floor(at % 60)).padStart(2, '0')}`);
+                toast(tr('Resumed from {time}', { time: `${Math.floor(at / 60)}:${String(Math.floor(at % 60)).padStart(2, '0')}` }));
               }
             }, 800);
           }
@@ -1035,7 +1036,7 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
           if (current.length && at === get().index + 1) preloadUpcoming();
-          if (!opts?.quiet) toast(`Added ${fresh.length} song${fresh.length === 1 ? '' : 's'} to queue`);
+          if (!opts?.quiet) toast(fresh.length === 1 ? 'Added 1 song to queue' : tr('Added {n} songs to queue', { n: fresh.length }));
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
         },
 
@@ -1117,7 +1118,7 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           const dropped = queue.length - next.length;
           set({ queue: next });
-          toast(`Cleared ${dropped} upcoming ${dropped === 1 ? 'song' : 'songs'}`);
+          toast(dropped === 1 ? 'Cleared 1 upcoming song' : tr('Cleared {n} upcoming songs', { n: dropped }));
         },
 
         clearPlayed: () => {
@@ -1127,7 +1128,7 @@ export const usePlayerStore = create<PlayerState>()(
           // Only the past goes: Up next, its planning and the playhead are untouched.
           if (lastRemoval) lastRemoval = { ...lastRemoval, at: Math.max(1, lastRemoval.at - index) };
           set({ queue: queue.slice(index), index: 0 });
-          toast(`Cleared ${index} played ${index === 1 ? 'song' : 'songs'}`);
+          toast(index === 1 ? 'Cleared 1 played song' : tr('Cleared {n} played songs', { n: index }));
         },
 
         clearQueue: () => {
@@ -1437,7 +1438,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (get().sleepAt != null) restoreVolume(); // cancelled or replaced inside the final fade
           set({ sleepAt: minutes == null ? null : Date.now() + minutes * 60_000, sleepAfterTrack: false });
           if (minutes != null) {
-            toast(`Sleeping in ${minutes} min`);
+            toast(tr('Sleeping in {n} min', { n: minutes }));
             sleepTimer = window.setTimeout(() => {
               sleepTimer = null;
               // The playing path (onTime) already stopped at the deadline, or the

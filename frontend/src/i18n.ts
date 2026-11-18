@@ -84,22 +84,29 @@ export function ensureDictionary(lang: UiLang): Promise<void> {
 /** For tests: the loaded extended dictionaries. */
 export const loadedDictionaries = (): Partial<Record<UiLang, Record<string, string>>> => EXTRA;
 
-export function translate(key: string, lang: UiLang): string {
-  if (lang === 'en') return key;
-  return CORE[lang]?.[key] ?? EXTRA[lang]?.[key] ?? key;
+/** Values for `{name}` slots in a key: `t('Sleeping in {n} min', { n: 5 })`. */
+export type TVars = Record<string, string | number>;
+
+export function translate(key: string, lang: UiLang, vars?: TVars): string {
+  const s = lang === 'en' ? key : (CORE[lang]?.[key] ?? EXTRA[lang]?.[key] ?? key);
+  // A slot with no value stays as written, so a missing value is easy to spot.
+  return vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
 }
+
+/** Outside React (stores, services, toasts): the app language right now. */
+export const tr = (key: string, vars?: TVars): string => translate(key, useSettingsStore.getState().uiLanguage, vars);
 
 const subscribe = (fn: () => void): (() => void) => { listeners.add(fn); return () => listeners.delete(fn); };
 const getVersion = (): number => version;
 
 /** Reactive translator bound to the user's selected app language. */
-export function useT(): (key: string) => string {
+export function useT(): (key: string, vars?: TVars) => string {
   const lang = useSettingsStore((s) => s.uiLanguage);
   const v = useSyncExternalStore(subscribe, getVersion, getVersion);
   if (lang !== 'en' && !EXTRA[lang]) void ensureDictionary(lang);
   // A new callback when the language changes or a dictionary lands (the
   // version is read inside so the dependency is real).
-  return useCallback((key: string) => (v >= 0 ? translate(key, lang) : key), [lang, v]);
+  return useCallback((key: string, vars?: TVars) => (v >= 0 ? translate(key, lang, vars) : key), [lang, v]);
 }
 
 /** The page's language tag (assistive tech, hyphenation, fonts) follows the app language; the dictionary is fetched early. */

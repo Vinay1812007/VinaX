@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { WaveIcon } from './Icons';
+import { useT } from '@/i18n';
 
 /**
  * 8.0 — the empty / error pattern: an icon in a quiet badge, a title, one
@@ -40,11 +41,13 @@ export function EmptyState({
   /** Optional context illustration — defaults to the neutral wave. */
   icon?: ReactNode;
 }) {
+  // Pages pass English; a title or line the dictionary knows shows in the app language.
+  const t = useT();
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{title}</p>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">{message}</p>
+      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{t(title)}</p>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">{t(message)}</p>
       {action && <div className="mt-5">{action}</div>}
     </StateShell>
   );
@@ -62,16 +65,17 @@ export function ErrorState({
   title?: string;
   icon?: ReactNode;
 }) {
+  const t = useT();
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
+      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{t(title ?? 'Couldn’t reach the music servers')}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">
-        {message ?? 'Check your connection and try again.'}
+        {t(message ?? 'Check your connection and try again.')}
       </p>
       {retry && (
         <button type="button" onClick={retry} className="mt-5 px-6 min-h-[44px] rounded-full btn-primary active:scale-[0.97] transition-transform">
-          Retry
+          {t('Retry')}
         </button>
       )}
     </StateShell>
@@ -84,11 +88,12 @@ export function ErrorState({
  * would stack once per shelf. `label` names what is missing.
  */
 export function InlineError({ label, retry }: { label?: string; retry: () => void }) {
+  const t = useT();
   return (
     <div role="alert" className="mb-8 flex items-center justify-between gap-3 min-h-[56px] rounded-xl bg-ink-850 pl-4 pr-2 py-1.5 text-[14px] text-ink-300">
-      <span className="min-w-0">{label ? `Couldn’t load ${label}.` : 'Couldn’t load this section.'}</span>
+      <span className="min-w-0">{label ? t('Couldn’t load {what}.', { what: t(label) }) : t('Couldn’t load this section.')}</span>
       <button type="button" onClick={retry} className="shrink-0 px-4 min-h-[44px] rounded-full text-[13px] font-bold text-ink-100 hover:bg-ink-800 transition-colors">
-        Retry
+        {t('Retry')}
       </button>
     </div>
   );

@@ -3,6 +3,7 @@ import { router } from '@/router';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { tutorialById } from '@/features/tutorials/tutorials';
+import { helpUi, localStep, localTour, useHelpTranslation } from '@/features/help/helpI18n';
 import { scrollBehavior } from '@/utils/motion';
 
 /**
@@ -20,6 +21,10 @@ import { scrollBehavior } from '@/utils/motion';
  *
  * 1.12.12 — a step can say it is not for this listener (`when`): it is passed
  * over at once, where a missing anchor is only noticed after ANCHOR_WAIT_MS.
+ *
+ * The card's words follow the app language (features/help/helpI18n, a lazy
+ * file per language). Only the text is swapped: targets, routes and actions
+ * come from the English definition, so the tour finds the same controls.
  */
 interface Rect { top: number; left: number; width: number; height: number }
 
@@ -76,6 +81,7 @@ export default function TutorialRunner() {
   const stop = useTutorialStore((s) => s.stop);
   const finish = useTutorialStore((s) => s.finish);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const tr = useHelpTranslation();
   const tutorial = tutorialById(activeId);
   const current = tutorial?.steps[step];
   const total = tutorial?.steps.length ?? 0;
@@ -244,6 +250,10 @@ export default function TutorialRunner() {
 
   if (!tutorial || !current) return null;
 
+  const t = helpUi(tr);
+  const tourTitle = localTour(tutorial, tr).title;
+  const words = localStep(tutorial, step, tr);
+
   const cardW = Math.min(380, vp.w - 24);
   // Without a spotlight the card is centred with `inset-0 m-auto h-fit`, NOT a
   // translate: the enter animation animates `transform` and would override it.
@@ -270,7 +280,7 @@ export default function TutorialRunner() {
       className="vx-tut fixed inset-0 z-[90]"
       role="dialog"
       aria-modal="true"
-      aria-label={`Tutorial: ${tutorial.title}`}
+      aria-label={t('Tutorial: {title}', { title: tourTitle })}
       data-step={step}
       data-ready={ready ? 'true' : 'false'}
       data-anchor={!current.target ? 'none' : rect ? 'found' : 'pending'}
@@ -286,7 +296,7 @@ export default function TutorialRunner() {
         <div aria-hidden className="fixed inset-0 bg-black/62" onClick={stop} />
       )}
       <p className="sr-only" role="status" aria-live="polite">
-        {showBody ? `Step ${step + 1} of ${total}. ${current.title}. ${current.body}` : ''}
+        {showBody ? `${t('Step {n} of {total}.', { n: step + 1, total })} ${words.title}. ${words.body}` : ''}
       </p>
       <div
         ref={cardRef}
@@ -297,27 +307,27 @@ export default function TutorialRunner() {
       >
         <div className="flex items-center justify-between gap-3 mb-2">
           <p className="text-[12px] font-bold text-ink-400">
-            {tutorial.title} <span className="tabular-nums">· {step + 1} of {total}</span>
+            {tourTitle} <span className="tabular-nums">· {t('{n} of {total}', { n: step + 1, total })}</span>
           </p>
           {tutorial.playsMusic && isPlaying && (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-ink-300"><span className="w-1.5 h-1.5 rounded-full bg-ember-500" /> Playing</span>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-ink-300"><span className="w-1.5 h-1.5 rounded-full bg-ember-500" /> {t('Playing')}</span>
           )}
         </div>
-        <h2 id={titleId} className="text-[18px] font-[750] tracking-[-0.015em]">{current.title}</h2>
-        <p className="mt-1.5 text-[14px] text-ink-200 leading-relaxed">{showBody ? current.body : 'Getting things ready…'}</p>
-        {current.tip && showBody && <p className="mt-2 text-[13px] text-ink-400">{current.tip}</p>}
+        <h2 id={titleId} className="text-[18px] font-[750] tracking-[-0.015em]">{words.title}</h2>
+        <p className="mt-1.5 text-[14px] text-ink-200 leading-relaxed">{showBody ? words.body : t('Getting things ready…')}</p>
+        {words.tip && showBody && <p className="mt-2 text-[13px] text-ink-400">{words.tip}</p>}
         <div className="mt-3 flex items-center gap-1.5" aria-hidden>
           {tutorial.steps.map((_, i) => (
             <span key={i} className={i === step ? 'w-4 h-1 rounded-full bg-ember-500' : 'w-1 h-1 rounded-full bg-ink-100/25'} />
           ))}
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <button type="button" onClick={stop} className="-ml-2 min-h-[44px] px-2 text-[13px] font-bold text-ink-400 hover:text-ink-100">Close</button>
+          <button type="button" onClick={stop} className="-ml-2 min-h-[44px] px-2 text-[13px] font-bold text-ink-400 hover:text-ink-100">{t('Close')}</button>
           <div className="flex-1" />
           {step > 0 && (
-            <button type="button" onClick={back} className="btn-secondary px-4 min-h-[44px] text-[14px]">Back</button>
+            <button type="button" onClick={back} className="btn-secondary px-4 min-h-[44px] text-[14px]">{t('Back')}</button>
           )}
-          <button type="button" onClick={next} className="btn-primary px-5 min-h-[44px] text-[14px]">{step >= total - 1 ? 'Done' : 'Next'}</button>
+          <button type="button" onClick={next} className="btn-primary px-5 min-h-[44px] text-[14px]">{t(step >= total - 1 ? 'Done' : 'Next')}</button>
         </div>
       </div>
     </div>

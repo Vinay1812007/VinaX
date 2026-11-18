@@ -86,6 +86,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/Button';
 import { Shelf } from '@/components/Shelf';
 import { IconButton } from '@/components/IconButton';
+import { useT } from '@/i18n';
 import '@/styles/pages/browse.css';
 
 // 8.2.0 — natural-language matches load only for queries that read like a description.
@@ -189,6 +190,7 @@ function GridTabState({
 }
 
 export default function SearchPage() {
+  const tx = useT();
   const { query: routeQuery } = useParams();
   const navigate = useNavigate();
   const [input, setInput] = useState(routeQuery ?? '');
@@ -247,7 +249,7 @@ export default function SearchPage() {
   );
   const typedNow = normalizeQuery(input);
   const q = commitQ !== null && typedNow === commitQ ? commitQ : normalizeQuery(debounced);
-  usePageTitle(q ? `“${q}”` : 'Search');
+  usePageTitle(q ? `“${q}”` : tx('Search'));
 
   const recent = useSearchStore((s) => s.recent);
   const pinned = useSearchStore((s) => s.pinned);
@@ -629,7 +631,7 @@ export default function SearchPage() {
   }, [noSongsSettled, q, trendingQueries, recent]);
   const dymBar = dym ? (
     <p role="status" className="search-dym">
-      Did you mean{' '}
+      {tx('Did you mean')}{' '}
       <button type="button" onClick={() => applySuggestion(dym)}>
         {dym}
       </button>
@@ -699,7 +701,7 @@ export default function SearchPage() {
       <span aria-hidden className="mr-1">
         ♪
       </span>
-      Search by lyrics
+      {tx('Search by lyrics')}
     </Chip>
   );
 
@@ -712,15 +714,15 @@ export default function SearchPage() {
         setTab(t);
         document.getElementById('main-content')?.scrollTo({ top: 0 });
       }}
-      aria-label={`See all ${t.toLowerCase()}`}
+      aria-label={tx(`See all ${t.toLowerCase()}`)}
     >
-      See all
+      {tx('See all')}
     </button>
   );
 
   const playAll = (list: Song[]) => (
     <button type="button" className="bx-pill" onClick={() => playQueue(list, 0)}>
-      <PlayIcon /> Play all
+      <PlayIcon /> {tx('Play all')}
     </button>
   );
 
@@ -778,7 +780,7 @@ export default function SearchPage() {
                 }
               }
             }}
-            aria-label="Search music"
+            aria-label={tx('Search music')}
             role="combobox"
             aria-expanded={showPanel}
             aria-controls="search-suggest"
@@ -797,18 +799,18 @@ export default function SearchPage() {
             enterKeyHint="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder={
+            placeholder={tx(
               listening
                 ? 'Listening…'
                 : lyricsMode
                   ? 'Type a line you remember…'
-                  : 'Songs, albums, artists, playlists…'
-            }
+                  : 'Songs, albums, artists, playlists…',
+            )}
           />
           <div className="bx-field-actions">
             {input && (
               <IconButton
-                label="Clear"
+                label={tx('Clear')}
                 onClick={() => {
                   setInput('');
                   setCommitQ(null);
@@ -822,7 +824,7 @@ export default function SearchPage() {
             )}
             {voiceReady && (
               <IconButton
-                label={listening ? 'Listening…' : 'Voice search'}
+                label={tx(listening ? 'Listening…' : 'Voice search')}
                 aria-pressed={listening}
                 onClick={startVoice}
                 className={cn('search-field-btn', listening && 'is-live')}
@@ -858,7 +860,7 @@ export default function SearchPage() {
         </div>
         </InWindowBar>
         {(active || lyricsMode || !trimmed) && (
-          <div className="search-filters" role="group" aria-label="Search filters">
+          <div className="search-filters" role="group" aria-label={tx('Search filters')}>
             {!lyricsMode &&
               TABS.map((t) => (
                 <Chip
@@ -870,7 +872,7 @@ export default function SearchPage() {
                     searchInputRef.current?.blur();
                   }}
                 >
-                  {t}
+                  {tx(t)}
                 </Chip>
               ))}
             {!lyricsMode && <span aria-hidden className="bx-rail-sep" />}
@@ -879,11 +881,11 @@ export default function SearchPage() {
         )}
         {suggestLyrics && (
           <div role="status" className="search-hint">
-            <span>That reads like a lyric line.</span>
+            <span>{tx('That reads like a lyric line.')}</span>
             <button type="button" onClick={() => setLyricsMode(true)} className="bx-text-btn">
-              Search by lyrics
+              {tx('Search by lyrics')}
             </button>
-            <IconButton size="sm" label="Dismiss" onClick={() => setLyricHintDismissed(q)}>
+            <IconButton size="sm" label={tx('Dismiss')} onClick={() => setLyricHintDismissed(q)}>
               <XIcon className="w-3.5 h-3.5" />
             </IconButton>
           </div>
@@ -913,7 +915,7 @@ export default function SearchPage() {
                   />
                 )}
                 {trendingTerms.length > 0 && (
-                  <section className="search-block search-trending-queries" aria-label="Trending searches">
+                  <section className="search-block search-trending-queries" aria-label={tx('Trending searches')}>
                     <SectionHeader title="Trending searches" explanation="What listeners look for now" />
                     <ul className="search-trend-chips">
                       {trendingTerms.slice(0, 10).map((term, i) => (
@@ -946,7 +948,7 @@ export default function SearchPage() {
             <div className="search-pair">
               <div className="search-pair-grid">
                 {!trimmed && (
-                  <section className="search-block" aria-label="Search tips">
+                  <section className="search-block" aria-label={tx('Search tips')}>
                     <SectionHeader title="Try searching" explanation="A lyric line, an artist and a film, or a mood in your language" />
                     <div className="vx-chip-row">
                       {exampleQueries(pinnedLangs).map((ex) => (
@@ -958,7 +960,7 @@ export default function SearchPage() {
                   </section>
                 )}
                 {myArtists.length >= 2 && (
-                  <section className="search-block" aria-label="From your artists">
+                  <section className="search-block" aria-label={tx('From your artists')}>
                     <SectionHeader title="From your artists" explanation="The artists you play most" />
                     <div className="vx-chip-row">
                       {myArtists.map((name) => (
@@ -973,7 +975,7 @@ export default function SearchPage() {
             </div>
           )}
 
-          <section className="search-block search-browse" aria-label="Browse a vibe">
+          <section className="search-block search-browse" aria-label={tx('Browse a vibe')}>
             <SectionHeader title="Moods and moments" seeAllTo="/moods" />
             <div className="search-vibe-grid">
               {moments.map((v) => (
@@ -981,31 +983,31 @@ export default function SearchPage() {
                   key={v.art}
                   className={`search-vibe search-vibe-${v.art}`}
                   tone={`vx-tone-${v.tone}`}
-                  title={v.title}
-                  meta={v.detail}
+                  title={tx(v.title)}
+                  meta={tx(v.detail)}
                   onClick={() => applySuggestion(v.query)}
                   visual={<TileGlyph>{v.glyph}</TileGlyph>}
                 />
               ))}
             </div>
-            <div className="vx-chip-rail search-moods" role="group" aria-label="In the mood for">
+            <div className="vx-chip-rail search-moods" role="group" aria-label={tx('In the mood for')}>
               {MOODS.map((m) => (
                 <Chip key={m.id} onClick={() => setInput(m.query)}>
                   <span aria-hidden className="mr-1">
                     {m.emoji}
                   </span>
-                  {m.label}
+                  {tx(m.label)}
                 </Chip>
               ))}
             </div>
           </section>
 
-          <section className="search-block" aria-label="Browse all">
+          <section className="search-block" aria-label={tx('Browse all')}>
             <SectionHeader title="Browse all" seeAllTo="/discover" />
             <DestinationGrid area="discover" chartSongs={trendingNow.data} />
           </section>
 
-          <section className="search-block" aria-label="Trending now">
+          <section className="search-block" aria-label={tx('Trending now')}>
             <SectionHeader title="Trending now" action={(trendingNow.data?.length ?? 0) > 0 && playAll(trendingNow.data ?? [])} />
             {trendingNow.isLoading && <ListSkeleton rows={6} />}
             <div className="vx-track-list max-w-[960px]">
@@ -1022,14 +1024,14 @@ export default function SearchPage() {
           {lyricsQ.isLoading && <ListSkeleton />}
           {lyricsQ.isError && <ErrorState retry={() => lyricsQ.refetch()} />}
           {!lyricsQ.isLoading && !lyricsQ.isError && !lyricMatches && (
-            <p className="vx-meta-line">Type a line you remember — a few words in a row work best.</p>
+            <p className="vx-meta-line">{tx('Type a line you remember — a few words in a row work best.')}</p>
           )}
           {lyricMatches && lyricMatches.length === 0 && (
             <EmptyState
               icon={<MusicIcon className="w-8 h-8" />}
               title="No song has those words — try a longer line."
               message="The lyrics service matches whole phrases best — a full line beats a couple of words."
-              action={<Button onClick={() => setLyricsMode(false)}>Search titles instead</Button>}
+              action={<Button onClick={() => setLyricsMode(false)}>{tx('Search titles instead')}</Button>}
             />
           )}
           {lyricMatches && lyricMatches.length > 0 && (
@@ -1038,7 +1040,7 @@ export default function SearchPage() {
                 title="Songs with those words"
                 explanation={
                   lyricMatches.every((m) => m.source === 'catalogue')
-                    ? 'The lyrics service had no match — these titles begin with those words.'
+                    ? tx('The lyrics service had no match — these titles begin with those words.')
                     : undefined
                 }
                 action={playAll(lyricSongs)}
@@ -1049,7 +1051,7 @@ export default function SearchPage() {
                     <SongRow song={m.song} songs={lyricSongs} index={i} asSeed />
                     {m.source === 'catalogue' && (
                       <p className="search-lyric-note">
-                        <span className="search-lyric-badge">Matched by title</span>
+                        <span className="search-lyric-badge">{tx('Matched by title')}</span>
                       </p>
                     )}
                     {m.source === 'lyrics' && m.hit.snippet && (
@@ -1091,7 +1093,7 @@ export default function SearchPage() {
                     <div className="search-lead-wrap">
                       <div className="search-results-lead">
                         {(topArtist || topResult) && (
-                          <section aria-label="Top result">
+                          <section aria-label={tx('Top result')}>
                             <SectionHeader title="Top result" />
                             {topArtist ? (
                               <ArtistTopResult artist={topArtist} onPlay={() => void playArtist(topArtist.id, topArtist.name)} />
@@ -1110,7 +1112,7 @@ export default function SearchPage() {
                           </section>
                         )}
                         {leadSongs.length > 0 && (
-                          <section aria-label="Songs" className="min-w-0">
+                          <section aria-label={tx('Songs')} className="min-w-0">
                             <SectionHeader title="Songs" action={seeAll('Songs')} />
                             <div className="search-top-songs">
                               {leadSongs.map((song, i) => (
@@ -1137,7 +1139,7 @@ export default function SearchPage() {
                           }
                           images={a.images}
                           title={a.name}
-                          subtitle="Artist"
+                          subtitle={tx('Artist')}
                           round
                           onPlay={() => void playArtist(a.id, a.name)}
                         />
@@ -1183,7 +1185,7 @@ export default function SearchPage() {
                           image={bestImage(p.images)}
                           images={p.images}
                           title={p.name}
-                          subtitle={p.season ? `Podcast · Season ${p.season}` : 'Podcast'}
+                          subtitle={p.season ? tx('Podcast · Season {n}', { n: p.season }) : tx('Podcast')}
                         />
                       ))}
                     </Shelf>
@@ -1193,9 +1195,9 @@ export default function SearchPage() {
                       <EmptyState
                         icon={<SearchIcon className="w-8 h-8" />}
                         title="No results"
-                        message={`Nothing matched “${q}”. Try a shorter or transliterated spelling.`}
+                        message={tx('Nothing matched “{q}”. Try a shorter or transliterated spelling.', { q })}
                       />
-                      <div className="search-empty-help" role="group" aria-label="Other ways to search">
+                      <div className="search-empty-help" role="group" aria-label={tx('Other ways to search')}>
                         {lyricsChip}
                         {trendingTerms
                           .filter((t) => normalizeQuery(t) !== q)
@@ -1224,9 +1226,9 @@ export default function SearchPage() {
                 language={langFilter}
               />
               {availableLangs.length > 1 && (
-                <div className="vx-chip-rail" role="group" aria-label="Language">
+                <div className="vx-chip-rail" role="group" aria-label={tx('Language')}>
                   <Chip active={!langFilter} onClick={() => setLangFilter(null)}>
-                    All languages
+                    {tx('All languages')}
                   </Chip>
                   {availableLangs.map((l) => (
                     <Chip key={l} active={langFilter === l} onClick={() => setLangFilter(l)}>
@@ -1238,18 +1240,18 @@ export default function SearchPage() {
               {allSongList.length > 0 && (
                 <div className="search-songs-tools">
                   <label>
-                    <span className="max-md:sr-only">Sort</span>
+                    <span className="max-md:sr-only">{tx('Sort')}</span>
                     <select
                       value={songSort}
                       onChange={(e) => {
                         if (isSongSort(e.target.value)) setSongSort(e.target.value);
                       }}
-                      aria-label="Sort results"
+                      aria-label={tx('Sort results')}
                       className="bx-select"
                     >
                       {SONG_SORTS.map((s) => (
                         <option key={s} value={s}>
-                          {SONG_SORT_LABELS[s]}
+                          {tx(SONG_SORT_LABELS[s])}
                         </option>
                       ))}
                     </select>
@@ -1258,10 +1260,10 @@ export default function SearchPage() {
                   {displaySongs.length > 0 && (
                     <>
                       <button type="button" onClick={() => playQueue(displaySongs, 0)} className="bx-pill">
-                        <PlayIcon /> Play all
+                        <PlayIcon /> {tx('Play all')}
                       </button>
                       <button type="button" onClick={() => enqueueAll(displaySongs)} className="bx-pill">
-                        <QueueIcon /> Queue all
+                        <QueueIcon /> {tx('Queue all')}
                       </button>
                     </>
                   )}
@@ -1274,12 +1276,12 @@ export default function SearchPage() {
                     value={resultFilter}
                     maxLength={80}
                     onChange={(e) => setResultFilter(e.target.value)}
-                    aria-label="Filter these results"
-                    placeholder="Filter these results"
+                    aria-label={tx('Filter these results')}
+                    placeholder={tx('Filter these results')}
                   />
                   {resultFilter && (
                     <div className="bx-field-actions">
-                      <IconButton size="sm" label="Clear filter" onClick={() => setResultFilter('')}>
+                      <IconButton size="sm" label={tx('Clear filter')} onClick={() => setResultFilter('')}>
                         <XIcon className="w-3.5 h-3.5" />
                       </IconButton>
                     </div>
@@ -1294,8 +1296,7 @@ export default function SearchPage() {
                 dymBar}
               {resultFilter.trim() && displaySongs.length === 0 && songList.length > 0 && (
                 <p className="vx-meta-line px-2 mb-3">
-                  Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or
-                  clear the filter.
+                  {tx('Nothing loaded so far matches “{q}” — scroll to load more, or clear the filter.', { q: resultFilter.trim() })}
                 </p>
               )}
               {!infiniteSongs.isLoading && !infiniteSongs.isError && displaySongs.length === 0 && (
@@ -1331,7 +1332,7 @@ export default function SearchPage() {
                   disabled={infiniteSongs.isFetchingNextPage}
                   onClick={() => void infiniteSongs.fetchNextPage()}
                 >
-                  Load more songs
+                  {tx('Load more songs')}
                 </button>
               )}
             </div>
@@ -1339,9 +1340,9 @@ export default function SearchPage() {
           {tab === 'Albums' && (
             <>
               {albumLangs.length > 1 && (
-                <div className="vx-chip-rail" role="group" aria-label="Language">
+                <div className="vx-chip-rail" role="group" aria-label={tx('Language')}>
                   <Chip active={!albumLang} onClick={() => setAlbumLang(null)}>
-                    All languages
+                    {tx('All languages')}
                   </Chip>
                   {albumLangs.map((l) => (
                     <Chip key={l} active={albumLang === l} onClick={() => setAlbumLang(l)}>
@@ -1387,7 +1388,7 @@ export default function SearchPage() {
                     }
                     images={a.images}
                     title={a.name}
-                    subtitle="Artist"
+                    subtitle={tx('Artist')}
                     round
                     fluid
                     onPlay={() => void playArtist(a.id, a.name)}
@@ -1439,7 +1440,7 @@ export default function SearchPage() {
                     image={bestImage(p.images)}
                     images={p.images}
                     title={p.name}
-                    subtitle={p.season ? `Podcast · Season ${p.season}` : 'Podcast'}
+                    subtitle={p.season ? tx('Podcast · Season {n}', { n: p.season }) : tx('Podcast')}
                     fluid
                   />
                 ))}
@@ -1447,7 +1448,7 @@ export default function SearchPage() {
               {podcastList.length === 0 && !podcastShows.isLoading && (
                 <p className="mt-3">
                   <a className="vx-section-link" href="/podcasts" onClick={(e) => { e.preventDefault(); navigate('/podcasts'); }}>
-                    Browse all podcasts
+                    {tx('Browse all podcasts')}
                   </a>
                 </p>
               )}

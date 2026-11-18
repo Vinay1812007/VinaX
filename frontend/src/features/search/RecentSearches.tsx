@@ -3,6 +3,7 @@ import { ClockIcon, XIcon } from '@/components/Icons';
 import { IconButton } from '@/components/IconButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { cn } from '@/utils/cn';
+import { useT } from '@/i18n';
 
 /** v5.17.0 — a small push-pin, used on pinned recents. */
 export function PinGlyph({ className }: { className?: string }) {
@@ -41,6 +42,7 @@ function RecentRow({
   onTogglePin: (viaLongPress: boolean) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const timer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const cancel = () => {
@@ -81,20 +83,20 @@ function RecentRow({
         </span>
         <span className="min-w-0">
           <span className="search-recent-text">{query}</span>
-          {pinned && <span className="search-recent-meta">Pinned</span>}
+          {pinned && <span className="search-recent-meta">{t('Pinned')}</span>}
         </span>
       </button>
       <span className="search-recent-tools">
         <IconButton
           size="sm"
-          label={pinned ? `Unpin ${query}` : `Pin ${query}`}
+          label={t(pinned ? 'Unpin {q}' : 'Pin {q}', { q: query })}
           aria-pressed={pinned}
           onClick={() => onTogglePin(false)}
           className="search-recent-tool search-recent-pin"
         >
           <PinGlyph className="w-4 h-4" />
         </IconButton>
-        <IconButton size="sm" label={`Remove ${query}`} onClick={onRemove} className="search-recent-tool">
+        <IconButton size="sm" label={t('Remove {q}', { q: query })} onClick={onRemove} className="search-recent-tool">
           <XIcon className="w-4 h-4" />
         </IconButton>
       </span>
@@ -124,16 +126,17 @@ export function RecentSearches({
   onRemove: (query: string) => void;
   onClear: () => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const cut = Math.max(RECENT_PREVIEW, pinned.filter((p) => ordered.includes(p)).length);
   const shown = expanded ? ordered : ordered.slice(0, cut);
   return (
-    <section className="search-block" aria-label="Recent searches">
+    <section className="search-block" aria-label={t('Recent searches')}>
       <SectionHeader
         title="Recent searches"
         action={
           <button type="button" className="vx-section-link" onClick={onClear}>
-            Clear all
+            {t('Clear all')}
           </button>
         }
       />
@@ -151,11 +154,11 @@ export function RecentSearches({
       </ul>
       {ordered.length > cut && (
         <button type="button" className="bx-text-btn mt-1 -ml-3" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-          {expanded ? 'Show fewer' : `Show all ${ordered.length}`}
+          {expanded ? t('Show fewer') : t('Show all {n}', { n: ordered.length })}
         </button>
       )}
       {pinned.length === 0 && ordered.length > 1 && (
-        <p className="search-recent-tip">Long-press (or hover) a search to pin it.</p>
+        <p className="search-recent-tip">{t('Long-press (or hover) a search to pin it.')}</p>
       )}
     </section>
   );
