@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.17.3': {
+    title: 'VinaX keeps working all day: the app now talks to its own server',
+    changes: [
+      { type: 'improved', text: 'No more "can\'t reach the server" late in the day: songs, search, sign-in and VinaX AI now run on VinaX\'s own server, with no daily limit.' },
+      { type: 'fixed', text: 'Long VinaX AI replies no longer stop half way.' },
+      { type: 'new', text: 'If the new server is ever unreachable, the app quietly switches back to the old one.' },
+    ],
+  },
   '1.17.2': {
     title: 'VinaX in Kannada and Malayalam, and videos open in Flow',
     changes: [
