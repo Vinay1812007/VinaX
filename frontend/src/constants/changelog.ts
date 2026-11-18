@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.18.1': {
+    title: 'VinaX AI: Claude answers again after long thinking, and 3D scenes get real models,…',
+    changes: [
+      { type: 'improved', text: 'When Claude spends its whole reply thinking, VinaX AI now says so and asks it again straight away, instead of "didn\'t send an answer".' },
+      { type: 'improved', text: '3D visuals use the latest three.js with real lighting and reflections, animated people and animals, textures and an HDR sky.' },
+      { type: 'improved', text: 'Every visual now comes with on-screen labels and controls and a short "What you\'re seeing" walkthrough under it.' },
+      { type: 'improved', text: 'Claude Haiku 5.5 has twice the room for long pages and apps.' },
+    ],
+  },
   '1.18.0': {
     title: 'VinaX AI works more like Claude: Research, a Chats page, shortcuts and more',
     changes: [
