@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.17.1': {
+    title: 'VinaX in Telugu, Hindi and Tamil: the player, Search, sign-in and Help',
+    changes: [
+      { type: 'improved', text: 'The player, Now Playing, Search, the welcome screens and sign-in now follow your app language.' },
+      { type: 'improved', text: 'Help guides, the FAQ and the guided tours are now in Telugu, Hindi and Tamil too.' },
+      { type: 'new', text: 'Messages like "Added to queue" and empty pages now show in your language.' },
+    ],
+  },
   '1.17.0': {
     title: 'Real crossfade, offline saves on the web, cast from Android, even volume and more',
     changes: [
