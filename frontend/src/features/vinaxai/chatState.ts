@@ -328,6 +328,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           return patchReply(state, () => ({ status: ev.data }));
         case 'progress':
           return patchReply(state, () => ({ progress: ev.data }));
+        case 'note':
+          return patchReply(state, () => ({ status: { step: 'note', message: ev.data.message } }));
         case 'sources': {
           const { markers, ...sources } = ev.data;
           return patchReply(state, (m) => ({ sources, ...(markers?.length ? { text: applyMarkers(m.text, markers) } : {}) }));

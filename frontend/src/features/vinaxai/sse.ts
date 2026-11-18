@@ -14,7 +14,7 @@ import type { StreamEvent } from './types';
 export interface RawLine { event: 'raw'; data: string }
 export type ChatStreamItem = StreamEvent | RawLine;
 
-const KNOWN = new Set(['meta', 'title', 'thinking', 'text', 'error', 'done', 'sources', 'status', 'progress']);
+const KNOWN = new Set(['meta', 'title', 'thinking', 'text', 'error', 'done', 'sources', 'status', 'progress', 'note']);
 
 export class SseParser {
   private buf = '';

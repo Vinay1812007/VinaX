@@ -166,9 +166,16 @@ describe('the Claude adapter', () => {
     expect(await collect(req(HAIKU))).toEqual([{ type: 'end', reason: 'content_filter' }]);
   });
 
-  it('a stream with no answer text is empty', async () => {
+  it('a stream with no answer text is empty; one that hit max_tokens while still thinking is spent', async () => {
     stubFetch(() => sseResponse(anthropicSse('', { thinking: 'Hmm.' })));
     await expect(collect(req(HAIKU))).rejects.toMatchObject({ kind: 'empty' });
+    stubFetch(() => sseResponse(anthropicSse('', { thinking: 'Hmm, let me plan the whole store…', stop: 'max_tokens' })));
+    await expect(collect(req(HAIKU))).rejects.toMatchObject({ kind: 'spent' });
+  });
+
+  it('Claude gets 65,536 output tokens: adaptive thinking counts against them', () => {
+    expect(spec(HAIKU).maxOutput).toBe(65_536);
+    expect(anthropicBody(req(HAIKU, { maxOutputTokens: 65_536 })).max_tokens).toBe(65_536);
   });
 
   it('classifies HTTP failures and mid-stream error events', async () => {
@@ -289,6 +296,55 @@ describe('the lock', () => {
     const saved = fake.rows('ai_messages').find((r) => r.role === 'assistant')!;
     expect(saved).toMatchObject({ model_id: HAIKU, provider: 'anthropic', thinking: 'Greet back.' });
     expect(saved.content).toEqual([{ type: 'text', text: 'Namaste from Claude.' }]);
+  });
+
+  it('thinking that takes the whole reply: the chat says so and asks Claude once more at Fast on the same stream', async () => {
+    let calls = 0;
+    const fake = fakeDb({
+      accounts: [{ id: '1001', name: 'Vinay', email: OWNER, email_verified: false }],
+      settings: [{ key: 'vinax-ai', value: { enabled: true }, updated_at: '2026-11-12T00:00:00Z', updated_by: 'owner' }],
+    }, (url: string) => {
+      if (!url.startsWith(ANTHROPIC_URL)) return sseResponse(openAiSse('Short title'));
+      calls += 1;
+      return calls === 1
+        ? sseResponse(anthropicSse('', { thinking: 'Planning every shelf of the store…', stop: 'max_tokens' }))
+        : sseResponse(anthropicSse('Here is the store.', { thinking: 'Quick plan.' }));
+    });
+    const res = await chat('1001', { mode: 'model', model: HAIKU, thinking: 'standard' });
+    const events = await readEvents(res);
+    await settle();
+    expect(calls).toBe(2);
+    const names = events.map((e) => e.event);
+    expect(names).toContain('note');
+    expect((events.find((e) => e.event === 'note')!.data as { message: string }).message).toMatch(/whole reply on thinking.*Fast/);
+    expect(names.indexOf('note')).toBeGreaterThan(names.indexOf('thinking'));
+    expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Here is the store.');
+    expect(events.some((e) => e.event === 'error')).toBe(false);
+    expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end', saved: true });
+    const bodies = (vi.mocked(fetch).mock.calls as Array<[string, RequestInit]>).filter(([u]) => String(u).startsWith(ANTHROPIC_URL)).map(([, init]) => JSON.parse(String(init.body)));
+    expect(bodies[0].output_config).toEqual({ effort: 'medium' });
+    expect(bodies[1].output_config).toEqual({ effort: 'low' });
+    const saved = fake.rows('ai_messages').find((r) => r.role === 'assistant')!;
+    expect(saved.content).toEqual([{ type: 'text', text: 'Here is the store.' }]);
+    expect(saved.thinking).toBe('Quick plan.');
+  });
+
+  it('a second spent reply is reported, not retried again', async () => {
+    let calls = 0;
+    fakeDb({
+      accounts: [{ id: '1001', name: 'Vinay', email: OWNER, email_verified: false }],
+      settings: [{ key: 'vinax-ai', value: { enabled: true }, updated_at: '2026-11-12T00:00:00Z', updated_by: 'owner' }],
+    }, (url: string) => {
+      if (!url.startsWith(ANTHROPIC_URL)) return sseResponse(openAiSse('Short title'));
+      calls += 1;
+      return sseResponse(anthropicSse('', { thinking: 'Still planning…', stop: 'max_tokens' }));
+    });
+    const events = await readEvents(await chat('1001', { mode: 'model', model: HAIKU }));
+    await settle();
+    expect(calls).toBe(2);
+    const err = events.find((e) => e.event === 'error')!.data as { code: string; message: string };
+    expect(err.code).toBe('thinking_overrun');
+    expect(err.message).toMatch(/used its whole reply on thinking/);
   });
 
   it('Auto never answers with Claude, even for the owner', async () => {

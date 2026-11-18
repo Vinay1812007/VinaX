@@ -1159,16 +1159,6 @@
     post({ type: 'error', message: String(err && err.message || err).slice(0, 500) });
   }
 
-  /**
-   * Pages often load a library from jsDelivr or unpkg, which this page's
-   * policy does not allow: the common ones are pointed at the same library on
-   * cdnjs instead (any other such script still fails, and says so).
-   */
-  var CDNJS_FOR = {
-    'chart.js': LIBS.chartjs, d3: LIBS.d3, 'plotly.js': LIBS.plotly, 'plotly.js-dist': LIBS.plotly, 'plotly.js-dist-min': LIBS.plotly,
-    three: LIBS.three, lodash: LIBS.lodash, mathjs: LIBS.mathjs, papaparse: LIBS.papaparse, mermaid: LIBS.mermaid,
-    react: LIBS.react, 'react-dom': LIBS.reactDom, '@babel/standalone': LIBS.babel, recharts: LIBS.recharts
-  };
   /** The OrbitControls kept in this page (see the comment above it). */
   function orbitSource() {
     var el = document.getElementById('vx-orbit-controls');
@@ -1176,23 +1166,19 @@
   }
 
   /**
-   * Make a page's scripts load here: a library's main file from jsDelivr or
-   * unpkg becomes the same library on cdnjs; a three.js build that cdnjs does
-   * not have under that name ("r152") becomes its numbered one ("0.152.0");
-   * OrbitControls, from anywhere, is put inline from the copy kept above.
-   * Anything else is left as written (and, if it fails, the page says so).
+   * Make a page's scripts load here. jsDelivr and unpkg are allowed hosts
+   * (2026-11-18: three.js r160's ES modules and addons), so their scripts are
+   * left as written. The classic (non-module) OrbitControls that older pages
+   * load from examples/js/, which newer three versions no longer ship, is put
+   * inline from the copy kept above; a three.js build that cdnjs does not have
+   * under that name ("r152") becomes its numbered one ("0.152.0"). Anything
+   * else is left as written (and, if it fails, the page says so).
    */
   function fixScripts(html) {
     return String(html)
-      .replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*\/OrbitControls(?:\.min)?\.js["'][^>]*>\s*<\/script>/gi, function () {
+      .replace(/<script\b(?![^>]*\btype\s*=\s*["']module["'])[^>]*\bsrc\s*=\s*["'][^"']*\/examples\/js\/controls\/OrbitControls(?:\.min)?\.js["'][^>]*>\s*<\/script>/gi, function () {
         return '<script>' + orbitSource() + '<\/script>';
       })
-      .replace(/(<script\b[^>]*\bsrc\s*=\s*["'])(https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@[\w.-]+\/)?[\w.-]+)(?:@[^/"']*)?([^"']*))(["'])/gi,
-        function (all, open, url, pkg, path, close) {
-          var to = CDNJS_FOR[pkg.toLowerCase()];
-          // Only a main file: add-ons and sources (examples/, addons/, jsm/, src/) are not the library itself.
-          return to && !/\/(examples|addons|jsm|src)\//i.test(path) ? open + to + close : all;
-        })
       .replace(/(https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/)r(\d{3})(\/three(?:\.min)?\.js)/gi, function (all, base, n, file) {
         return n === '128' ? all : base + '0.' + n + '.0' + file;
       });

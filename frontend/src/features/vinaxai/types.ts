@@ -116,7 +116,9 @@ export type SearchStatus =
   | { step: 'planning' }
   | { step: 'researching'; queries: string[]; done: number }
   /** Today's Research allowance is used up: this reply searches once instead. */
-  | { step: 'research_limit' };
+  | { step: 'research_limit' }
+  /** A line from the Worker about this reply (e.g. thinking took the whole reply, so it is asked again at Fast). */
+  | { step: 'note'; message: string };
 
 export interface ReplyError {
   code: string;
@@ -244,6 +246,7 @@ export type StreamEvent =
   | { event: 'text'; data: { delta: string } }
   | { event: 'status'; data: SearchStatus }
   | { event: 'progress'; data: ReplyProgress }
+  | { event: 'note'; data: { message: string } }
   | { event: 'sources'; data: SourcesInfo & { markers?: Marker[] } }
   | { event: 'error'; data: ReplyError }
   /** `saved` false: the Worker did not save the reply, so the page keeps what it saw (POST /api/ai/keep). */

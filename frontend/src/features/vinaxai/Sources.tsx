@@ -92,6 +92,7 @@ export function statusText(s: SearchStatus): string {
       : `Researching ${n} search${n === 1 ? '' : 'es'}: ${s.queries.slice(0, 3).map(short).join(' · ')}${n > 3 ? ' …' : ''}`;
   }
   if (s.step === 'research_limit') return 'Today’s research is used up, so this reply searches once';
+  if (s.step === 'note') return s.message;
   if (!s.count) return 'No useful results; answering without them';
   return `Found ${s.count} result${s.count === 1 ? '' : 's'}${s.sites.length ? ` · ${s.sites.slice(0, 3).join(', ')}` : ''}`;
 }

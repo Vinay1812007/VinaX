@@ -156,7 +156,7 @@ export const isApproved = (id: string): boolean => APPROVED_MODELS.has(id);
  * fallback, so it stays off. Each thread is capped at 340,000 characters
  * (about 85K tokens, with the system prompt under 100K; the model holds 1M):
  * Haiku 5.5 costs five times as much per token once a prompt passes 100K
- * tokens, and the owner pays per token. 32,768 tokens of answer and thinking
+ * tokens, and the owner pays per token. 65,536 tokens of answer and thinking (adaptive thinking counts against it: 32,768 was all thinking on a long build request, 2026-11-18)
  * per reply; a longer page carries on with the page's Continue.
  */
 const CLAUDE_CTX = 340_000;
@@ -166,7 +166,7 @@ const claude = (upstream: string, name: string, description: string, extra: Part
   return m('anthropic', upstream, name, 'claude', {
     description,
     maxContextChars: CLAUDE_CTX,
-    maxOutput: 32_768,
+    maxOutput: 65_536,
     params: { ...claudeThink, ...(fallback ? { fallbacks: 'default' } : {}) },
     offParams: { output_config: { effort: 'low' } },
     ...rest,
@@ -282,7 +282,8 @@ export const MODELS: readonly ModelSpec[] = [
   claude('claude-haiku-5-5', 'Claude Haiku 5.5', 'Anthropic’s quick Claude: sees images, thinks when it helps'),
   // The previous Haiku: 200K context, 64K output, thinking by token budget (thinking.ts), no effort.
   // Fast is its default (no thinking); the Thinking menu turns thinking on.
-  claude('claude-haiku-4-5', 'Claude Haiku 4.5', 'The previous Haiku: quick, sees images', { params: {}, offParams: {} }),
+  // Haiku 4.5 thinks by a budget kept under max_tokens (thinking.ts), so its room stays at 32,768.
+  claude('claude-haiku-4-5', 'Claude Haiku 4.5', 'The previous Haiku: quick, sees images', { params: {}, offParams: {}, maxOutput: 32_768 }),
   // ---- Cloudflare Workers AI (picked by hand only)
   m('cloudflare', '@cf/zai-org/glm-5.3-flash', 'GLM 5.3 Flash (Cloudflare)', 'cloudflare', {
     description: 'Quick GLM on the edge network', maxContextChars: CF_CTX, maxOutput: 8_192,

@@ -42,8 +42,15 @@ describe('buildSystemPrompt', () => {
     expect(VISUALS_OWNER_TEXT).toContain('Format them as a ```questions block containing JSON');
     expect(VISUALS_OWNER_TEXT).toContain('For quizzes, output a ```quiz block');
     expect(VISUALS_OWNER_TEXT).toContain('never describe the code itself.');
-    expect(ARTIFACTS_BLOCK).toMatch(/three\.js r128/);
+    // 3D: three.js r160 as ES modules through an import map on jsDelivr, real lighting, the example assets, and a walkthrough.
+    expect(ARTIFACTS_BLOCK).toContain('"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"');
+    expect(ARTIFACTS_BLOCK).toContain('"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"');
     expect(ARTIFACTS_BLOCK).toMatch(/setPixelRatio/);
+    expect(ARTIFACTS_BLOCK).toMatch(/RoomEnvironment/);
+    expect(ARTIFACTS_BLOCK).toContain('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/');
+    expect(ARTIFACTS_BLOCK).toContain('Soldier.glb');
+    expect(ARTIFACTS_BLOCK).toContain('What you\'re seeing');
+    expect(ARTIFACTS_BLOCK).not.toMatch(/r128/);
     expect(ARTIFACTS_BLOCK).not.toContain('<artifact');
   });
 
@@ -82,6 +89,20 @@ describe('buildSystemPrompt', () => {
     expect(p.indexOf(CITATION_RULES)).toBeLessThan(p.indexOf(RESEARCH_RULES));
     expect(buildSystemPrompt({ spec: full, vars, artifacts: false, search })).not.toContain(RESEARCH_RULES);
     expect(buildSystemPrompt({ spec: full, vars, artifacts: false, search: { sources: [] }, research: true })).not.toContain(RESEARCH_RULES);
+  });
+
+  it('on a small window a project with files outranks the visuals block; a long window keeps both', () => {
+    const docs = [{ name: 'notes.txt', text: 'y'.repeat(3_000) }];
+    const small = buildSystemPrompt({ spec: full, vars, artifacts: true, project: { name: 'P', instructions: null, documents: docs, notes: [] } });
+    expect(full.maxContextChars).toBe(30_000);
+    expect(small).not.toContain('# Visuals');
+    expect(small).toContain('<document name="notes.txt">');
+    const long = modelById(MODELS, 'gemini:gemini-3.1-flash-lite')!;
+    const wide = buildSystemPrompt({ spec: long, vars, artifacts: true, project: { name: 'P', instructions: null, documents: docs, notes: [] } });
+    expect(wide).toContain('# Visuals');
+    expect(wide).toContain('<document name="notes.txt">');
+    // Without files the visuals block stays, whatever the window.
+    expect(buildSystemPrompt({ spec: full, vars, artifacts: true, project: { name: 'P', instructions: 'Be brief.', documents: [], notes: [] } })).toContain('# Visuals');
   });
 
   it('artifacts block on and off', () => {

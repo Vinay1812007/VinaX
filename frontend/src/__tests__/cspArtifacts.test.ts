@@ -1,6 +1,8 @@
 /**
  * VinaX AI artifacts run on their own origin: the app may frame the sandbox
- * host, and nothing else about it changes (no scripts, no connections).
+ * host, and nothing else about it changes (no scripts, no connections). The
+ * sandbox itself loads scripts from three CDNs and fetches files from two
+ * of them (three.js assets), never from the app.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -23,10 +25,15 @@ describe('the app CSP and the artifact sandbox', () => {
 describe('the sandbox site', () => {
   const sandbox = readFileSync(resolve(__dirname, '../../../sandbox/_headers'), 'utf8');
   const runner = readFileSync(resolve(__dirname, '../../../sandbox/index.html'), 'utf8');
-  it('cannot reach the network, and only VinaX may frame it', () => {
-    expect(sandbox).toMatch(/connect-src 'none'/);
+  it('reaches only the two script CDNs for files (three.js models, textures, decoders), never the app, and only VinaX may frame it', () => {
+    const connect = /connect-src ([^;]+)/.exec(sandbox)![1].split(/\s+/);
+    expect(connect).toEqual(['https://cdn.jsdelivr.net', 'https://unpkg.com']);
+    expect(sandbox).not.toMatch(/connect-src[^;]*(vinaxmusic\.online|\*|https:\s)/);
     expect(sandbox).toMatch(/frame-ancestors https:\/\/www\.vinaxmusic\.online http:\/\/localhost:\*/);
     expect(sandbox).toMatch(/default-src 'none'/);
+    // Scripts: the three CDNs and nothing else (no data:, no *).
+    const scripts = /script-src ([^;]+)/.exec(sandbox)![1].split(/\s+/).filter((v) => !v.startsWith("'"));
+    expect(scripts).toEqual(['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']);
   });
   it('listens only to VinaX (and localhost for development): the page framing it, or the tab that opened it', () => {
     expect(runner).toContain("var ALLOWED = /^(https:\\/\\/www\\.vinaxmusic\\.online|https?:\\/\\/localhost(:\\d+)?)$/;");
@@ -40,8 +47,9 @@ describe('the sandbox site', () => {
     expect(urls.length).toBeGreaterThan(6);
     for (const u of urls) {
       expect(u, u).toMatch(/@?\d+\.\d+\.\d+\//);
-      const allowed = u.startsWith('https://cdnjs.cloudflare.com/') || sandbox.includes(u.replace(/dist\/.*$/, '').replace(/\/$/, '/'));
-      expect(allowed, u).toBe(true);
+      const host = new URL(u).origin;
+      expect(['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'], u).toContain(host);
+      expect(sandbox, u).toContain(host);
     }
   });
 });

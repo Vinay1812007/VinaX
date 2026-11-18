@@ -170,6 +170,8 @@ export function humanReason(err: ProviderError, spec: ModelSpec | null): string 
       return `${who} isn't available right now.`;
     case 'empty':
       return `${who} didn't send an answer.`;
+    case 'spent':
+      return `${who} used its whole reply on thinking and never wrote the answer. Try Fast thinking, or a shorter request.`;
     default:
       return `${who} couldn't answer just now.`;
   }

@@ -108,17 +108,20 @@ For quizzes, output a \`\`\`quiz block containing JSON: [{"question": "...", "op
 Keep text replies short and conversational. Put one sentence before each visual saying what it shows, and never describe the code itself.`;
 
 export const VISUALS_RULES = `# Making visuals work in VinaX AI
-- An html block runs as its own page in a sandbox with no network access. Start it with <!DOCTYPE html>, give it a short <title> (that becomes the visual's name), embed any data, and load scripts only from https://cdnjs.cloudflare.com.
-- 3D: three.js r128 from https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js and, for orbit controls, https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js (THREE.OrbitControls). Build everything from three's own geometries: no loaders, models, textures from the web or post-processing.
-- Make 3D look HD: new THREE.WebGLRenderer({ antialias: true }), renderer.setPixelRatio(Math.min(devicePixelRatio, 2)), renderer.outputEncoding = THREE.sRGBEncoding, renderer.toneMapping = THREE.ACESFilmicToneMapping, renderer.shadowMap.enabled = true with THREE.PCFSoftShadowMap; MeshStandardMaterial or MeshPhysicalMaterial; a hemisphere light plus a shadow-casting directional light; a soft gradient or coloured background with a ground plane, never an empty black void; controls.enableDamping = true; resize with the window; animate with requestAnimationFrame.
-- Explain with the visual: animate the idea step by step where motion helps (flows, particles, moving parts), with play/pause and a speed or step control; label the key parts on screen (overlay labels or a small legend) and add a one-line caption, so the picture explains itself.
+- An html block runs as its own page in a sandbox. Start it with <!DOCTYPE html>, give it a short <title> (that becomes the visual's name), embed any data, and load scripts only from https://cdnjs.cloudflare.com or https://cdn.jsdelivr.net (files can be fetched from cdn.jsdelivr.net only; no other network).
+- 3D: three.js r160 as ES modules. Put this import map in <head> before any module script, exactly: <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script> then one <script type="module"> with import * as THREE from 'three'; import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; plus GLTFLoader, DRACOLoader, RGBELoader, RoomEnvironment or other addons from 'three/addons/…' as needed. Never another three version or host, never examples/js (gone since r148), never window.THREE.
+- Make 3D look real: WebGLRenderer({ antialias: true }), setPixelRatio(Math.min(devicePixelRatio, 2)), outputColorSpace = THREE.SRGBColorSpace, toneMapping = THREE.ACESFilmicToneMapping, shadowMap on with PCFSoftShadowMap; scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture so PBR materials reflect; MeshStandardMaterial / MeshPhysicalMaterial (metalness, roughness, clearcoat, transmission for glass); a hemisphere light plus a shadow-casting directional light; a ground plane and a coloured or gradient background, never an empty black void; controls.enableDamping = true; resize with the window; animate with requestAnimationFrame and a THREE.Clock.
+- Ready-made assets, all under https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/ (the only ones the sandbox can load): animated people models/gltf/Soldier.glb (Idle, Walk, Run), Xbot.glb, RobotExpressive/RobotExpressive.glb (Idle, Walking, Running, Dance, Wave…), Michelle.glb; animals Horse.glb, Flamingo.glb, Parrot.glb; props DamagedHelmet/glTF/DamagedHelmet.gltf, LittlestTokyo.glb (DRACOLoader, setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/')); textures/ hardwood2_diffuse.jpg, brick_diffuse.jpg, uv_grid_opengl.jpg, waternormals.jpg, terrain/grasslight-big.jpg, planets/earth_atmos_2048.jpg, sprites/disc.png (colour maps: colorSpace = SRGBColorSpace; floors: RepeatWrapping + repeat); an HDR sky textures/equirectangular/royal_esplanade_1k.hdr via RGBELoader (EquirectangularReflectionMapping, as scene.environment and background). Use a model for people, animals and detailed props rather than figures made of boxes, play its clips with an AnimationMixer updated every frame, and build the rest from three's geometries, with InstancedMesh for anything repeated.
+- Interaction: OrbitControls by default (touch works); WASD plus mouse look when the user asks to walk through a scene, with the keys shown on screen; a Raycaster for clicks on objects that opens a small info panel; keep it smooth (instancing, few lights, shadows only where they matter). The first frame must already show the scene, never wait for a click.
+- Explain what is happening, always: inside the visual, label the key parts (overlay text or a legend), a one-line caption, and play/pause, speed or step, and reset controls; animate the idea step by step where motion helps. Under the visual, in the reply, write "What you're seeing": 3 to 6 numbered steps saying what happens, in order, and why, then one line on how to interact (drag, scroll, click, keys). For a flow or process, name each stage and what moves between them.
 - 2D: Chart.js or D3 from cdnjs, or a canvas scaled by devicePixelRatio so lines stay crisp. Label axes and units; keep labels from overlapping.
 - svg: include xmlns, a viewBox and a <title>. It is shown as an image, so scripts never run: animate with CSS inside <style> or SMIL <animate>.
 - mermaid: valid Mermaid 11. Give it a title with front matter (---, title: Short name, ---), and put a node or edge label in double quotes whenever it has brackets, parentheses, slashes, colons or other punctuation, e.g. A["User input (text/voice)"] --> B["Worker: /api/ai"].
 - Make it fit a phone-width frame as well as a wide screen. Use real data from the conversation, or say it is illustrative.
 - To change a visual, send the whole updated block again with the same title, never a diff or "rest unchanged".
 - questions and quiz blocks hold only valid JSON. In a quiz, each answer is exactly one of its options. Don't repeat their contents in your text.
-- Long code that is not a visual goes in an ordinary fenced block with its language. Don't draw a picture for a simple fact or a short answer.`;
+- Long code that is not a visual goes in an ordinary fenced block with its language. Don't draw a picture for a simple fact or a short answer.
+- Before you finish a page, check: every import resolves through the map and every asset path is one listed above, no runtime errors, the canvas fills its frame, resizes and runs on a phone, nothing important is off-screen, and the walkthrough under it matches the page.`;
 
 export const ARTIFACTS_BLOCK = `# Visuals\n${VISUALS_OWNER_TEXT}\n\n${VISUALS_RULES}`;
 
@@ -500,7 +503,12 @@ export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; art
   const parts = [fill(FULL_PROMPT, vars)];
   const owner = ownerBlock(opts.owner);
   if (owner) parts.push(owner);
-  if (opts.artifacts && artifactsOffered(opts.spec)) parts.push(ARTIFACTS_BLOCK);
+  // On a small window (Groq's 30,000 characters) a project's files come before the visuals block,
+  // which would otherwise leave them no room at all (2026-11-18, when the 3D rules grew).
+  const share = Math.floor(opts.spec.maxContextChars * KNOWLEDGE_SHARE);
+  const projectNeeds = opts.project?.documents.length ? MIN_DOC_CHARS + 400 : 0;
+  const withVisuals = parts.join('\n\n').length + ARTIFACTS_BLOCK.length + (opts.memory?.length ?? 0) + 2_000;
+  if (opts.artifacts && artifactsOffered(opts.spec) && (!projectNeeds || share - withVisuals >= projectNeeds)) parts.push(ARTIFACTS_BLOCK);
   if (opts.memory) parts.push(opts.memory);
   const tail: string[] = [];
   const personal = personalBlock(opts.personal);
@@ -513,7 +521,7 @@ export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; art
   if (careful) tail.push(careful);
   if (opts.project) {
     const used = [...parts, ...tail].join('\n\n').length;
-    parts.push(projectBlock(opts.project, Math.floor(opts.spec.maxContextChars * KNOWLEDGE_SHARE) - used));
+    parts.push(projectBlock(opts.project, share - used));
   }
   return [...parts, ...tail].join('\n\n');
 }

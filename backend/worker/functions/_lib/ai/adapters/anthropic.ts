@@ -26,6 +26,8 @@
  * (stop reason, output tokens), `message_stop`; `ping` is a keep-alive and
  * `error` is a mid-stream failure (classified like an HTTP one). A
  * `refusal` stop reason is a declined request, reported as content_filter.
+ * `max_tokens` with thinking and no text is a `spent` error: the answer never
+ * began (chat.ts then asks once more at Fast).
  */
 import { classifyHttp, errorText, ProviderError } from '../errors';
 import { parseJson, sseData } from '../sse';
@@ -154,7 +156,9 @@ export async function* parseAnthropicStream(body: ReadableStream<Uint8Array> | n
       yield { type: 'end', reason };
       return;
     }
-    throw new ProviderError('empty');
+    // max_tokens with no text: adaptive thinking took the whole room (seen 2026-11-18 on a long
+    // "build me a 3D store" request: 32,768 thinking tokens, no answer). The chat asks once more at low effort.
+    throw new ProviderError(reason === 'length' ? 'spent' : 'empty');
   }
   if (sawUsage) yield { type: 'usage', input, output };
   yield { type: 'end', reason };

@@ -29,6 +29,7 @@
  *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search" | "research", queries?, entryPointHtml?, markers? }
  *                (search: before the text, the model cites [n] itself; grounding: after the text,
  *                 with `markers` [{ at, ns }] saying where [n] goes in it)
+ *       note     { message }   (a line for the listener: e.g. the model's thinking took the whole reply, so it is asked once more at Fast)
  *       error    { code, message, retryable, alternatives? }
  *       done     { stopReason: end | length | aborted | error, usage?, saved }
  *
@@ -94,7 +95,7 @@ export const FIRST_EVENT_MS = 12_000;
 export const FIRST_EVENT_SLOW_MS = 25_000;
 /** Room for a long page or app (16K tokens at ~60 a second, after thinking). */
 export const REPLY_BUDGET_MS = 360_000;
-export const REPLY_BUDGET_SLOW_MS = 480_000;
+export const REPLY_BUDGET_SLOW_MS = 600_000;
 
 /**
  * How long to wait for the first event: longer for the deep ladder and a
@@ -186,6 +187,7 @@ const errorCode = (err: ProviderError, exhausted: boolean): string => {
     case 'quota': return 'model_busy';
     case 'timeout': return 'model_timeout';
     case 'empty': return 'empty_reply';
+    case 'spent': return 'thinking_overrun';
     default: return 'model_unavailable';
   }
 };
@@ -477,6 +479,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     return r;
   })());
   const memo = newMemo();
+  /** Set for the second try after a `spent` reply: the model answers at this level instead of `wanted`. */
+  let forceLevel: ThinkingLevel | null = null;
   // What the reply reads, said once before the model starts (a real step, not a guess at its thinking).
   const readNames = [...fileRows.values(), ...(project?.files ?? [])].map((a) => a.name).filter(Boolean);
   let saidReading = false;
@@ -494,7 +498,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
     const knowledge = project ? await knowledgeFor(env, spec, project, memo) : null;
     // The nearest level this model has, sent through its own switch (thinking.ts).
-    const level = resolveLevel(spec, wanted);
+    const level = forceLevel ?? resolveLevel(spec, wanted);
     const asked = specAtLevel(spec, level);
     const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText, thinking: level, research });
     const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
@@ -581,7 +585,10 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         ...(mode === 'model' && !partial ? { alternatives: alternativesFor(model) } : {}),
       });
     };
+    /** Once: a reply whose whole room went on thinking (`spent`) is asked for again at Fast, with the thinking shown so far kept. */
+    let secondTry = false;
     try {
+      for (;;) {
       const started_ = await openModel(env, {
         candidates, picked: mode === 'model', build, signal: abort.signal,
         firstEventMs: firstEventMsFor(slow, mode === 'model' ? candidates[0] ?? null : null),
@@ -642,6 +649,15 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
               send('sources', { ...searched, markers });
             }
           }
+          if (parsed.error?.kind === 'spent' && !secondTry && !text.trim() && open && !abort.signal.aborted && resolveLevel(model, 'fast') === 'fast') {
+            // Thinking took the whole reply: once more, at Fast, on the same stream (the page keeps the thinking it saw).
+            secondTry = true;
+            forceLevel = 'fast';
+            thinking = '';
+            send('note', { message: `${model.name} used its whole reply on thinking. Asking again with Fast thinking…` });
+            console.log(JSON.stringify({ route: 'ai-chat', event: 'thinking_overrun', model: model.id }));
+            continue;
+          }
           if (parsed.error) {
             noteFailure(model, parsed.error);
             failed(parsed.error, model, text.trim().length > 0);
@@ -650,6 +666,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
           // Time spent reasoning, shared out by length (the bytes passed by without a clock).
           if (thinking) thinkMs = Math.round((Date.now() - opened.firstAt) * (thinking.length / Math.max(1, thinking.length + text.length)));
         }
+      }
+      break;
       }
     } catch {
       stop = 'error';
@@ -706,7 +724,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       });
     }
     if (titleJob) await titleJob;
-    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, research, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, research, secondTry, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
     // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).
     if (learnNow && savedReply && (stop === 'end' || stop === 'length')) {
       const path = [...pathRows.map((r) => ({ role: r.role, text: typedText(r.content) })), { role: 'assistant' as const, text: finalText }];

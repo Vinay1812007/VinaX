@@ -15,6 +15,7 @@ export type ProviderErrorKind =
   | 'timeout'     // no first event in time, or the reply ran past its budget
   | 'network'     // fetch itself failed
   | 'empty'       // the stream ended with no answer text (or only reasoning)
+  | 'spent'       // the reply's whole room (max tokens) went on thinking: it never started the answer
   | 'not_configured';
 
 export class ProviderError extends Error {

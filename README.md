@@ -258,7 +258,7 @@ The chat is **off** until the `vinax-ai` setting (App Settings > Features & AI):
 
 ### VinaX AI sandbox host
 
-Artifact previews run from `sandbox/` on `https://sandbox.vinaxmusic.online`: Pages project `vinax-sandbox`, branch `main`, no build, output `sandbox`, watch `sandbox/*`, custom domain added after the first deploy. Manual: `npx wrangler pages deploy sandbox --project-name vinax-sandbox`. Check `curl -sI` shows `default-src 'none'` and `frame-ancestors https://www.vinaxmusic.online`. Renaming the host means changing `VITE_AI_SANDBOX_ORIGIN`, `frame-src` in `_headers`, and the runner's `ALLOWED`/`frame-ancestors` together.
+Artifact previews run from `sandbox/` on `https://sandbox.vinaxmusic.online`: Pages project `vinax-sandbox`, branch `main`, no build, output `sandbox`, watch `sandbox/*`, custom domain added after the first deploy. Manual: `npx wrangler pages deploy sandbox --project-name vinax-sandbox`. Check `curl -sI` shows `default-src 'none'` and `frame-ancestors https://www.vinaxmusic.online`. Renaming the host means changing `VITE_AI_SANDBOX_ORIGIN`, `frame-src` in `_headers`, and the runner's `ALLOWED`/`frame-ancestors` together. Since 2026-11-18 the policy allows scripts from cdnjs, jsDelivr and unpkg and fetches from jsDelivr and unpkg only (three.js r160 ES modules and addons from `npm/three@0.160.0`, its example models, textures and HDR sky from the `gh/mrdoob/three.js@r160` mirror, Draco decoders); the app, its API and everything else stay unreachable.
 
 ### Release checks
 
@@ -627,7 +627,7 @@ The free Worker plan allows 10 ms CPU per request; relaying a long reply chunk b
 
 ### Claude (owner-only)
 
-`adapters/anthropic.ts` calls the Messages API by plain fetch (the SDK would parse the stream in the Worker). Adaptive summarised thinking, no `temperature`, history capped at 340,000 characters to stay under Haiku 5.5's 100K-token price step. `claudeAccess.ts` holds `CLAUDE_EMAILS`, matched against the account's Google-verified email; everyone else sees Claude locked and gets `403 model_locked`. No ladder or fallback ever calls Claude.
+`adapters/anthropic.ts` calls the Messages API by plain fetch (the SDK would parse the stream in the Worker). Adaptive summarised thinking, no `temperature`, history capped at 340,000 characters to stay under Haiku 5.5's 100K-token price step, 65,536 output tokens (thinking counts against them). A reply that ends at `max_tokens` with thinking and no text is a `spent` error; the chat sends a `note` event and asks the same model once more at Fast (effort low) on the same stream (seen 2026-11-18: 32,768 tokens of thinking on a long "build a 3D store" request). `claudeAccess.ts` holds `CLAUDE_EMAILS`, matched against the account's Google-verified email; everyone else sees Claude locked and gets `403 model_locked`. No ladder or fallback ever calls Claude.
 
 ### Research (`research.ts`)
 
@@ -641,7 +641,7 @@ At most one search per turn (Auto, On or Off in the composer; Auto on recency cu
 
 - **Prompt** (`prompt.ts`, snapshot test `__tests__/aiPrompt.test.ts`): base prompt, `<owner_instructions>`, `ARTIFACTS_BLOCK`, `<memory>`, project block, `<user_preferences>`, `<search_results>`. Never listening history.
 - **Files** (`attachments.ts`, `materialize.ts`, `geminiFiles.ts`): images, PDFs (text read on the device by pdf.js; Gemini gets the file via its Files API) and text, streamed into the **private** bucket `ai-attachments` with an `ai_attachments` row; no public URLs.
-- **Artifacts:** fenced `html`/`svg`/`mermaid` blocks plus `questions`/`quiz` cards, parsed by `splitFenced` in both Worker and page, saved in `ai_messages.artifacts`, gallery `/vinaxai/artifacts`. Previews run in `sandbox/index.html` at `sandbox.vinaxmusic.online`: `sandbox="allow-scripts allow-modals"`, no `allow-same-origin`, CSP in `sandbox/_headers` (cdnjs and pinned jsDelivr only, `connect-src 'none'`), pinned React/Mermaid/chart libraries.
+- **Artifacts:** fenced `html`/`svg`/`mermaid` blocks plus `questions`/`quiz` cards, parsed by `splitFenced` in both Worker and page, saved in `ai_messages.artifacts`, gallery `/vinaxai/artifacts`. Previews run in `sandbox/index.html` at `sandbox.vinaxmusic.online`: `sandbox="allow-scripts allow-modals"`, no `allow-same-origin`, CSP in `sandbox/_headers` (scripts from cdnjs, jsDelivr and unpkg; fetches from jsDelivr and unpkg only), pinned React/Mermaid/chart libraries. `VISUALS_RULES` (prompt.ts) tells every model to build 3D with three.js r160 ES modules through an import map, with RoomEnvironment lighting, the example models, textures and HDR sky listed there, and to write a "What you're seeing" walkthrough under every visual.
 - **Create image** (`images.ts`): FLUX.1 schnell on Workers AI, off by default (`vinax-ai.images`), per person `perDay` (default 10) and 50/day overall via `ai_take_daily`. Not yet tested against the real model.
 
 ### Voice (`voice.ts`, `voiceGate.ts`; page `mic.ts`, `readAloud.ts`, `live/`)
