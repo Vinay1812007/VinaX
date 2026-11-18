@@ -1,0 +1,37 @@
+# systemd unit for the VinaX API on a server (README.md (Operations),
+# "Running the API on a server"). setup-vm.sh installs it as
+# /etc/systemd/system/vinax-api.service.
+[Unit]
+Description=VinaX API (Node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinax
+Group=vinax
+WorkingDirectory=/opt/vinax-api
+Environment=NODE_ENV=production
+Environment=VINAX_ENV_FILE=/etc/vinax-api/env
+Environment=VINAX_DATA_DIR=/opt/vinax-api/data
+ExecStart=/usr/bin/node --enable-source-maps /opt/vinax-api/vinax-api.mjs
+Restart=always
+RestartSec=2
+# Up to 10 s to finish open replies on stop/restart (main.ts).
+TimeoutStopSec=15
+LimitNOFILE=65536
+
+# Hardening: the process can write only its data folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/vinax-api/data
+
+[Install]
+WantedBy=multi-user.target

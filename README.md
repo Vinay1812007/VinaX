@@ -254,6 +254,8 @@ backend/
   worker/functions/_lib/      db.ts and companions, catalogue, admin auth, rate limits, ai/, personal/, trends/
   worker/__tests__/           Worker tests
   worker/wrangler.toml        name, routes, vars, bindings, Cron Trigger
+  server/                     the same API as a Node server (no daily request limit): app.ts, bindings.ts, http.ts, build.mjs
+  server/deploy/              VM setup script, systemd unit, deploy script
   supabase/schema.sql         the whole database (idempotent)
   supabase/reset.sql          drops everything so schema.sql can start over
   supabase/check.sql, ci.sh   the schema proof run by the Schema workflow
@@ -657,6 +659,36 @@ Platform behaviour seen in production (2026-10-06). The Worker runs on the free 
 - On 2026-10-06 a scraper rotating fake desktop-browser user agents through thousands of IPv6 addresses hit the edge-rendered entity pages (~98% of requests). Fix: since 11.0.2 the entity pages, and since V2 1.0 the 72 hubs and all sitemaps, are static files built by the frontend (`scripts/prerender-entities.mjs`, using the Worker's renderer). Crawlers cost no Worker requests. **Do not route a page family to the Worker again.**
 - Diagnosis: the meter on Server Checks says how much is used, by which Worker and how the requests ended; Worker request analytics in Cloudflare's dashboard, grouped by path and client network, say where: look for one path family or range taking most of the day.
 - To bring server rendering back, put the four patterns in `routes` **and** a zone rule in front first. `backend/scripts/cf-edge-rules.mjs` creates two WAF custom rules (matched by description, safe to re-run): "VinaX entity pages: browser impostors" (block: `/song/ /album/ /artist/ /playlist/` requests claiming Chromium but without `sec-ch-ua`, not a verified bot) and "VinaX entity pages: unverified automation" managed challenge (`--challenge`). Run: `CLOUDFLARE_ZONE_TOKEN=... node backend/scripts/cf-edge-rules.mjs --dry-run` (print), without flag (create/update), `--challenge` (also challenge). A routed request is counted before any code runs, so only a rule in front saves quota. The in-Worker `_lib/pageGuard.ts` (browser impostors; 30 pages/min per address, 200 then 100/min per IPv6 /32 or IPv4 /24) answers the plain shell with `x-vinax-page: impostor|address|network` and protects mirrors and CPU, but not the quota. Verified bots and link previewers are exempt.
+
+### Running the API on a server
+
+The Worker's free plan allows 100,000 requests a day ([The daily request quota](#the-daily-request-quota)). `backend/server/` runs the **same** `worker/index.ts` on a plain Node server, which has no request limit (only its own CPU and memory) and no 10 ms CPU limit per request. The handlers are unchanged; the server only supplies what Cloudflare used to:
+
+| On the Worker | On the Node server (`server/bindings.ts`) |
+| --- | --- |
+| `[vars]` in `wrangler.toml` | Baked into the bundle at build time (`server/build.mjs`) |
+| Worker secrets | One env file, `/etc/vinax-api/env` (`NAME=value`; names in `backend/.env.example`) |
+| KV `HANDOFF` | `fileKv`: one JSON file in `VINAX_DATA_DIR` |
+| Rate Limiting bindings | `fixedWindowLimiter`, in memory; one process, so the limits are global instead of per location |
+| Workers AI binding `AI` | `workersAiRest`: Cloudflare's REST API with `CF_ACCOUNT_ID` + `CF_AI_TOKEN` (same free daily pool). Without the token VinaX AI skips those models |
+| `request.cf` | Rebuilt from Cloudflare's headers: `cf-ipcountry` always; region, city and timezone need the zone's free Managed Transform **Add visitor location headers** |
+| `caches.default` | None; the routes fall back to instance memory |
+| Cron Trigger | `startCron`: every 5-minute boundary, only with `VINAX_CRON=on` |
+| `ctx.waitUntil` | Tracked; a stop waits up to 10 s for it |
+
+`server/http.ts` turns Node requests into web `Request`s and back: hop-by-hop headers are dropped, bodies stream chunk by chunk (VinaX AI's SSE), a closed connection cancels the body, every `set-cookie` is kept, and a `content-encoding: gzip|br|deflate|zstd` response goes out plain without that header (on Workers the runtime would encode it; Cloudflare compresses on the way out instead). `GET /__health` answers `ok` without touching the Worker code.
+
+Build and run locally: `cd backend && npm run server:build && VINAX_PROTO=http npm run server:start` (listens on 127.0.0.1:8787; reads `./.env`). `server/server.test.ts` covers the adapter, the bindings, the env parsing and the cron.
+
+**On a VM** (written for Oracle Cloud Always Free, Ampere A1, Ubuntu 24.04; any Linux VM works):
+
+1. Once: `scp backend/server/deploy/{setup-vm.sh,vinax-api.service} ubuntu@<vm>:` then `ssh ubuntu@<vm> 'sudo bash setup-vm.sh'`. It installs Node 22, `cloudflared` and automatic security updates, creates the `vinax` user, `/opt/vinax-api`, `/etc/vinax-api/env` and the systemd service. It opens **no** ports.
+2. Put every Worker secret in `/etc/vinax-api/env` (`sudo nano /etc/vinax-api/env`), plus `CF_AI_TOKEN` (API token with Account > Workers AI).
+3. Deploy from the Mac: `VINAX_VM=ubuntu@<vm> backend/server/deploy/deploy.sh` (builds, copies the bundle, restarts, checks `/__health`). Logs: `journalctl -u vinax-api -f`.
+4. Traffic: a Cloudflare Tunnel (free) from the VM, created in the dashboard (Zero Trust > Networks > Tunnels > Create, then `sudo cloudflared service install <token>` on the VM), with a public hostname such as `api.vinaxmusic.online` -> `http://127.0.0.1:8787`. The server listens on 127.0.0.1 only, so `cf-connecting-ip` and `cf-ipcountry` can only come from Cloudflare.
+5. Jobs: turn the Worker's cron trigger off, then set `VINAX_CRON=on` and restart. Never both, or the 5-minute jobs run twice.
+
+Until the app calls the new host, the Worker keeps serving every route; adding the server changes nothing in production by itself.
 
 ### Secrets for operators
 
