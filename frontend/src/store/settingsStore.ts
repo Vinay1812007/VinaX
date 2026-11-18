@@ -69,7 +69,7 @@ export interface SettingsState {
   lyricsSize: 'sm' | 'md' | 'lg' | 'xl';
   /** 1.3 — lyrics as written ('original') or in English letters ('latin'). */
   lyricsScript: 'original' | 'latin';
-  uiLanguage: 'en' | 'te' | 'hi' | 'ta';
+  uiLanguage: 'en' | 'te' | 'hi' | 'ta' | 'kn' | 'ml';
   reduceMotion: boolean;
   /** 0..1 — how aggressively recommendations personalize. */
   recommendationIntensity: number;
@@ -151,7 +151,7 @@ export interface SettingsState {
   setDownloadQuality(q: AudioQualityPref): void;
   setLyricsSize(v: 'sm' | 'md' | 'lg' | 'xl'): void;
   setLyricsScript(v: 'original' | 'latin'): void;
-  setUiLanguage(v: 'en' | 'te' | 'hi' | 'ta'): void;
+  setUiLanguage(v: 'en' | 'te' | 'hi' | 'ta' | 'kn' | 'ml'): void;
   setReduceMotion(v: boolean): void;
   setRecommendationIntensity(v: number): void;
   setExploreMode(v: boolean): void;
@@ -219,7 +219,7 @@ const defaults = {
   downloadQuality: 'high' as AudioQualityPref,
   lyricsSize: 'md' as 'sm' | 'md' | 'lg' | 'xl',
   lyricsScript: 'original' as 'original' | 'latin',
-  uiLanguage: 'en' as 'en' | 'te' | 'hi' | 'ta',
+  uiLanguage: 'en' as 'en' | 'te' | 'hi' | 'ta' | 'kn' | 'ml',
   reduceMotion: false,
   recommendationIntensity: 0.7,
   exploreMode: false,
@@ -258,7 +258,7 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   downloadQuality: QUALITY_IDS,
   lyricsSize: ['sm', 'md', 'lg', 'xl'],
   lyricsScript: ['original', 'latin'],
-  uiLanguage: ['en', 'te', 'hi', 'ta'],
+  uiLanguage: ['en', 'te', 'hi', 'ta', 'kn', 'ml'],
   discoveryMode: ['familiar', 'balanced', 'discover'],
   queueLanguages: ['one', 'mix'],
 };

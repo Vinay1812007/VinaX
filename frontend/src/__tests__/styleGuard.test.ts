@@ -28,7 +28,7 @@ const BASELINE: Record<string, [number, number]> = {
   'features.css': [0, 2],
   'index.css': [13, 9],
   'overlays.css': [5, 8],
-  'pages/browse.css': [4, 1],
+  'pages/browse.css': [1, 1],
   'pages/design.css': [19, 1],
   'pages/home.css': [2, 1],
   'pages/language-picker.css': [0, 1],

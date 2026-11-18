@@ -1,9 +1,10 @@
 -- =============================================================================
--- VinaX database · schema version 24
+-- VinaX database · schema version 25
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
--- safe and never deletes data (reset.sql is the file that wipes).
+-- safe and never deletes data (reset.sql is the file that wipes). The one
+-- exception is version 25, which drops the retired song reactions.
 --
 -- Who talks to it: only the Cloudflare Worker (backend/worker), with the
 -- service-role key. Row-level security is on and FORCED on every table and no
@@ -56,6 +57,9 @@
 --  score; and, in section 11, stats_song_problems (songs that fail to play
 --  or have no lyrics) and stats_experiment (A/B test results per version
 --  from the recommendation events' exposure maps)
+--  version 25 drops song_reactions, song_reaction_counts and stats_reactions
+--  (end of section 6b): song reactions left the app in 2.0, so their rows
+--  go too (/api/reactions still answers old apps without the database);
 --  12. security
 -- =============================================================================
 
@@ -504,26 +508,21 @@ create index if not exists outreach_account_idx on outreach (account_id, kind, s
 create index if not exists outreach_kind_at_idx on outreach (kind, sent_at desc);
 comment on table outreach is 'Automatic pushes per person (weekly recap, win-back, new releases). Kept 180 days; cascades with the account.';
 
--- Version 19 — public song reactions (POST /api/reactions): one reaction per
--- device per song, from a fixed set. The device id is the derived listener id
--- the events route uses (never the raw install id); the song's title, artist
--- and picture travel with it so the console can list top songs without a
--- catalogue call. Counts are public; who reacted never leaves the Worker.
-create table if not exists song_reactions (
-  song_id      text not null,
-  listener_id  text not null,
-  emoji        text not null,                           -- fire | love | sad | dance | wow
-  song_title   text,
-  song_artist  text,
-  song_image   text,
-  language     text,
-  at           timestamptz not null default now(),
-  primary key (song_id, listener_id),
-  constraint song_reactions_emoji_shape check (emoji in ('fire', 'love', 'sad', 'dance', 'wow'))
-);
-create index if not exists song_reactions_at_idx on song_reactions (at desc);
-create index if not exists song_reactions_listener_idx on song_reactions (listener_id);
-comment on table song_reactions is 'Public song reactions, one per device per song (fire, love, sad, dance, wow). Counts are public; the device is never shown.';
+-- Version 25 — song reactions are gone (they left the app in 2.0; version 19
+-- added them). Drop the two functions and the table, with their rows. Old
+-- apps still call /api/reactions, which answers without the database.
+do $$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('song_reaction_counts', 'stats_reactions')
+  loop
+    execute format('drop function if exists %s', r.sig);
+  end loop;
+end $$;
+drop table if exists song_reactions;
 
 -- --------------------------------------------- 7. settings, experiments --
 
@@ -1847,7 +1846,6 @@ begin
     delete from events where listener_id = v_listener; get diagnostics n_events = row_count;
     delete from room_members where member_id = v_listener; get diagnostics n_members = row_count;
     update feedback set listener_id = null where listener_id = v_listener; get diagnostics n_feedback = row_count;
-    delete from song_reactions where listener_id = v_listener; -- v19: the device's reactions go with it
   end if;
   if v_account is not null then
     delete from ai_feedback where account_id = v_account; get diagnostics n_ai_feedback = row_count; -- v24
@@ -2856,39 +2854,6 @@ language sql stable set search_path = public, pg_temp as $$
   )
 $$;
 
--- Version 19 — song reactions: the counts one song page shows (and the
--- viewer's own), and the console's Song Reactions page.
-create or replace function song_reaction_counts(p_song text, p_listener text default null) returns jsonb
-language sql stable set search_path = public, pg_temp as $$
-  select jsonb_build_object(
-    'total', (select count(*) from song_reactions where song_id = p_song),
-    'counts', coalesce((select jsonb_object_agg(emoji, n) from (select emoji, count(*) as n from song_reactions where song_id = p_song group by 1) x), '{}'::jsonb),
-    'mine', (select emoji from song_reactions where song_id = p_song and p_listener is not null and listener_id = p_listener)
-  )
-$$;
-
-create or replace function stats_reactions(p_days int default 30, p_limit int default 50) returns jsonb
-language sql stable set search_path = public, pg_temp as $$
-  with w as (select make_interval(days => least(greatest(coalesce(p_days, 30), 1), 365)) as span),
-  r as (select sr.* from song_reactions sr, w where sr.at > now() - w.span),
-  prev as (select count(*) as n from song_reactions sr, w where sr.at > now() - 2 * w.span and sr.at <= now() - w.span),
-  top as (
-    select song_id, max(song_title) as title, max(song_artist) as artist, max(song_image) as image, max(language) as language, count(*) as total,
-           (select jsonb_object_agg(e.emoji, e.n) from (select emoji, count(*) as n from r r2 where r2.song_id = r.song_id group by 1) e) as counts
-    from r group by song_id order by total desc, song_id limit least(greatest(coalesce(p_limit, 50), 1), 200)
-  )
-  select jsonb_build_object(
-    'days', (select extract(day from span)::int from w),
-    'total', (select count(*) from r),
-    'prevTotal', (select n from prev),
-    'people', (select count(distinct listener_id) from r),
-    'songs', (select count(distinct song_id) from r),
-    'byEmoji', coalesce((select jsonb_agg(jsonb_build_object('emoji', emoji, 'n', n) order by n desc, emoji) from (select emoji, count(*) as n from r group by 1) e), '[]'::jsonb),
-    'top', coalesce((select jsonb_agg(jsonb_build_object('id', song_id, 'title', title, 'artist', artist, 'image', image, 'language', language, 'total', total, 'counts', coalesce(counts, '{}'::jsonb)) order by total desc, song_id) from top), '[]'::jsonb),
-    'byDay', coalesce((select jsonb_agg(jsonb_build_object('day', d, 'n', n) order by d) from (select (at at time zone 'Asia/Kolkata')::date as d, count(*) as n from r group by 1) x), '[]'::jsonb)
-  )
-$$;
-
 -- --------------------------------------------------------- 12. security --
 
 do $$
@@ -2902,7 +2867,7 @@ begin
     'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
     'ai_feedback',
-    'owner_notes', 'outreach', 'song_reactions', 'account_passwords', 'email_codes']
+    'owner_notes', 'outreach', 'account_passwords', 'email_codes']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -2927,7 +2892,6 @@ begin
                         'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily', 'ai_feedback_stats',
                         'profile_extras', 'owner_tags',
                         '_outreach_people', 'outreach_recap', 'outreach_winback', 'outreach_release_people', 'outreach_summary',
-                        'song_reaction_counts', 'stats_reactions',
                         'account_set_password', 'account_check_password', 'account_has_password')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
@@ -2942,7 +2906,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 24, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 24, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 25, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 25, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 24 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 25 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

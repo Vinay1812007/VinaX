@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Video } from '@/services/api/videos';
 import {
-  SEEN_CAP, appendReels, markSeen, notePageAsked, notePageCount, pageCount, pickPage, readSeen, reelKey, reelQueries, reelSources, searchableTitle,
+  SEEN_CAP, appendReels, flowVideoPath, markSeen, notePageAsked, notePageCount, pageCount, pickPage, readSeen, reelKey, reelQueries, reelSources, searchableTitle, withLead,
   type PageBook,
 } from './reels';
 
@@ -24,6 +24,26 @@ describe('Flow reels', () => {
   it('plays the preview first (the full stream is 404 upstream today)', () => {
     expect(reelSources(video('1', 'A'))).toEqual(['https://v/preview-1.mp4', 'https://v/full-1.mp4']);
     expect(reelSources(video('1', 'A', { previewUrl: null }))).toEqual(['https://v/full-1.mp4']);
+    expect(reelSources(video('1', 'A', { streamUrl: null }))).toEqual(['https://v/preview-1.mp4']);
+    expect(reelSources(video('1', 'A', { streamUrl: 'https://v/preview-1.mp4' }))).toEqual(['https://v/preview-1.mp4']);
+    expect(reelSources(video('1', 'A', { previewUrl: null, streamUrl: null }))).toEqual([]);
+  });
+
+  it('opens on the asked-for video, whatever its language, without a second copy of its song', () => {
+    const lead = video('L', 'Kesariya (Lyric Video)', { language: 'Hindi' });
+    expect(withLead([], lead)).toEqual([lead]);
+    const feed = withLead([video('a', "Kesariya (From 'Brahmastra')"), video('b', 'Other')], lead);
+    expect(feed.map((v) => v.id)).toEqual(['L', 'b']);
+    const already = [video('x', 'X'), lead];
+    expect(withLead(already, lead)).toBe(already);
+    // The rounds after it skip its song and keep it first.
+    const next = appendReels([lead], [video('c', 'Kesariya (Video)'), video('d', 'New')], { languages: ['telugu'], seen: new Set() });
+    expect(next.reels.map((v) => v.id)).toEqual(['L', 'd']);
+  });
+
+  it('builds the Flow address for one video', () => {
+    expect(flowVideoPath('21uSZLdz')).toBe('/flow?v=21uSZLdz');
+    expect(flowVideoPath('a b&c')).toBe('/flow?v=a%20b%26c');
   });
 
   it('appends only playable reels labelled with the listener’s languages, holding back watched ones, never moving the current ones', () => {

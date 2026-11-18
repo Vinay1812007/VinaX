@@ -12,7 +12,8 @@
 #   run by hand: applies schema.sql to the production project with psql, so
 #   the SQL editor paste in README.md (Database) is no longer the only path. It
 #   runs only after `check` is green and only ever runs schema.sql, which
-#   adds what is missing and deletes nothing. reset.sql and check.sql are
+#   adds what is missing and deletes nothing (except version 25, which drops
+#   the retired song reactions and their rows). reset.sql and check.sql are
 #   never run against production from here.
 #
 # IT IS INERT UNTIL CONFIGURED. With no SUPABASE_DB_URL secret the apply job

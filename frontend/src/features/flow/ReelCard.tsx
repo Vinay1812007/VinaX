@@ -4,7 +4,7 @@ import type { Video } from '@/services/api/videos';
 import { useLibraryStore } from '@/store/libraryStore';
 import { isFavoriteIn } from '@/utils/favIndex';
 import { languageLabel } from '@/constants/languages';
-import { ExpandIcon, HeartIcon, MusicIcon, PlayIcon, PlusIcon, ShareIcon, VolumeIcon } from '@/components/Icons';
+import { HeartIcon, MusicIcon, PlayIcon, PlusIcon, ShareIcon, VolumeIcon } from '@/components/Icons';
 import { artistPath } from '@/utils/slug';
 import { reelSources } from './reels';
 
@@ -44,6 +44,9 @@ export interface ReelCardProps {
  * bottom, the action rail on the right, a thin progress line along the
  * foot. A tap pauses or plays; a double tap likes the song (a heart blooms
  * where the finger was).
+ *
+ * 1.17.2 — the rail's Open (to the separate /video/<id> player) is gone:
+ * Flow is the one video player now, and /video/<id> opens Flow.
  */
 export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
   const { video, index, total, active, next, near, muted, reduceMotion, hint } = props;
@@ -218,10 +221,6 @@ export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
             <ShareIcon className="w-6 h-6" />
             <span aria-hidden>Share</span>
           </button>
-          <Link to={`/video/${video.id}`} className="vx-flow-action" aria-label={`Open ${video.title} in the video player`}>
-            <ExpandIcon className="w-6 h-6" />
-            <span aria-hidden>Open</span>
-          </Link>
         </div>
       </div>
 

@@ -5,8 +5,8 @@ import type { HelpTourStep, HelpTranslation, HelpUiKey } from '@/i18n/help/types
 import type { FaqEntry, Guide } from './helpContent';
 
 /**
- * Help, the FAQ and the guided tours in the app language. The Telugu, Hindi
- * and Tamil text is a lazy chunk per language (src/i18n/help), fetched the
+ * Help, the FAQ and the guided tours in the app language. The Telugu, Hindi,
+ * Tamil, Kannada and Malayalam text is a lazy chunk per language (src/i18n/help), fetched the
  * first time Help or a tour opens in that language and kept for the session;
  * it is never part of the first load or of the main dictionaries. Anything a
  * translation lacks shows in English.
@@ -16,6 +16,8 @@ const LOADERS: Partial<Record<Exclude<UiLang, 'en'>, () => Promise<{ default: He
   te: () => import('@/i18n/help/te'),
   hi: () => import('@/i18n/help/hi'),
   ta: () => import('@/i18n/help/ta'),
+  kn: () => import('@/i18n/help/kn'),
+  ml: () => import('@/i18n/help/ml'),
 };
 
 const cache = new Map<UiLang, HelpTranslation>();

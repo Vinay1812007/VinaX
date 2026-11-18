@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { SiteGate } from '@/components/SiteGate';
 import { AuthGate } from '@/components/AuthGate';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppLayout } from '@/layouts/AppLayout';
 import { RouteError } from '@/components/ErrorBoundary';
 import { HUB_LANGUAGES } from '@/constants/languages';
@@ -101,9 +101,19 @@ const DmcaPage = lazy(() => import('@/pages/DmcaPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 // Round 8 — Share to VinaX: the share target of the installed web app and the Android app.
 const SharePage = lazy(() => import('@/pages/SharePage'));
-// v5.7.9 — music videos: browse + cinematic player.
+// v5.7.9 — music videos: browse. 1.17.2 — Flow is the one video player.
 const VideosPage = lazy(() => import('@/pages/VideosPage'));
-const VideoPage = lazy(() => import('@/pages/VideoPage'));
+
+/**
+ * 1.17.2 — the separate /video/<id> player folded into Flow. Old shared
+ * links, the Android app's links and installed apps open Flow on that video
+ * (the address is features/flow/reels flowVideoPath, written out here so the
+ * router keeps Flow's code out of the first load).
+ */
+function VideoToFlow() {
+  const { id = '' } = useParams();
+  return <Navigate to={id ? `/flow?v=${encodeURIComponent(id)}` : '/flow'} replace />;
+}
 // 8.2.0 — Radio: endless music from a song, an artist, a mood or a station.
 const RadioPage = lazy(() => import('@/pages/RadioPage'));
 // Browse pages: New Releases, Top Artists, Top Playlists.
@@ -208,7 +218,7 @@ export const router = createBrowserRouter([
       { path: 'regions', element: <Navigate to="/languages" replace /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
       { path: 'videos', element: <VideosPage /> },
-      { path: 'video/:id', element: <VideoPage /> },
+      { path: 'video/:id', element: <VideoToFlow /> },
       { path: 'settings', element: <SettingsPage /> },
       // Move to a new device is gone: signing in with the same account brings
       // everything across. Old links and QR codes land on Your data.

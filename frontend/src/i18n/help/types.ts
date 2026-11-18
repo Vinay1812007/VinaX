@@ -1,5 +1,5 @@
 /**
- * The shape of a Help translation (te.ts, hi.ts, ta.ts in this folder). Each
+ * The shape of a Help translation (te.ts, hi.ts, ta.ts, kn.ts, ml.ts in this folder). Each
  * file is its own lazy chunk, fetched only when Help or a tour opens in that
  * app language; English in features/help/helpContent.ts and
  * features/tutorials/tutorials.ts is the source and the fallback.

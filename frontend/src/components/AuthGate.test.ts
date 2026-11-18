@@ -19,6 +19,15 @@ describe('browsableSignedOut', () => {
     }
   });
 
+  it('a shared video opens Flow signed out (old /video/<id> links redirect there); Flow itself does not', () => {
+    expect(browsableSignedOut('/flow', '?v=21uSZLdz')).toBe(true);
+    expect(browsableSignedOut('/flow', '?x=1&v=21uSZLdz')).toBe(true);
+    expect(browsableSignedOut('/video/21uSZLdz')).toBe(true);
+    expect(browsableSignedOut('/flow')).toBe(false);
+    expect(browsableSignedOut('/flow', '?v=')).toBe(false);
+    expect(browsableSignedOut('/radio', '?v=21uSZLdz')).toBe(false);
+  });
+
   it('a shared VinaX AI chat opens signed out; the chat itself does not', () => {
     expect(browsableSignedOut('/vinaxai/share/AAAAAAAAAAAAAAAAAAAAAA')).toBe(true);
     expect(browsableSignedOut('/vinaxai/share/')).toBe(false);

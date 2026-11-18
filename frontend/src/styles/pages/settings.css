@@ -237,6 +237,11 @@
   .vx-set-row.is-stack .vx-set-control { width: 100%; }
   .vx-set-row.is-stack .vx-seg { display: flex; width: 100%; }
   .vx-set-row.is-stack .vx-seg-item { flex: 1 1 0; padding: 0 6px; }
+  /* Many choices (the app languages): rows of --seg-cols instead of one squeezed line. */
+  .vx-set-row.is-stack .vx-seg.is-grid { display: grid; grid-template-columns: repeat(var(--seg-cols, 3), minmax(0, 1fr)); border-radius: 22px; }
+  /* Rows sit 2px apart, so each hit pad reaches only half the gap: a 4px pad
+     on the lower row would cover the bottom of the button above and take its taps. */
+  .vx-set-row.is-stack .vx-seg.is-grid .vx-seg-item::after { inset: -1px 0; }
 }
 
 /* Full-width blocks: the control sits under the label. */
@@ -323,8 +328,8 @@
 .vx-settings .vx-seg-thumb {
   position: absolute;
   z-index: 0;
-  top: 4px;
-  bottom: 4px;
+  /* Placed and sized from the chosen button (translate + width/height), so it can follow it down a row. */
+  top: 0;
   left: 0;
   border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
@@ -332,7 +337,7 @@
   pointer-events: none;
 }
 /* --dur-base is 0 under reduced motion, so the thumb just appears there. */
-.vx-settings .vx-seg-thumb { transition: transform var(--dur-base) var(--ease-standard), width var(--dur-base) var(--ease-standard); }
+.vx-settings .vx-seg-thumb { transition: transform var(--dur-base) var(--ease-standard), width var(--dur-base) var(--ease-standard), height var(--dur-base) var(--ease-standard); }
 .vx-settings .vx-seg-item {
   position: relative;
   z-index: 1;

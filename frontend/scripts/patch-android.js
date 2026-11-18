@@ -392,7 +392,9 @@ if (fs.existsSync(manifestPath)) {
   //
   // Share to VinaX (round 8): the SEND filter puts VinaX in the system share
   // sheet for text; MainActivity.shareAsLink turns it into /share?text=.
-  const APP_LINK_PATHS = ['/song/', '/album/', '/artist/', '/playlist/', '/video/', '/podcast/', '/lyrics/', '/p/', '/u/', '/together', '/vinaxai/share/'];
+  // 1.17.2 — a shared video is /flow?v=<id>; /video/ stays so older shared
+  // video links still open the app (the app redirects them to Flow).
+  const APP_LINK_PATHS = ['/song/', '/album/', '/artist/', '/playlist/', '/video/', '/flow', '/podcast/', '/lyrics/', '/p/', '/u/', '/together', '/vinaxai/share/'];
   const linkData = (host) => [
     '                <data android:scheme="https" />',
     `                <data android:host="${host}" />`,

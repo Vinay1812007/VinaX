@@ -56,8 +56,11 @@ const HUB_PATHS = new Set(HUB_LANGUAGES.flatMap((l) => [`/${l}-songs`, ...MOOD_H
 
 /** True for a path a signed-out visitor may open in the live app.
  *  1.11 — Home too: a signed-out visitor gets the catalogue Home
- *  (features/home/GuestHome.tsx) with a sign-in card, like JioSaavn. */
-export function browsableSignedOut(path: string): boolean {
+ *  (features/home/GuestHome.tsx) with a sign-in card, like JioSaavn.
+ *  1.17.2 — a shared video (/flow?v=<id>; the old /video/<id> redirects
+ *  there) opens signed out, as /video/<id> did; Flow without one stays personal. */
+export function browsableSignedOut(path: string, search = ''): boolean {
+  if (path === '/flow') return !!new URLSearchParams(search).get('v');
   return path === '/' || BROWSE_PATHS.has(path) || HUB_PATHS.has(path) || BROWSE_PREFIXES.some((p) => path.startsWith(p) && path.length > p.length);
 }
 
@@ -85,7 +88,7 @@ export function AuthGate({ children }: { children: ReactNode }): ReactNode {
   const published = path !== '/' ? serverPageFor(pathname) : null;
   // 13.9 — a browse page reached inside the app, or anywhere once the visitor
   // chose to explore: the live page, with play and save asking to sign in.
-  if (browsableSignedOut(path) && (!published || guestBrowseChosen())) {
+  if (browsableSignedOut(path, search) && (!published || guestBrowseChosen())) {
     rememberGuestBrowse();
     return <>{children}</>;
   }

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { searchVideosPage, type Video } from '@/services/api/videos';
+import { getVideo, searchVideosPage, type Video } from '@/services/api/videos';
 import type { Song } from '@/types';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { useTrendingNow } from '@/features/home/useHomeShelves';
 import { seededShuffle } from '@/features/home/freshRotation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { appendReels, notePageAsked, notePageCount, readSeen, reelQueries, searchableTitle, type PageBook } from './reels';
+import { appendReels, notePageAsked, notePageCount, playableReel, readSeen, reelQueries, searchableTitle, withLead, type PageBook } from './reels';
 
 /** Reels asked for per search. */
 const PER_QUERY = 10;
@@ -34,8 +34,13 @@ const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
  * before wait until nothing new is left; a round where every search failed
  * is asked again after a pause instead of ending the feed, and after a few
  * the page offers Try again.
+ *
+ * 1.17.2 — `startId` (/flow?v=<id>, a shared link or a Videos card) opens
+ * the feed on that video, whatever its language; the normal feed follows.
+ * The video is asked at the same time as the first round, and that round
+ * waits for it, so it is always the first reel and never moves.
  */
-export function useFlowReels() {
+export function useFlowReels(startId: string | null = null) {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const muted = useSettingsStore((s) => s.mutedLanguages);
   const daily = useDailyMix();
@@ -56,6 +61,9 @@ export function useFlowReels() {
   const [seen] = useState(readSeen);
   const [salt] = useState(() => Math.floor(Math.random() * 1_000_000));
   const titles = useRef<string[]>([]);
+  /** The asked-for video while it loads (rounds wait for it so it stays first). */
+  const lead = useRef<Promise<void> | null>(null);
+  const [leadMissing, setLeadMissing] = useState(false);
 
   const langs = (pinned.length ? pinned : ['telugu', 'hindi']).map((l) => l.toLowerCase()).filter((l) => !muted.includes(l));
   const langKey = langs.join(',');
@@ -103,6 +111,7 @@ export function useFlowReels() {
           notePageAsked(book.current, q);
         }
         const answers = await Promise.all(plan.map((q) => searchVideosPage(q.query, q.page, PER_QUERY)));
+        if (lead.current) await lead.current;
         if (mine !== epoch.current) return;
         if (answers.every((a) => a === null)) {
           // Offline, or the catalogue hiccuped: not "nothing more". Ask again after a pause.
@@ -160,13 +169,33 @@ export function useFlowReels() {
     setReels([]);
     setDone(false);
     setFailed(false);
+    setLeadMissing(false);
+    lead.current = null;
+    if (startId) {
+      const mine = epoch.current;
+      lead.current = getVideo(startId).then(
+        (v) => {
+          if (mine !== epoch.current) return;
+          if (!playableReel(v)) {
+            setLeadMissing(true);
+            return;
+          }
+          const next = withLead(reelsRef.current, v);
+          reelsRef.current = next;
+          setReels(next);
+        },
+        () => {
+          if (mine === epoch.current) setLeadMissing(true);
+        },
+      );
+    }
     void more();
-  }, [more]);
+  }, [more, startId]);
 
   // First screen; a language change starts over.
   useEffect(() => {
     start();
   }, [langKey, start]);
 
-  return { reels, loading, done: done || failed, failed, more, retry: start };
+  return { reels, loading, done: done || failed, failed, leadMissing, more, retry: start };
 }

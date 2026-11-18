@@ -36,4 +36,10 @@ describe('the Settings segmented control', () => {
     expect(css).not.toMatch(/\.vx-seg::after/);
     expect(css).toMatch(/\.vx-seg-thumb\s*\{[^}]*pointer-events:\s*none/);
   });
+
+  it('in rows (the app languages on a phone), a hit pad stops at half the 2px row gap', () => {
+    const css = readFileSync(join(STYLES, 'pages', 'settings.css'), 'utf8');
+    expect(css).toMatch(/\.vx-seg\s*\{[^}]*gap:\s*2px/);
+    expect(css).toMatch(/\.vx-seg\.is-grid \.vx-seg-item::after\s*\{\s*inset:\s*-1px 0;?\s*\}/);
+  });
 });

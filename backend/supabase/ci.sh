@@ -13,7 +13,8 @@
 #   Nothing survives: the database is scratch by definition.
 #
 # apply — for the production project (the SUPABASE_DB_URL secret):
-#   1. applies schema.sql (idempotent: adds what is missing, deletes nothing)
+#   1. applies schema.sql (idempotent: adds what is missing, deletes nothing
+#      except the retired song reactions, which version 25 drops)
 #   2. reads back meta.schema and the table count and prints them
 #   It never runs reset.sql or check.sql against this database.
 #
@@ -64,7 +65,7 @@ SQL
 fi
 
 # ---- apply ------------------------------------------------------------------
-step "schema.sql — apply (idempotent; nothing is deleted)"
+step "schema.sql — apply (idempotent; only retired tables are dropped)"
 psql_ -f "$here/schema.sql"
 step "verify"
 psql_ -At <<'SQL'

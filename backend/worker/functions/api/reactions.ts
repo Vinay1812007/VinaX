@@ -2,8 +2,8 @@
  * 2.0 — song reactions are gone from VinaX. Apps from before 2.0 still ask
  * for a song's reactions; they get an empty answer so nothing breaks while
  * they update, and leaving a reaction answers 410 Gone. Nothing is read from
- * or written to the database any more (the old `song_reactions` rows stay
- * until the owner clears them).
+ * or written to the database any more (schema version 25 dropped the
+ * `song_reactions` table and its rows).
  *
  *   GET  /api/reactions?song=<id> → { total: 0, counts: {}, mine: null }
  *   POST /api/reactions           → 410 { error: 'reactions_removed' }

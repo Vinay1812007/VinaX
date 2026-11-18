@@ -32,7 +32,8 @@ async function seed(page: Page, baseURL: string, reduce = false) {
   });
 }
 
-const anim = (page: Page, selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).animationName);
+// A row the Up next refill has just replaced reads empty styles, so a detached element answers null and every read is polled.
+const anim = (page: Page, selector: string) => page.locator(selector).first().evaluate((el) => (el.isConnected ? getComputedStyle(el).animationName : null));
 
 test('Now Playing: the cover eases in on a new song (not on open), panels cross-fade, rows stagger', async ({ page, baseURL }) => {
   await seed(page, baseURL!);
@@ -44,16 +45,16 @@ test('Now Playing: the cover eases in on a new song (not on open), panels cross-
 
   await page.getByRole('button', { name: 'Next' }).first().click();
   await expect(page.locator('.vx-np-art-img.is-swap')).toHaveCount(1);
-  expect(await anim(page, '.vx-np-art-img')).toBe('vx-art-in');
+  await expect.poll(() => anim(page, '.vx-np-art-img')).toBe('vx-art-in');
 
-  expect(await anim(page, '.vx-np-tabpanel')).toBe('vx-np-fade');
+  await expect.poll(() => anim(page, '.vx-np-tabpanel')).toBe('vx-np-fade');
   const rows = page.locator('.vx-upnext > li');
   await expect(rows.first()).toBeVisible();
   // Polled: the queue refill can replace the rows between the locate and the read, and a
   // replaced (detached) row reads an empty animationName.
   await expect.poll(() => anim(page, '.vx-upnext > li')).toBe('vx-np-rise');
   // How many rows Up next holds depends on the queue refill timing; the first one always carries its index.
-  await expect.poll(() => rows.first().evaluate((el) => getComputedStyle(el).getPropertyValue('--i').trim())).toBe('0');
+  await expect.poll(() => rows.first().evaluate((el) => (el as HTMLElement).style.getPropertyValue('--i').trim())).toBe('0');
 
   // Play ⇄ pause: the glyph springs in. Polled: while the (blocked) audio
   // buffers, the button swaps its glyph for a spinner and back, so a read can
@@ -66,7 +67,7 @@ test('Queue: rows arrive in a stagger', async ({ page, baseURL }) => {
   await page.goto('/queue');
   const row = page.locator('.vx-queue-list > li.vx-queue-row').first();
   await expect(row).toBeVisible({ timeout: 15_000 });
-  expect(await row.evaluate((el) => getComputedStyle(el).animationName)).toBe('vx-np-rise');
+  await expect.poll(() => anim(page, '.vx-queue-list > li.vx-queue-row')).toBe('vx-np-rise');
 });
 
 test('reduced motion: none of it moves', async ({ page, baseURL }) => {
@@ -76,6 +77,6 @@ test('reduced motion: none of it moves', async ({ page, baseURL }) => {
   await page.getByRole('button', { name: 'Next' }).first().click();
   await expect(page.locator('.vx-np-art-img.is-swap')).toHaveCount(1);
   for (const sel of ['.vx-np-art-img', '.vx-np-tabpanel', '.vx-upnext > li', '.vx-np-play > svg']) {
-    expect(await anim(page, sel), sel).toBe('none');
+    await expect.poll(() => anim(page, sel), { message: sel }).toBe('none');
   }
 });

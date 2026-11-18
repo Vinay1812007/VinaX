@@ -201,6 +201,23 @@ export function appendReels(current: readonly Video[], incoming: readonly Video[
   return { reels: fresh.length ? [...current, ...fresh] : (current as Video[]), held };
 }
 
+/**
+ * The feed opened on one asked-for video (/flow?v=<id>): that video first,
+ * whatever its language or whether it was watched before, then the rest
+ * without a second copy of its song. Flow calls this before the first round
+ * lands, so no reel on screen moves.
+ */
+export function withLead(current: readonly Video[], lead: Video): Video[] {
+  if (current.some((v) => v.id === lead.id)) return current as Video[];
+  const key = reelKey(lead);
+  return [lead, ...current.filter((v) => reelKey(v) !== key)];
+}
+
+/** The in-app address that opens Flow on one video (shared links, Videos cards, old /video/<id> links). */
+export function flowVideoPath(id: string): string {
+  return `/flow?v=${encodeURIComponent(id)}`;
+}
+
 /* ------------------------------------------------------- watched on this device */
 
 export const SEEN_KEY = 'vinax.flow.seen.v1';

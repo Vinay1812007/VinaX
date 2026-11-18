@@ -11,7 +11,8 @@ import { toast } from '@/store/toastStore';
 import { useTogether } from '@/services/together/session';
 import { ReelCard } from '@/features/flow/ReelCard';
 import { useFlowReels } from '@/features/flow/useFlowReels';
-import { markSeen } from '@/features/flow/reels';
+import { flowVideoPath, markSeen } from '@/features/flow/reels';
+import { requireAccount } from '@/services/auth/gate';
 import { ChevronDownIcon, VolumeIcon, XIcon } from '@/components/Icons';
 import { shareLink } from '@/utils/share';
 import { reducedMotion } from '@/utils/motion';
@@ -73,6 +74,11 @@ function songFor(video: Video): Promise<Song> {
  * unless the listener turns the sound on themselves.
  *
  * Before 1.14.4 Flow was a feed of 30-second song previews.
+ *
+ * 1.17.2 — /flow?v=<id> opens on that video, then the normal feed follows.
+ * It is the one video player: Videos cards and shared links open here, and
+ * the old /video/<id> player redirects here. A shared link opens signed
+ * out (AuthGate); playing the song, liking or queueing asks to sign in.
  */
 export default function FlowPage() {
   usePageTitle('Flow');
@@ -81,7 +87,8 @@ export default function FlowPage() {
   const inSession = useTogether((s) => s.mode !== 'idle');
   const following = usePlayerStore((s) => s.followMode);
   const locked = inSession || following;
-  const { reels, loading, done, failed: loadFailed, more, retry } = useFlowReels();
+  const startId = new URLSearchParams(location.search).get('v')?.trim() || null;
+  const { reels, loading, done, failed: loadFailed, leadMissing, more, retry } = useFlowReels(startId);
   const [reduceMotion] = useState(reducedMotion);
   const [active, setActive] = useState(0);
   const [muted, setMuted] = useState(() => locked || readFlag(FLOW_MUTED_KEY, false));
@@ -94,6 +101,10 @@ export default function FlowPage() {
   reelsRef.current = reels;
   const activeRef = useRef(active);
   activeRef.current = active;
+
+  useEffect(() => {
+    if (leadMissing) toast('That video couldn’t be loaded. Here are others.');
+  }, [leadMissing]);
 
   useEffect(() => {
     if (showHint) writeFlag(FLOW_HINT_KEY, true);
@@ -173,6 +184,12 @@ export default function FlowPage() {
     void songFor(v).then(
       (song) => {
         const lib = useLibraryStore.getState();
+        // Signed out (a shared link): the sign-in sheet, and the like once they have.
+        const like = () => {
+          const l = useLibraryStore.getState();
+          if (!l.isFavorite(song.id)) l.toggleFavorite(song);
+        };
+        if (!lib.isFavorite(song.id) && !requireAccount('save', like)) return;
         if (!lib.isFavorite(song.id)) lib.toggleFavorite(song);
         setAnnounce(`Liked ${song.title}`);
       },
@@ -182,10 +199,15 @@ export default function FlowPage() {
   const onPlaySong = useCallback((v: Video) => {
     void songFor(v).then(
       (song) => {
-        feedRef.current?.querySelectorAll('video').forEach((el) => el.pause());
-        usePlayerStore.getState().playSong(song);
-        toast(`Playing ${song.title}`);
-        navigate('/now-playing');
+        // Signed out (a shared link), the same steps run once they have signed in,
+        // so the reel still pauses and the song does not play over it.
+        const play = () => {
+          feedRef.current?.querySelectorAll('video').forEach((el) => el.pause());
+          usePlayerStore.getState().playSong(song);
+          toast(`Playing ${song.title}`);
+          navigate('/now-playing');
+        };
+        if (requireAccount('listen', play)) play();
       },
       () => toast('Could not load the song right now'),
     );
@@ -193,14 +215,17 @@ export default function FlowPage() {
   const onAddToQueue = useCallback((v: Video) => {
     void songFor(v).then(
       (song) => {
-        usePlayerStore.getState().enqueue(song);
-        toast(`Added ${song.title} to the queue`);
+        const add = () => {
+          usePlayerStore.getState().enqueue(song);
+          toast(`Added ${song.title} to the queue`);
+        };
+        if (requireAccount('listen', add)) add();
       },
       () => toast('Could not add this song right now'),
     );
   }, []);
   const onShare = useCallback((v: Video) => {
-    void shareLink(`/video/${v.id}`, v.title).then((r) => r === 'copied' && toast('Link copied'));
+    void shareLink(flowVideoPath(v.id), v.title).then((r) => r === 'copied' && toast('Link copied'));
   }, []);
 
   const close = useCallback(() => {

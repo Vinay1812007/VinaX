@@ -145,12 +145,6 @@ export async function getVideo(id: string): Promise<Video | null> {
   return normalizeVideo(json?.data);
 }
 
-/** Playable sources for a video, in the order to try them: the preview clip
- *  that always plays, then the full stream (404 upstream so far), each once. */
-export function videoSources(v: Video): string[] {
-  return [...new Set([v.previewUrl, v.streamUrl].filter((u): u is string => !!u))];
-}
-
 
 /** Lowercased, punctuation-free comparison form (same lesson as the lyrics
  *  matcher: titles must gate, or a wrong clip plays with confidence). */

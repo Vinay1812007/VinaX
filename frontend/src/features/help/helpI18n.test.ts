@@ -6,14 +6,16 @@ import { HELP_UI_KEYS, type HelpTranslation } from '@/i18n/help/types';
 import TE from '@/i18n/help/te';
 import HI from '@/i18n/help/hi';
 import TA from '@/i18n/help/ta';
+import KN from '@/i18n/help/kn';
+import ML from '@/i18n/help/ml';
 
 /**
- * The Telugu, Hindi and Tamil Help files must cover every guide, question,
+ * The Telugu, Hindi, Tamil, Kannada and Malayalam Help files must cover every guide, question,
  * group, shortcut and tour step English has, one for one, so a listener never
  * reads half a guide in one language and half in another, and a renamed or
  * removed English entry cannot leave a stale translation behind.
  */
-const LANGS: Array<[string, HelpTranslation]> = [['te', TE], ['hi', HI], ['ta', TA]];
+const LANGS: Array<[string, HelpTranslation]> = [['te', TE], ['hi', HI], ['ta', TA], ['kn', KN], ['ml', ML]];
 const sorted = (xs: Iterable<string>): string[] => [...xs].sort();
 const placeholders = (s: string): string[] => sorted(s.match(/\{\w+\}/g) ?? []);
 
@@ -142,5 +144,8 @@ describe('help translation helpers', () => {
     const a = await loadHelpTranslation('hi');
     expect(a?.ui.Next).toBe(HI.ui.Next);
     expect(await loadHelpTranslation('hi')).toBe(a);
+    // Kannada and Malayalam have their own chunks too.
+    expect((await loadHelpTranslation('kn'))?.ui.Next).toBe(KN.ui.Next);
+    expect((await loadHelpTranslation('ml'))?.ui.Next).toBe(ML.ui.Next);
   });
 });

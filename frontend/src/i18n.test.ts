@@ -2,29 +2,38 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ensureDictionary, loadedDictionaries, tr, translate, UI_LANGS } from './i18n';
-import { useSettingsStore } from './store/settingsStore';
+import { ensureDictionary, initI18n, loadedDictionaries, tr, translate, UI_LANGS } from './i18n';
+import { pickSettings, useSettingsStore } from './store/settingsStore';
 import { TUNE_OPTIONS } from './services/recommendation/tune';
 import { MOODS } from './constants/seeds';
 import { SONG_SORT_LABELS } from './features/search/sortSongs';
 import TE from './i18n/te';
 import HI from './i18n/hi';
 import TA from './i18n/ta';
+import KN from './i18n/kn';
+import ML from './i18n/ml';
 
 describe('1.12 — app language', () => {
   it('English is the key; an unknown string stays English in every language', () => {
     expect(translate('Home', 'en')).toBe('Home');
     expect(translate('Home', 'te')).toBe('హోమ్');
     expect(translate('Something new', 'hi')).toBe('Something new');
-    expect(UI_LANGS.map((l) => l.id)).toEqual(['en', 'te', 'hi', 'ta']);
+    expect(UI_LANGS.map((l) => l.id)).toEqual(['en', 'te', 'hi', 'ta', 'kn', 'ml']);
+    // The picker shows each language in its own script.
+    expect(UI_LANGS.find((l) => l.id === 'kn')?.label).toBe('ಕನ್ನಡ');
+    expect(UI_LANGS.find((l) => l.id === 'ml')?.label).toBe('മലയാളം');
+    expect(translate('Home', 'kn')).toBe('ಮುಖಪುಟ');
+    expect(translate('Settings', 'ml')).toBe('ക്രമീകരണങ്ങൾ');
   });
 
-  it('the three extended dictionaries cover the same strings, none empty', () => {
+  it('the five extended dictionaries cover the same strings, none empty', () => {
     const keys = Object.keys(TE).sort();
     expect(Object.keys(HI).sort()).toEqual(keys);
     expect(Object.keys(TA).sort()).toEqual(keys);
+    expect(Object.keys(KN).sort()).toEqual(keys);
+    expect(Object.keys(ML).sort()).toEqual(keys);
     expect(keys.length).toBeGreaterThan(100);
-    for (const d of [TE, HI, TA]) for (const [k, v] of Object.entries(d)) expect(v.trim(), k).not.toBe('');
+    for (const d of [TE, HI, TA, KN, ML]) for (const [k, v] of Object.entries(d)) expect(v.trim(), k).not.toBe('');
     // The song menu, the Settings sections and the common section titles are in.
     for (const k of ['Add to queue', 'Play next', 'Playback', 'Your data', 'Recently played', 'Show all', 'Listening calendar']) expect(keys).toContain(k);
   });
@@ -36,6 +45,33 @@ describe('1.12 — app language', () => {
     expect(translate('Play next', 'ta')).toBe('அடுத்து இயக்கு');
     expect(translate('Home', 'ta')).toBe('முகப்பு');
     await ensureDictionary('en'); // nothing to fetch
+  });
+
+  it('Kannada and Malayalam load their own dictionaries and keep the first-load words', async () => {
+    expect(translate('Play next', 'kn')).toBe('Play next');
+    await Promise.all([ensureDictionary('kn'), ensureDictionary('ml')]);
+    expect(translate('Play next', 'kn')).toBe(KN['Play next']);
+    expect(translate('Play next', 'ml')).toBe(ML['Play next']);
+    expect(translate('Sleeping in {n} min', 'ml', { n: 5 })).toBe(ML['Sleeping in {n} min'].replace('{n}', '5'));
+    expect(translate('Library', 'kn')).toBe('ಲೈಬ್ರರಿ');
+  });
+
+  it('the page language follows the app language, Kannada and Malayalam included', () => {
+    useSettingsStore.setState({ uiLanguage: 'en' });
+    initI18n();
+    expect(document.documentElement.lang).toBe('en');
+    useSettingsStore.setState({ uiLanguage: 'kn' });
+    expect(document.documentElement.lang).toBe('kn');
+    useSettingsStore.setState({ uiLanguage: 'ml' });
+    expect(document.documentElement.lang).toBe('ml');
+    useSettingsStore.setState({ uiLanguage: 'en' });
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('a stored or restored Kannada or Malayalam choice is kept, an unknown one is dropped', () => {
+    expect(pickSettings({ uiLanguage: 'kn' }).uiLanguage).toBe('kn');
+    expect(pickSettings({ uiLanguage: 'ml' }).uiLanguage).toBe('ml');
+    expect(pickSettings({ uiLanguage: 'xx' }).uiLanguage).toBeUndefined();
   });
 });
 
@@ -86,13 +122,13 @@ describe('1.16 — more than the menus', () => {
     expect(tr('Added {n} songs to queue', { n: 3 })).toBe('3 गाने क़तार में जोड़े गए');
   });
 
-  it('every key the player, Now Playing, Search, the welcome, sign-in and snackbars ask for is in all three dictionaries', () => {
+  it('every key the player, Now Playing, Search, the welcome, sign-in and snackbars ask for is in all five dictionaries', () => {
     const missing: string[] = [];
     for (const file of WRAPPED) {
       const keys = literalKeys(file);
       expect(keys.length, file).toBeGreaterThan(0);
       for (const key of keys) {
-        for (const [lang, d] of [['te', TE], ['hi', HI], ['ta', TA]] as const) {
+        for (const [lang, d] of [['te', TE], ['hi', HI], ['ta', TA], ['kn', KN], ['ml', ML]] as const) {
           if (!(key in d) && translate(key, lang) === key) missing.push(`${lang} ${file}: ${key}`);
         }
       }
@@ -105,7 +141,7 @@ describe('1.16 — more than the menus', () => {
       'More chill', 'Surprise me', 'Road Trip', 'Relevance', 'After hours', 'No matching songs yet', 'Four places to go',
       'Nothing playing', 'Queue is empty', 'No liked songs yet', 'Added to Liked songs', 'Link copied', 'Added 1 song to queue', 'View',
     ];
-    for (const d of [TE, HI, TA]) for (const k of built) expect(d[k], k).toBeTruthy();
+    for (const d of [TE, HI, TA, KN, ML]) for (const k of built) expect(d[k], k).toBeTruthy();
   });
 
   it('the lists the wrapped screens translate at run time are all in the dictionaries', () => {
@@ -145,13 +181,13 @@ describe('1.16 — more than the menus', () => {
       'Up next ran out of songs for this session — pick something or start a radio', 'Undo', 'View',
     ];
     const missing: string[] = [];
-    for (const [lang, d] of [['te', TE], ['hi', HI], ['ta', TA]] as const) {
+    for (const [lang, d] of [['te', TE], ['hi', HI], ['ta', TA], ['kn', KN], ['ml', ML]] as const) {
       for (const k of built) if (!d[k] && translate(k, lang) === k) missing.push(`${lang}: ${k}`);
     }
     expect(missing).toEqual([]);
   });
 
   it('a translation keeps exactly the slots of its English key', () => {
-    for (const d of [TE, HI, TA]) for (const [k, v] of Object.entries(d)) expect(slots(v), k).toEqual(slots(k));
+    for (const d of [TE, HI, TA, KN, ML]) for (const [k, v] of Object.entries(d)) expect(slots(v), k).toEqual(slots(k));
   });
 });

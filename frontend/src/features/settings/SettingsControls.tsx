@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useT } from '@/i18n';
 import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
@@ -197,21 +197,27 @@ function useRovingChoice<T>(values: T[], value: T, onChange: (v: T) => void) {
  * The chosen option sits on a solid accent thumb that slides to the new
  * choice (measured from the buttons, re-measured when they resize); until it
  * is measured, the chosen button paints its own background instead.
+ *
+ * `cols`: on a phone, lay the choices out in rows of this many instead of one
+ * squeezed line (the six app languages do not fit one line at 360 px). The
+ * thumb follows the chosen button down a row too.
  */
 export function Segmented<T extends string | number>({
   label,
   value,
   options,
   onChange,
+  cols,
 }: {
   label: string;
   value: T;
   options: Array<{ value: T; label: string; title?: string }>;
   onChange: (v: T) => void;
+  cols?: number;
 }) {
   const roving = useRovingChoice(options.map((o) => o.value), value, onChange);
   const group = useRef<HTMLDivElement>(null);
-  const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
+  const [thumb, setThumb] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const at = options.findIndex((o) => o.value === value);
   useLayoutEffect(() => {
     const el = group.current;
@@ -219,8 +225,10 @@ export function Segmented<T extends string | number>({
     const measure = (): void => {
       const btn = at < 0 ? null : el.querySelectorAll<HTMLButtonElement>('.vx-seg-item')[at];
       const w = btn?.offsetWidth ?? 0;
+      const h = btn?.offsetHeight ?? 0;
       const x = btn?.offsetLeft ?? 0;
-      setThumb((prev) => (w === 0 ? null : prev && prev.x === x && prev.w === w ? prev : { x, w }));
+      const y = btn?.offsetTop ?? 0;
+      setThumb((prev) => (w === 0 ? null : prev && prev.x === x && prev.y === y && prev.w === w && prev.h === h ? prev : { x, y, w, h }));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -229,8 +237,14 @@ export function Segmented<T extends string | number>({
     return () => ro.disconnect();
   }, [at, options.length]);
   return (
-    <div ref={group} role="radiogroup" aria-label={label} className={cn('vx-seg', thumb && 'has-thumb')}>
-      {thumb && <span aria-hidden className="vx-seg-thumb" style={{ width: thumb.w, transform: `translateX(${thumb.x}px)` }} />}
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-label={label}
+      className={cn('vx-seg', thumb && 'has-thumb', !!cols && 'is-grid')}
+      style={cols ? ({ '--seg-cols': cols } as CSSProperties) : undefined}
+    >
+      {thumb && <span aria-hidden className="vx-seg-thumb" style={{ width: thumb.w, height: thumb.h, transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />}
       {options.map((o, i) => (
         <button
           key={String(o.value)}

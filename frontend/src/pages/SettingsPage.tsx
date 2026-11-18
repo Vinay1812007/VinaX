@@ -580,7 +580,7 @@ export default function SettingsPage() {
               </RangeRow>
             </Row>
             <Row stack label="App language" keywords="display language interface">
-              <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
+              <Segmented label="App language" cols={3} value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
             </Row>
             <Group title="Size and comfort">
               <Row stack label="Display size" note="Text and controls, everywhere." keywords="scale font zoom">

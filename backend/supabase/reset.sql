@@ -5,7 +5,9 @@
 -- a clean slate. THIS DELETES ALL DATA. Run it only when you mean to start
 -- over; then paste schema.sql and run that. It also drops the old AI tables
 -- and functions schema versions 1 and 2 had (ai_calls, shared_chats,
--- stats_ai, ai_usage_since), in case they are still there.
+-- stats_ai, ai_usage_since), the personal engine's (versions 7–20) and the
+-- song reactions of versions 19–24 (song_reactions, song_reaction_counts,
+-- stats_reactions), in case they are still there.
 -- =============================================================================
 
 drop view if exists directory;
@@ -21,7 +23,10 @@ begin
            'room_request', 'room_control', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
            'table_stats', 'table_counts', 'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
            'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened',
-           'account_set_password', 'account_check_password', 'account_has_password')
+           'account_set_password', 'account_check_password', 'account_has_password', 'song_reaction_counts',
+           '_device_key', '_listen_spans', '_window_start', 'listen_time', 'app_time', 'account_app_time', 'profile_app_time',
+           'device_breakdown', 'weekly_summary', 'profile_extras', 'owner_tags', 'ai_feedback_stats')
+           or p.proname like 'outreach\_%' or p.proname = '_outreach_people'
            or p.proname like 'personal\_%')
   loop
     execute format('drop function if exists %s cascade', r.sig);

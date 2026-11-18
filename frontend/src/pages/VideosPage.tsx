@@ -11,6 +11,7 @@ import { PlayIcon, SearchIcon, VideoIcon } from '@/components/Icons';
 import { EmptyState, ErrorState, InlineError } from '@/components/States';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
+import { flowVideoPath } from '@/features/flow/reels';
 import '@/styles/pages/browse.css';
 
 function fmtDuration(s: number | null): string {
@@ -21,10 +22,11 @@ function fmtDuration(s: number | null): string {
 }
 
 /** 16:9 video card — the thumbnail leads (duration in its corner, a play
- *  squircle on hover), then the title on up to two lines and the artists. */
+ *  squircle on hover), then the title on up to two lines and the artists.
+ *  1.17.2 — it opens Flow on that video (Flow is the one video player). */
 export function VideoCard({ v }: { v: Video }) {
   return (
-    <Link to={`/video/${v.id}`} className="bx-video">
+    <Link to={flowVideoPath(v.id)} className="bx-video">
       <div className="bx-video-thumb">
         {v.thumbnail ? (
           <img src={v.thumbnail} alt="" loading="lazy" decoding="async" width={320} height={180} />
@@ -101,7 +103,8 @@ function VideoShelf({ title, query }: { title: string; query: string }) {
 
 /**
  * v5.7.9 — Music Videos. Search the video catalog and browse per-language
- * shelves; every card opens the cinematic player at /video/:id.
+ * shelves; every card opens Flow on that video (/flow?v=<id>, since 1.17.2;
+ * it was the separate player at /video/:id, which now redirects there).
  */
 export default function VideosPage() {
   usePageTitle('Videos');
@@ -130,7 +133,7 @@ export default function VideosPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Videos" subtitle="Music videos in your languages. Every one opens in its own player." />
+      <PageHeader title="Videos" subtitle="Music videos in your languages. Tap one to watch it in Flow." />
 
       <form
         role="search"

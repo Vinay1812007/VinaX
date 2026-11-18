@@ -135,3 +135,22 @@ test('Flow offers Try again when the video search keeps failing, instead of sayi
   await expect(page.locator('.vx-reel').first()).toBeVisible();
   await ctx.close();
 });
+
+test('an old /video/<id> link opens Flow on that video, outside the listener’s languages, then the feed follows', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const ctx = await browser.newContext({ baseURL: base, viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await setup(page, base);
+  // 1.17.2 — Flow is the one video player; the asked-for video is Hindi, the listener's language is Telugu.
+  const shared = { ...apiVideo(base), id: 'shared1', name: 'Shared Hindi Song (Video)', language: 'Hindi' };
+  await page.route('**/api/cat/videos/shared1', (route) => route.fulfill({ json: { data: shared } }));
+  await page.goto('/video/shared1');
+  await expect(page).toHaveURL(/\/flow\?v=shared1$/);
+  const first = page.locator('.vx-flow-card[data-flow-index="0"]');
+  await expect(first.locator('.vx-flow-title')).toHaveText('Shared Hindi Song (Video)');
+  await expect.poll(async () => (await reelState(page, 0))?.paused, { timeout: 15_000 }).toBe(false);
+  await expect(page.locator('.vx-flow-card[data-flow-index="1"]')).toBeVisible();
+  // The rail has no separate Open any more.
+  await expect(first.getByRole('link', { name: /in the video player/ })).toHaveCount(0);
+  await ctx.close();
+});

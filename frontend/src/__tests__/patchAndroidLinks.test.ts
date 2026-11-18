@@ -108,7 +108,7 @@ describe('patch-android.js: verified App Links', () => {
       expect(f).toContain('<data android:scheme="https" />');
       expect(f).not.toContain('android:scheme="http"');
       // The invite button's intent:// link (features/together/invite.ts) and shared pages.
-      for (const p of ['/together', '/p/', '/song/', '/album/', '/artist/', '/playlist/']) expect(f).toContain(`<data android:pathPrefix="${p}" />`);
+      for (const p of ['/together', '/p/', '/song/', '/album/', '/artist/', '/playlist/', '/flow', '/video/']) expect(f).toContain(`<data android:pathPrefix="${p}" />`);
       // Home and the sign-in pages stay in the browser.
       expect(f).not.toMatch(/android:(path|pathPrefix)="\/"/);
       expect(f).not.toContain('/login');

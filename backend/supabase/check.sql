@@ -671,25 +671,12 @@ begin
   assert not has_table_privilege('anon', 'public.ai_memories', 'select'), 'anon cannot read VinaX AI memory';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
 
-  -- v19: song reactions — one per device per song, public counts, the console's stats.
-  insert into song_reactions (song_id, listener_id, emoji, song_title, song_artist, language) values
-    ('check_s1', 'check_l1', 'fire', 'Check Song 1', 'Check Artist 9', 'telugu'),
-    ('check_s1', 'check_l2', 'love', 'Check Song 1', 'Check Artist 9', 'telugu'),
-    ('check_s2', 'check_l1', 'fire', 'Check Song 2', 'Check Artist 8', 'tamil'),
-    ('check_s9', 'check_l3', 'wow', 'Old', 'X', 'hindi');
-  update song_reactions set at = now() - interval '40 days' where song_id = 'check_s9';
-  insert into song_reactions (song_id, listener_id, emoji) values ('check_s1', 'check_l1', 'sad') on conflict (song_id, listener_id) do update set emoji = excluded.emoji, at = now();
-  assert (select count(*) from song_reactions where song_id = 'check_s1') = 2, 'song_reactions: one per device per song';
-  v := song_reaction_counts('check_s1', 'check_l1');
-  assert (v ->> 'total')::int = 2 and (v -> 'counts' ->> 'sad')::int = 1 and (v -> 'counts' ->> 'love')::int = 1 and v ->> 'mine' = 'sad', 'song_reaction_counts: totals and mine';
-  assert (song_reaction_counts('check_s1') ->> 'mine') is null and (song_reaction_counts('check_nothing') ->> 'total')::int = 0, 'song_reaction_counts: nobody / unknown song';
-  v := stats_reactions(30, 10);
-  assert (v ->> 'total')::int = 3 and (v ->> 'people')::int = 2 and (v ->> 'songs')::int = 2 and (v ->> 'prevTotal')::int = 1, 'stats_reactions: window, people, songs, previous window';
-  assert (v -> 'top' -> 0 ->> 'id') = 'check_s1' and (v -> 'top' -> 0 -> 'counts' ->> 'love')::int = 1 and (v -> 'top' -> 0 ->> 'artist') = 'Check Artist 9', 'stats_reactions: top song with per-emoji counts';
-  assert jsonb_array_length(v -> 'byDay') >= 1 and jsonb_array_length(v -> 'byEmoji') = 3, 'stats_reactions: by day and by emoji';
-  assert not has_table_privilege('anon', 'public.song_reactions', 'select'), 'anon cannot read song reactions';
+  -- v25: song reactions are gone — the table and both functions were dropped.
+  assert to_regclass('public.song_reactions') is null, 'song_reactions is dropped';
+  assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                     where n.nspname = 'public' and p.proname in ('song_reaction_counts', 'stats_reactions')), 'song_reaction_counts and stats_reactions are dropped';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 24, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 25, 'meta.schema.version';
   -- v24: thumbs on VinaX AI replies. One per reply per account (changeable), the per-model score,
   -- kept when the chat goes, gone with the account, locked like every table.
   insert into accounts (id, email) values ('check_fb', 'fb@example.com');

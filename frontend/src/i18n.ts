@@ -1,13 +1,15 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 
-export type UiLang = 'en' | 'te' | 'hi' | 'ta';
+export type UiLang = 'en' | 'te' | 'hi' | 'ta' | 'kn' | 'ml';
 
 export const UI_LANGS: { id: UiLang; label: string }[] = [
   { id: 'en', label: 'English' },
   { id: 'te', label: 'తెలుగు' },
   { id: 'hi', label: 'हिन्दी' },
   { id: 'ta', label: 'தமிழ்' },
+  { id: 'kn', label: 'ಕನ್ನಡ' },
+  { id: 'ml', label: 'മലയാളം' },
 ];
 
 /**
@@ -56,7 +58,31 @@ const TA: Record<string, string> = {
   'App language': 'பயன்பாட்டு மொழி',
 };
 
-const CORE: Record<UiLang, Record<string, string>> = { en: {}, te: TE, hi: HI, ta: TA };
+const KN: Record<string, string> = {
+  Listen: 'ಕೇಳಿ', 'Your Music': 'ನಿಮ್ಮ ಸಂಗೀತ', Explore: 'ಅನ್ವೇಷಿಸಿ',
+  Home: 'ಮುಖಪುಟ', Discover: 'ಡಿಸ್ಕವರ್', Charts: 'ಚಾರ್ಟ್‌ಗಳು', 'Made For You': 'ನಿಮಗಾಗಿ',
+  'Your Week': 'ನಿಮ್ಮ ವಾರ', Search: 'ಹುಡುಕಿ',
+  Library: 'ಲೈಬ್ರರಿ', Favorites: 'ಮೆಚ್ಚಿನವು', History: 'ಇತಿಹಾಸ', Queue: 'ಕ್ಯೂ',
+  'Your VinaX': 'ನಿಮ್ಮ VinaX', Downloads: 'ಡೌನ್‌ಲೋಡ್‌ಗಳು', 'Listen Together': 'ಒಟ್ಟಿಗೆ ಕೇಳಿ', Following: 'ಫಾಲೋ ಮಾಡಿದವು',
+  Movies: 'ಸಿನಿಮಾಗಳು', Languages: 'ಭಾಷೆಗಳು', Moods: 'ಮೂಡ್‌ಗಳು',
+  'Taste Profile': 'ಅಭಿರುಚಿ ಪ್ರೊಫೈಲ್', Settings: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು', 'For You': 'ನಿಮಗಾಗಿ',
+  'Good morning': 'ಶುಭೋದಯ', 'Good afternoon': 'ಶುಭ ಮಧ್ಯಾಹ್ನ', 'Good evening': 'ಶುಭ ಸಂಜೆ', 'Good night': 'ಶುಭ ರಾತ್ರಿ',
+  'App language': 'ಆ್ಯಪ್ ಭಾಷೆ',
+};
+
+const ML: Record<string, string> = {
+  Listen: 'കേൾക്കാം', 'Your Music': 'നിങ്ങളുടെ സംഗീതം', Explore: 'പര്യവേക്ഷണം',
+  Home: 'ഹോം', Discover: 'ഡിസ്കവർ', Charts: 'ചാർട്ടുകൾ', 'Made For You': 'നിങ്ങൾക്കായി',
+  'Your Week': 'നിങ്ങളുടെ ആഴ്ച', Search: 'തിരയുക',
+  Library: 'ലൈബ്രറി', Favorites: 'പ്രിയപ്പെട്ടവ', History: 'ചരിത്രം', Queue: 'ക്യൂ',
+  'Your VinaX': 'നിങ്ങളുടെ VinaX', Downloads: 'ഡൗൺലോഡുകൾ', 'Listen Together': 'ഒരുമിച്ച് കേൾക്കാം', Following: 'ഫോളോ ചെയ്യുന്നവ',
+  Movies: 'സിനിമകൾ', Languages: 'ഭാഷകൾ', Moods: 'മൂഡുകൾ',
+  'Taste Profile': 'അഭിരുചി പ്രൊഫൈൽ', Settings: 'ക്രമീകരണങ്ങൾ', 'For You': 'നിങ്ങൾക്കായി',
+  'Good morning': 'സുപ്രഭാതം', 'Good afternoon': 'ശുഭ മധ്യാഹ്നം', 'Good evening': 'ശുഭ സായാഹ്നം', 'Good night': 'ശുഭരാത്രി',
+  'App language': 'ആപ്പ് ഭാഷ',
+};
+
+const CORE: Record<UiLang, Record<string, string>> = { en: {}, te: TE, hi: HI, ta: TA, kn: KN, ml: ML };
 
 /** The extended dictionaries, once fetched. */
 const EXTRA: Partial<Record<UiLang, Record<string, string>>> = {};
@@ -69,6 +95,8 @@ const LOADERS: Record<Exclude<UiLang, 'en'>, () => Promise<{ default: Record<str
   te: () => import('./i18n/te'),
   hi: () => import('./i18n/hi'),
   ta: () => import('./i18n/ta'),
+  kn: () => import('./i18n/kn'),
+  ml: () => import('./i18n/ml'),
 };
 
 /** Fetch a language's full dictionary (once). Resolves when it is in place. */
