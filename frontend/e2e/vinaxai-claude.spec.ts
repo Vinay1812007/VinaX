@@ -90,6 +90,10 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light' } = {}): Promi
   return server;
 }
 
+/** The shortcut modifier the page expects on this machine (shortcuts.ts isMac): ⌘ on a Mac, Ctrl on the Linux runner. */
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control';
+const MOD_KEY = process.platform === 'darwin' ? '⌘' : 'Ctrl';
+
 const composer = (page: Page) => page.getByRole('textbox', { name: /Message VinaX AI|What should VinaX AI research\?|Ask about the quoted part/ });
 
 test('Research: switched on from the + menu, the request asks for it, the progress and sources show it ran several searches', async ({ page }) => {
@@ -154,21 +158,21 @@ test('keyboard shortcuts: ⌘/ lists them, ⌘⇧O starts a new chat, ⌘⇧S hi
   await setup(page);
   await page.goto(`/vinaxai/c/${C1}`);
   await expect(page.locator('.vx-ai-md').getByText('Its vadi is Ga.')).toBeVisible();
-  await page.keyboard.press('Meta+/');
+  await page.keyboard.press(`${MOD}+/`);
   const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('New chat');
-  await expect(dialog.locator('kbd').first()).toHaveText('⌘');
+  await expect(dialog.locator('kbd').first()).toHaveText(MOD_KEY);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await page.keyboard.press('Meta+Shift+S');
+  await page.keyboard.press(`${MOD}+Shift+S`);
   await expect(page.getByRole('navigation', { name: 'VinaX AI' })).toBeVisible();
-  await page.keyboard.press('Meta+Shift+S');
+  await page.keyboard.press(`${MOD}+Shift+S`);
   await expect(page.getByRole('navigation', { name: 'Chats' })).toBeVisible();
   await page.locator('body').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('Shift+Escape');
   await expect(composer(page)).toBeFocused();
-  await page.keyboard.press('Meta+Shift+O');
+  await page.keyboard.press(`${MOD}+Shift+O`);
   await expect(page).toHaveURL(/\/vinaxai$/);
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Tester/ })).toBeVisible();
 });
@@ -248,7 +252,7 @@ for (const theme of ['dark', 'light'] as const) {
     expect(chats.violations).toEqual([]);
     await page.goto('/vinaxai');
     await expect(page.getByRole('region', { name: 'Your recent chats' })).toBeVisible();
-    await page.keyboard.press('Meta+/');
+    await page.keyboard.press(`${MOD}+/`);
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
     const home = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
     expect(home.violations).toEqual([]);

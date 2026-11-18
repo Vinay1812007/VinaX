@@ -2072,6 +2072,9 @@ html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
    the welcome, "Ask about this" on a selection, Copy as CSV over tables,
    keyboard shortcuts, the chat font and text size.
    ========================================================================== */
+/* On the welcome the composer sits mid-screen inside a scroll box that clips
+   anything above it, so the + menu (taller since Research) opens downward there. */
+.vx-ai-main.is-empty .vx-ai-plus-menu { top: calc(100% + 6px); bottom: auto; }
 /* Research: the pill in the composer and the starter chip. */
 .vx-ai .vx-ai-pill-research { gap: 5px; }
 .vx-ai .vx-ai-starter.is-on { background: rgb(var(--ember-500) / 0.14); border-color: rgb(var(--ember-500) / 0.5); color: rgb(var(--ember-300)); }
