@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.17.2': {
+    title: 'VinaX in Kannada and Malayalam, and videos open in Flow',
+    changes: [
+      { type: 'improved', text: 'VinaX now speaks Kannada and Malayalam too: pick them in Settings, App language.' },
+      { type: 'improved', text: 'Videos open in Flow, so every music video plays in one place; old video links still work.' },
+      { type: 'improved', text: 'Help, the FAQ and the guided tours are in Kannada and Malayalam as well.' },
+    ],
+  },
   '1.17.1': {
     title: 'VinaX in Telugu, Hindi and Tamil: the player, Search, sign-in and Help',
     changes: [
