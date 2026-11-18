@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.18.0': {
+    title: 'VinaX AI works more like Claude: Research, a Chats page, shortcuts and more',
+    changes: [
+      { type: 'improved', text: 'Research in the + menu runs several web searches at once and answers with a report that cites its sources.' },
+      { type: 'new', text: 'Your recent chats sit under the greeting, and the new Chats page lets you pick several chats and delete them together.' },
+      { type: 'improved', text: 'Select any part of a reply and tap Ask about this; keyboard shortcuts (Cmd or Ctrl + /) and Copy as CSV on tables.' },
+      { type: 'new', text: 'Settings add a reply language, a chat font, larger text, a notification when a reply finishes, and Import and Export for memory.' },
+    ],
+  },
   '1.17.3': {
     title: 'VinaX keeps working all day: the app now talks to its own server',
     changes: [
