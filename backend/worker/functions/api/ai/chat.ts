@@ -12,7 +12,8 @@
  *     mode: "auto" | "model", model?: "<registry id>",
  *     thinking?: "auto" | "fast" | "standard" | "extended" | "max",   // thinking.ts
  *     webSearch?, artifacts? (default true), timezone?, locale?,
- *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
+ *     research?: true,                    // Research (research.ts): several planned searches, then a cited report
+ *     personal?: { name?, about?, instructions?, style?, language? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
  *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
  *     incognito?: true }                   // a chat that never reads or writes memory; kept on a new chat (memory.ts)
  *
@@ -23,8 +24,9 @@
  *                (sent again when a failover changes the model; the page then clears any reasoning shown)
  *       title    { title }      (new conversations: a generated 2–6 word title, when it arrives in time)
  *       status   { step: "searching", query } · { step: "searched", count, sites }
+ *                · Research: { step: "planning" } · { step: "researching", queries, done } · { step: "research_limit" } (today's Research used up: one search instead)
  *       progress { step: "reading", count, names }   (the reply reads the thread's files or the project's; older pages ignore it)
- *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search", queries?, entryPointHtml?, markers? }
+ *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search" | "research", queries?, entryPointHtml?, markers? }
  *                (search: before the text, the model cites [n] itself; grounding: after the text,
  *                 with `markers` [{ at, ns }] saying where [n] goes in it)
  *       error    { code, message, retryable, alternatives? }
@@ -67,9 +69,10 @@ import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
 import { generateTitle } from '../../_lib/ai/title';
 import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone, sanitizePersonal, type SearchBlock } from '../../_lib/ai/prompt';
 import {
-  applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
+  applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, providerOf, searchConfigured, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
   type Marker, type SearchResult,
 } from '../../_lib/ai/search';
+import { researchWeb } from '../../_lib/ai/research';
 import { humanReason, pickLadder, preferFit, type RunOptions } from '../../_lib/ai/router';
 import { assessTask, autoLevel, parseThinking, preferLevel, resolveLevel, specAtLevel, TASK_NAMES, type ThinkingLevel } from '../../_lib/ai/thinking';
 import { collect, openModel, textBody } from '../../_lib/ai/passthrough';
@@ -132,6 +135,7 @@ interface ChatBody {
   model?: unknown;
   continueFrom?: unknown;
   webSearch?: unknown;
+  research?: unknown;
   artifacts?: unknown;
   thinking?: unknown;
   timezone?: unknown;
@@ -402,14 +406,21 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     candidates = preferLevel(preferFit(candidates, { hasImages: signals.hasImages, threadChars: threadSize }), wanted);
   }
 
-  // Web search: at most one per turn, never for a Continue.
+  // Web search: at most one per turn, never for a Continue. Research
+  // (research.ts): several planned searches through the search API, within
+  // the person's daily allowance; past it, one search like any other turn.
   const pathRows = pathTo(rows, userMsg.id);
   const previousUser = [...pathRows].reverse().find((r) => r.role === 'user' && r.id !== userMsg.id);
-  const doSearch = !continuing && settings.search && wantsSearch(latestText, searchMode(body.webSearch));
-  const query = doSearch ? buildQuery(latestText, previousUser ? typedText(previousUser.content) : null) : '';
+  const previousText = previousUser ? typedText(previousUser.content) : null;
+  const researchWanted = body.research === true && !continuing && settings.search && settings.limits.researchPerDay > 0 && searchConfigured(env, settings.limits.searchesPerDay) && latestText.trim().length > 0;
+  let researchLimited = false;
+  if (researchWanted && !(await takeDaily(env, `research:${sub}`, settings.limits.researchPerDay))) researchLimited = true;
+  const research = researchWanted && !researchLimited;
+  const doSearch = research || (!continuing && settings.search && wantsSearch(latestText, searchMode(body.webSearch)));
+  const query = doSearch ? buildQuery(latestText, previousText) : '';
   const topic = topicOf(latestText);
   let grounding = false;
-  if (doSearch && query) {
+  if (doSearch && query && !research) {
     // Free Google Search grounding first, while today's allowance lasts.
     const grounded = ladderModels(registry, 'grounded');
     if (mode === 'model') grounding = candidates[0].flags.grounding && (await takeDaily(env, 'grounding', GROUNDING_DAILY_LIMIT));
@@ -433,10 +444,28 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const slow = ladder === 'deep' || mode === 'model' || wanted === 'extended' || wanted === 'max';
   // The search API runs once, and only if a model that cannot search itself answers.
   let apiSearch: Promise<SearchResult> | null = null;
-  let searched: { items: Source[]; via: 'grounding' | 'search'; queries: string[]; entryPointHtml?: string } | null = null;
+  let searched: { items: Source[]; via: 'grounding' | 'search' | 'research'; queries: string[]; entryPointHtml?: string } | null = null;
   let searchLog: Record<string, unknown> | null = null;
   const sitesOf = (items: Source[]) => [...new Set(items.map((i) => i.site))].slice(0, 4);
+  /** The research plan's queries, kept for the progress line while they run. */
+  let planned: string[] = [];
   const runApiSearch = (): Promise<SearchResult> => (apiSearch ??= (async () => {
+    if (research) {
+      send('status', { step: 'planning' });
+      const r = await researchWeb(env, {
+        question: latestText, previousUser: previousText, ownerCap: settings.limits.searchesPerDay, signal: abort.signal,
+        onPlanned: (queries) => { planned = queries; send('status', { step: 'researching', queries, done: 0 }); },
+        onSearched: (done, of) => { if (done < of) send('status', { step: 'researching', queries: planned, done }); },
+      });
+      if (r.sources.length) {
+        searched = { items: r.sources, via: 'research', queries: r.queries };
+        send('status', { step: 'searched', count: r.sources.length, sites: sitesOf(r.sources) });
+        send('sources', { items: r.sources, via: 'research', queries: r.queries });
+      } else send('status', { step: 'searched', count: 0, sites: [] });
+      searchLog = { via: 'research', ok: r.sources.length > 0, queries: r.queries.length, answered: r.answered, planned: r.planned, count: r.sources.length, ...(r.reason ? { reason: r.reason } : {}) };
+      return r.sources.length ? { ok: true, sources: r.sources, cached: false, provider: providerOf(env) } : { ok: false, reason: r.reason ?? 'empty' };
+    }
+    if (researchLimited) send('status', { step: 'research_limit' });
     send('status', { step: 'searching', query });
     const r = await searchWeb(env, query, topic, Date.now(), settings.limits.searchesPerDay);
     if (r.ok) {
@@ -467,7 +496,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     // The nearest level this model has, sent through its own switch (thinking.ts).
     const level = resolveLevel(spec, wanted);
     const asked = specAtLevel(spec, level);
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText, thinking: level });
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText, thinking: level, research });
     const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
     return {
       model: asked,
@@ -527,6 +556,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       thinking: { choice: thinkingChoice, level: wanted, used: resolveLevel(m, wanted) },
       ...(mode === 'auto' ? { route: { task: TASK_NAMES[task.kind], complexity: task.complexity } } : {}),
       ...(continuing ? { continued: true } : {}),
+      ...(research ? { research: true } : {}),
     });
     send('meta', metaOf(model));
     // A new conversation gets a generated title, written in parallel with the reply.
@@ -676,7 +706,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       });
     }
     if (titleJob) await titleJob;
-    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, research, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
     // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).
     if (learnNow && savedReply && (stop === 'end' || stop === 'length')) {
       const path = [...pathRows.map((r) => ({ role: r.role, text: typedText(r.content) })), { role: 'assistant' as const, text: finalText }];

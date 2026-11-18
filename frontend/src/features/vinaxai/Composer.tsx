@@ -10,7 +10,7 @@
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ACCEPT } from './files';
-import { ArrowUpIcon, CheckIcon, CloseIcon, ImageIcon, MicIcon, StopIcon, WaveIcon } from './icons';
+import { ArrowUpIcon, CheckIcon, CloseIcon, ImageIcon, MicIcon, ResearchIcon, StopIcon, WaveIcon } from './icons';
 import { ModelPicker } from './ModelPicker';
 import { PlusMenu, type WebSearch } from './PlusMenu';
 import { ThinkingPicker } from './ThinkingPicker';
@@ -50,6 +50,8 @@ interface Props {
   onSettings?(): void;
   /** Create image, when the owner has it on: whether the composer is in it now, and how to switch. */
   image?: { on: boolean; maxPrompt: number; onChange(on: boolean): void };
+  /** Research, when the owner offers it: on, the next messages run several searches and answer with a report. */
+  research?: { on: boolean; onChange(on: boolean): void };
 }
 
 export interface ComposerHandle { focus(): void }
@@ -80,7 +82,7 @@ function RecordingBar({ d }: { d: Dictation }): ReactNode {
   );
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, autoThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings, image }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, autoThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings, image, research }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({
@@ -102,6 +104,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
   }, [value]);
 
   const imaging = !!image?.on;
+  /** The box's name and placeholder: what it is for right now. */
+  const hint = imaging ? 'Describe the image you want' : research?.on ? 'What should VinaX AI research?' : placeholder ?? 'Message VinaX AI';
   const canSend = !disabled && !streaming && (imaging
     ? value.trim().length > 0 && value.trim().length <= (image?.maxPrompt ?? Infinity)
     : !sendBlocked && (value.trim().length > 0 || !!hasFiles));
@@ -144,7 +148,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
           }}
         />
       )}
-      <label htmlFor="vx-ai-input" className="sr-only">{imaging ? 'Describe the image you want' : 'Message VinaX AI'}</label>
+      <label htmlFor="vx-ai-input" className="sr-only">{hint}</label>
       <textarea
         id="vx-ai-input"
         ref={area}
@@ -153,7 +157,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
-        placeholder={imaging ? 'Describe the image you want' : placeholder ?? 'Message VinaX AI'}
+        placeholder={hint}
         maxLength={imaging ? image?.maxPrompt : undefined}
         disabled={disabled}
         enterKeyHint="send"
@@ -162,7 +166,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       {dictation && dictating ? <RecordingBar d={dictation} /> : (
       <div className="vx-ai-composer-row">
         <div className="vx-ai-composer-tools">
-          <PlusMenu search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onCreateImage={image && !imaging ? () => image.onChange(true) : undefined} onSettings={onSettings} />
+          <PlusMenu search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onCreateImage={image && !imaging ? () => image.onChange(true) : undefined} research={research} onSettings={onSettings} />
           {onThinking && (
             <ThinkingPicker
               value={thinking ?? 'auto'}
@@ -181,7 +185,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
               </button>
             </span>
           )}
-          {!imaging && search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
+          {!imaging && research?.on && (
+            <span className="vx-ai-pill vx-ai-pill-image vx-ai-pill-research">
+              <ResearchIcon className="w-3.5 h-3.5" /> Research
+              <button type="button" className="vx-ai-pill-x" onClick={() => research.onChange(false)} aria-label="Turn off Research">
+                <CloseIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {!imaging && !research?.on && search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
         </div>
         {models && onModel ? <ModelPicker models={models} value={model ?? 'auto'} onChange={onModel} /> : <span className="vx-ai-composer-mode">Auto</span>}
         {dictation?.supported && !streaming && (

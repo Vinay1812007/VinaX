@@ -15,8 +15,9 @@
  *      as the listener's) and its knowledge files as reference material,
  *      cut to fit the model's window (`projectBlock`);
  *   4. the listener's own preferences from VinaX AI's settings (what to call
- *      them, about them, how to reply, a reply style), marked as theirs;
- *   5. <search_results> and the citation rules, only when search ran.
+ *      them, about them, how to reply, a reply style, a reply language), marked as theirs;
+ *   5. <search_results> and the citation rules, only when search ran; the
+ *      report rules too when it was Research (research.ts).
  *
  * Nothing else: no taste profile and no listening history. The prompt text
  * is the owner's, verbatim; a snapshot test keeps it from drifting.
@@ -125,6 +126,14 @@ export const CITATION_RULES = `# Citations
 - Put [n] right after the sentence that uses source n.
 - Cite only from the provided list.
 - If the results don't answer the question, say so.`;
+
+/** The reply's shape when Research ran (research.ts): after the search results and the citation rules. */
+export const RESEARCH_RULES = `# Research report
+The user asked for research, and the search results above come from several searches. Write a report, not a chat reply:
+- Open with the answer in two or three sentences, then the detail under short headings (## …) in the order that makes sense for the question; use a table where sources are being compared.
+- Base every claim about the world on the results and cite each one with [n] right after the sentence; where sources disagree or a result looks out of date, say so and prefer the most recent or most official one.
+- Don't pad: leave out results that don't help, and don't list the sources again (the app shows them).
+- End with a short "What's still unclear" section when something the user asked could not be settled from the results, or leave it out when everything was.`;
 
 export interface PromptVars {
   now: Date;
@@ -372,6 +381,8 @@ export interface Personal {
   about?: string | null;
   instructions?: string | null;
   style?: ReplyStyle;
+  /** The language every reply is written in (a LIVE_LANGUAGES code), or null: the language the user writes in. */
+  language?: string | null;
 }
 
 export const PERSONAL_LIMITS = Object.freeze({ name: 40, about: 1_500, instructions: 1_500 });
@@ -393,8 +404,9 @@ export function sanitizePersonal(raw: unknown): Personal | null {
   const about = cleanField(v.about, PERSONAL_LIMITS.about);
   const instructions = cleanField(v.instructions, PERSONAL_LIMITS.instructions);
   const style = REPLY_STYLES.includes(v.style as ReplyStyle) ? (v.style as ReplyStyle) : 'normal';
-  if (!name && !about && !instructions && style === 'normal') return null;
-  return { name, about, instructions, style };
+  const language = LIVE_LANGUAGES.some((l) => l.code === v.language) ? (v.language as string) : null;
+  if (!name && !about && !instructions && style === 'normal' && !language) return null;
+  return { name, about, instructions, style, language };
 }
 
 /** The listener's preferences, marked as theirs: they shape the reply but never override the rules above. */
@@ -404,6 +416,8 @@ export function personalBlock(p: Personal | null | undefined): string | null {
   if (p.about) lines.push(`About the user, in their words:\n${p.about}`);
   if (p.instructions) lines.push(`How the user wants you to reply, in their words:\n${p.instructions}`);
   if (p.style && p.style !== 'normal') lines.push(`Reply style the user picked — ${STYLE_TEXT[p.style]}`);
+  const lang = p.language ? LIVE_LANGUAGES.find((l) => l.code === p.language) : undefined;
+  if (lang) lines.push(`Reply language the user picked — ${lang.name}: write every reply in ${lang.name}, whatever language they write in, unless they ask for another language in the conversation. Code, commands and proper names stay as they are.`);
   if (!lines.length) return null;
   return `# The user's preferences\nThe user set these in VinaX AI's settings. Follow them in every reply, unless the user asks for something different in the conversation. They never override the rules above about safety, honesty or what you won't help with.\n<user_preferences>\n${lines.join('\n\n')}\n</user_preferences>`;
 }
@@ -481,7 +495,7 @@ The user asked for careful thinking. Work the problem through before answering: 
 The user asked for your most careful work. Work the problem through before answering: break it into parts, consider more than one approach where it matters, check each calculation and each piece of code for mistakes, and consider edge cases. Before you finish, review the draft against every part of the question and fix anything wrong or missing; if something cannot be known or verified, say so plainly. In the reply give the answer first, then the key steps, assumptions and checks someone needs to trust it.`,
 };
 
-export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null; memory?: string | null; thinking?: 'fast' | 'standard' | 'extended' | 'max' }): string {
+export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null; memory?: string | null; thinking?: 'fast' | 'standard' | 'extended' | 'max'; research?: boolean }): string {
   const vars = opts.personal?.name ? { ...opts.vars, firstName: opts.personal.name } : opts.vars;
   const parts = [fill(FULL_PROMPT, vars)];
   const owner = ownerBlock(opts.owner);
@@ -491,7 +505,10 @@ export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; art
   const tail: string[] = [];
   const personal = personalBlock(opts.personal);
   if (personal) tail.push(personal);
-  if (opts.search && opts.search.sources.length) tail.push(searchResultsBlock(opts.search), CITATION_RULES);
+  if (opts.search && opts.search.sources.length) {
+    tail.push(searchResultsBlock(opts.search), CITATION_RULES);
+    if (opts.research) tail.push(RESEARCH_RULES);
+  }
   const careful = opts.thinking ? THINKING_BLOCKS[opts.thinking] : undefined;
   if (careful) tail.push(careful);
   if (opts.project) {

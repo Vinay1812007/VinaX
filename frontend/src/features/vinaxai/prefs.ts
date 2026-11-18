@@ -2,9 +2,10 @@
  * VinaX AI — this device's chat preferences: the model picked in the
  * composer ('auto' or a registry id), the Thinking choice, whether the
  * desktop sidebar is collapsed, the voices for Read aloud and Live, the
- * Live model, language and captions, web search in Live voice, the microphone, and the Personalisation
+ * Live model, language and captions, web search in Live voice, the microphone, the Personalisation
  * and Features choices in VinaX AI's settings (sent with each message, never
- * stored on the server).
+ * stored on the server), the reply language, the chat font and text size,
+ * and the finished-reply notification.
  * Kept in localStorage under a key the boot migration does not sweep (it
  * clears the old `vinax.ai…` keys).
  */
@@ -46,14 +47,25 @@ export interface ChatPrefs {
   liveLanguage: string;
   /** Live voice shows what each side says. */
   liveCaptions: boolean;
+  /** The language every reply is written in ('auto' = the language the listener writes in). */
+  replyLanguage: string;
+  /** The chat's reading face: VinaX AI's own, the device's, or a serif. */
+  font: ChatFont;
+  /** Larger text in replies and the composer. */
+  largeText: boolean;
+  /** A system notification when a reply finishes while the tab is in the background. */
+  notifyDone: boolean;
 }
+
+export type ChatFont = 'default' | 'system' | 'serif';
+export const CHAT_FONTS: readonly ChatFont[] = ['default', 'system', 'serif'];
 
 export type ReplyStyle = 'normal' | 'concise' | 'explanatory' | 'formal' | 'learning';
 export const REPLY_STYLES: readonly ReplyStyle[] = ['normal', 'concise', 'explanatory', 'formal', 'learning'];
 export const PERSONAL_MAX = Object.freeze({ name: 40, about: 1_500, instructions: 1_500 });
 
 const DEFAULTS: ChatPrefs = {
-  liveLanguage: deviceLanguage(), liveCaptions: true,
+  liveLanguage: deviceLanguage(), liveCaptions: true, replyLanguage: 'auto', font: 'default', largeText: false, notifyDone: false,
   model: 'auto', webSearch: 'auto', thinking: 'auto', sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
   artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal', liveSearch: true, liveSpeaker: true,
 };
@@ -86,6 +98,10 @@ function load(): ChatPrefs {
       liveSpeaker: raw.liveSpeaker !== false,
       liveLanguage: typeof raw.liveLanguage === 'string' && LANGUAGE.test(raw.liveLanguage) ? raw.liveLanguage : DEFAULTS.liveLanguage,
       liveCaptions: raw.liveCaptions !== false,
+      replyLanguage: typeof raw.replyLanguage === 'string' && LANGUAGE.test(raw.replyLanguage) ? raw.replyLanguage : 'auto',
+      font: CHAT_FONTS.includes(raw.font as ChatFont) ? (raw.font as ChatFont) : 'default',
+      largeText: raw.largeText === true,
+      notifyDone: raw.notifyDone === true,
     };
   } catch {
     return DEFAULTS;
@@ -97,12 +113,13 @@ interface PrefsStore extends ChatPrefs {
 }
 
 /** The Personalisation block a chat request carries, or undefined when nothing is set. */
-export function personalOf(p: Pick<ChatPrefs, 'personalName' | 'personalAbout' | 'personalInstructions' | 'style'>): { name?: string; about?: string; instructions?: string; style?: ReplyStyle } | undefined {
+export function personalOf(p: Pick<ChatPrefs, 'personalName' | 'personalAbout' | 'personalInstructions' | 'style' | 'replyLanguage'>): { name?: string; about?: string; instructions?: string; style?: ReplyStyle; language?: string } | undefined {
   const name = p.personalName.trim();
   const about = p.personalAbout.trim();
   const instructions = p.personalInstructions.trim();
-  if (!name && !about && !instructions && p.style === 'normal') return undefined;
-  return { ...(name ? { name } : {}), ...(about ? { about } : {}), ...(instructions ? { instructions } : {}), ...(p.style !== 'normal' ? { style: p.style } : {}) };
+  const language = p.replyLanguage !== 'auto' ? p.replyLanguage : '';
+  if (!name && !about && !instructions && p.style === 'normal' && !language) return undefined;
+  return { ...(name ? { name } : {}), ...(about ? { about } : {}), ...(instructions ? { instructions } : {}), ...(p.style !== 'normal' ? { style: p.style } : {}), ...(language ? { language } : {}) };
 }
 
 export const usePrefs = create<PrefsStore>()((set, get) => ({

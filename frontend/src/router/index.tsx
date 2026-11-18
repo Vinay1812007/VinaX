@@ -176,6 +176,7 @@ export const router = createBrowserRouter([
       { path: 'ai/shared/*', element: <Navigate to="/" replace /> },
       { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/c/:id', caseSensitive: true, element: <VinaXAIPage /> },
+      { path: 'vinaxai/chats', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/artifacts', caseSensitive: true, element: <VinaXAIArtifactsPage /> },
       { path: 'vinaxai/projects', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/project/:projectId', caseSensitive: true, element: <VinaXAIPage /> },

@@ -158,8 +158,8 @@ async function callProvider(env: AiEnv, provider: Provider, query: string, topic
   return { ok: true, sources: toSources(list.map((r) => ({ url: r.url, title: r.title, snippet: r.content }))) };
 }
 
-/** Take one from a global daily allowance (ai_take_daily, schema 5). False when spent or unknown. */
-export async function takeDaily(env: DbEnv, kind: 'search' | 'grounding', limit: number): Promise<boolean> {
+/** Take one from a daily allowance (ai_take_daily, schema 5): global for searches, per person for `research:<account>`. False when spent or unknown. */
+export async function takeDaily(env: DbEnv, kind: 'search' | 'grounding' | `research:${string}`, limit: number): Promise<boolean> {
   if (limit <= 0) return false;
   const r = await db.rpc<boolean>(env, 'ai_take_daily', { p_kind: kind, p_limit: limit });
   return r.ok && r.value === true;

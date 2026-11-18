@@ -1,14 +1,16 @@
 /**
  * VinaX AI settings → Memory: the two switches (kept with the account, as
  * learning runs on the server), every note with its own Delete, Add a
- * memory, and Forget everything. See README.md (VinaX AI) "Memory".
+ * memory, Import (one note per line) and Export (a text file), and Forget
+ * everything. See README.md (VinaX AI) "Memory".
  */
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/store/toastStore';
-import { addMemory, AiError, deleteMemory, forgetAllMemory, getMemory, memoryNotice, setMemoryPrefs } from './api';
+import { addMemory, AiError, deleteMemory, forgetAllMemory, getMemory, importMemories, memoryNotice, setMemoryPrefs } from './api';
 import { shareDate } from './ShareDialog';
-import { TrashIcon } from './icons';
+import { downloadText } from './CodeBlock';
+import { DownloadIcon, TrashIcon } from './icons';
 import type { MemoryPrefs, MemoryState } from './types';
 
 export const MEMORY_KEY = ['vinaxai', 'memory'] as const;
@@ -22,6 +24,9 @@ export function MemorySettings(): ReactNode {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
+  // Import: notes pasted one per line (the way Claude's Memory page imports).
+  const [importing, setImporting] = useState(false);
+  const [importText, setImportText] = useState('');
   const box = useRef<HTMLDivElement>(null);
   const forgetBtn = useRef<HTMLButtonElement>(null);
   const patch = (fn: (d: MemoryState) => MemoryState) => qc.setQueryData<MemoryState>(MEMORY_KEY, (d) => (d ? fn(d) : d));
@@ -76,6 +81,28 @@ export function MemorySettings(): ReactNode {
       const buttons = box.current?.querySelectorAll<HTMLElement>('.vx-ai-mem-list button');
       (buttons?.[Math.min(index, (buttons?.length ?? 1) - 1)] ?? box.current)?.focus();
     });
+  };
+
+  const exportAll = () => {
+    const lines = (memory.data?.items ?? []).map((m) => m.text);
+    if (!lines.length) { toast('Nothing to export yet'); return; }
+    downloadText(`${lines.join('\n')}\n`, `vinax-ai-memory-${new Date().toISOString().slice(0, 10)}.txt`);
+  };
+  const runImport = async () => {
+    const lines = importText.split(/\r?\n/).map((l) => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean).slice(0, 200);
+    if (!lines.length || busy) return;
+    setBusy(true);
+    try {
+      const r = await importMemories(lines);
+      patch((d) => ({ ...d, items: [...d.items, ...r.items.filter((i) => !d.items.some((x) => x.id === i.id))] }));
+      toast(r.added ? `${r.added} ${r.added === 1 ? 'memory' : 'memories'} added${r.skipped ? `, ${r.skipped} skipped` : ''}` : 'Nothing new to add');
+      setImportText('');
+      setImporting(false);
+    } catch (err) {
+      toast(memoryNotice(codeOf(err)));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const forgetAll = async () => {
@@ -159,6 +186,21 @@ export function MemorySettings(): ReactNode {
             <small id="vx-ai-set-memadd-hint">{full ? 'Memory is full. Delete a memory to add another.' : 'A short fact or preference. Never passwords, numbers or contact details.'}</small>
           </form>
 
+          <div className="vx-ai-mem-tools">
+            <button type="button" className="vx-ai-chip" onClick={() => setImporting((v) => !v)} aria-expanded={importing} disabled={!data.enabled || full}>Import</button>
+            <button type="button" className="vx-ai-chip" onClick={exportAll} disabled={!items.length}><DownloadIcon className="w-4 h-4" /> Export</button>
+          </div>
+          {importing && (
+            <div className="vx-ai-field vx-ai-mem-import">
+              <label htmlFor="vx-ai-set-memimport">Memories to import, one per line</label>
+              <textarea id="vx-ai-set-memimport" rows={4} value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={'Is learning Carnatic vocals\nPrefers answers in Telugu'} aria-describedby="vx-ai-set-memimport-hint" />
+              <small id="vx-ai-set-memimport-hint">Paste what another assistant remembers about you, or a list you exported. Repeats and anything that looks like a secret are skipped.</small>
+              <div className="vx-ai-mem-row">
+                <button type="button" className="vx-ai-chip is-primary" onClick={() => void runImport()} disabled={busy || !importText.trim()}>Add these</button>
+                <button type="button" className="vx-ai-chip" onClick={() => { setImporting(false); setImportText(''); }}>Cancel</button>
+              </div>
+            </div>
+          )}
           {items.length > 0 && (asking ? (
             <span className="vx-ai-mem-ask" role="group" aria-label="Forget everything VinaX AI remembers?">
               <button type="button" className="vx-ai-chip" onClick={() => setAsking(false)}>Keep</button>

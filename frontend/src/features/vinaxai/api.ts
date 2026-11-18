@@ -55,6 +55,10 @@ export const patchConversation = (id: string, patch: { title?: string; starred?:
 
 export const deleteConversation = (id: string): Promise<{ ok: true }> => call(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+/** Delete several chats at once (the Chats page), or every chat (`all`), the way one is deleted. */
+export const deleteConversations = (which: { ids: string[] } | { all: true }): Promise<{ ok: true; deleted: number }> =>
+  call('/conversations', { method: 'DELETE', body: JSON.stringify(which) });
+
 // ---------- artifacts gallery ----------
 
 export const listArtifacts = (opts: { kind?: GalleryItem['kind'] | null; q?: string; cursor?: string | null } = {}): Promise<{ items: GalleryItem[]; nextCursor: string | null }> => {
@@ -146,6 +150,10 @@ export async function getMemory(): Promise<MemoryState> {
 
 export const addMemory = (text: string): Promise<{ item: MemoryItem }> => call('/memories', { method: 'POST', body: JSON.stringify({ text }) });
 
+/** Import notes, one per line (Memory → Import): the ones kept, and how many were skipped (repeats, secrets, past the limit). */
+export const importMemories = (texts: string[]): Promise<{ items: MemoryItem[]; added: number; skipped: number }> =>
+  call('/memories', { method: 'POST', body: JSON.stringify({ texts }) });
+
 export const deleteMemory = (id: string): Promise<{ ok: true }> => call(`/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 /** Forget everything. */
@@ -183,11 +191,13 @@ export interface ChatRequestBody {
   /** Thinking: Auto or a level (the Worker's thinking.ts). */
   thinking?: 'auto' | 'fast' | 'standard' | 'extended' | 'max';
   webSearch?: 'auto' | 'on' | 'off';
+  /** Research: several planned searches, then a cited report (the composer's Research switch). */
+  research?: boolean;
   artifacts?: boolean;
   timezone?: string;
   locale?: string;
   /** VinaX AI settings → Personalisation; used for this reply only. */
-  personal?: { name?: string; about?: string; instructions?: string; style?: string };
+  personal?: { name?: string; about?: string; instructions?: string; style?: string; language?: string };
   /** A new chat starts in this project. */
   projectId?: string;
   /** An incognito chat: no memory is read or written. */
@@ -257,7 +267,7 @@ export interface LiveTokenOptions {
   lean?: boolean;
   /** Music control: Gemini may play, pause and skip in VinaX's player. */
   music?: boolean;
-  personal?: { name?: string; about?: string; instructions?: string; style?: string };
+  personal?: { name?: string; about?: string; instructions?: string; style?: string; language?: string };
   conversationId?: string | null;
   incognito?: boolean;
 }

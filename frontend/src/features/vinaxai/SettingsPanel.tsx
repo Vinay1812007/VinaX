@@ -3,29 +3,36 @@
  * sidebar's Settings, the header's gear, or Settings in the + menu). All of
  * it is kept on this device (prefs.ts), except the theme, which is the app's:
  *
- *   General          the app's theme, artifacts, live previews in replies
+ *   General          the app's theme, artifacts, live previews in replies,
+ *                    the chat font and text size, the finished-reply
+ *                    notification, the keyboard shortcuts
  *   Personalisation  what VinaX AI calls you, about you, how to reply, a
- *                    reply style (sent with each message, never stored)
+ *                    reply style and language (sent with each message, never stored)
  *   Memory  what VinaX AI remembers across chats, kept with the account:
  *           Use memory, Learn from my chats, each note, add, forget all
  *   Chat    the model new messages use, Thinking (Auto or a level), Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
  *           Live voice, the Live model and web search in Live voice
- *   Chats   export every chat; the artifacts gallery; the shared links (open, copy, stop sharing);
- *           a link to the rest of VinaX's settings
+ *   Chats   export every chat; the artifacts gallery; all chats and Delete all chats;
+ *           the shared links (open, copy, stop sharing); a link to the rest of VinaX's settings
  *
  * The app's own Settings page stays for everything that is not VinaX AI.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { toast } from '@/store/toastStore';
+import { deleteConversations } from './api';
+import { languageLabel, REPLY_LANGUAGES } from './languages';
+import { resetChat } from './store';
+import { LIST_KEY } from './Sidebar';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
-import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
+import { CHAT_FONTS, PERSONAL_MAX, usePrefs, type ChatFont, type ReplyStyle } from './prefs';
 import { voiceLabel } from './live/liveOptions';
 import { SharedLinks } from './SharedLinks';
 import { MemorySettings } from './MemorySettings';
-import { ArtifactsIcon, CloseIcon, DownloadIcon, MicIcon } from './icons';
+import { ArtifactsIcon, ChatsIcon, CloseIcon, DownloadIcon, KeyboardIcon, MicIcon, TrashIcon } from './icons';
 import { useSettingsStore } from '@/store/settingsStore';
 import { THINKING_CHOICES, type PickerModel, type ThinkingChoice, type VoiceInfo } from './types';
 import { THINKING_LABELS, THINKING_NOTES } from './ThinkingPicker';
@@ -38,6 +45,8 @@ const THEMES: Array<{ value: 'system' | 'light' | 'dark'; label: string }> = [
 ];
 
 export type SettingsSection = 'general' | 'personal' | 'memory' | 'chat' | 'voice' | 'chats';
+
+const FONTS: Record<ChatFont, string> = { default: 'VinaX AI: a serif for replies', system: 'System: this device’s own font', serif: 'Serif everywhere' };
 
 const STYLES: Array<{ value: ReplyStyle; label: string }> = [
   { value: 'normal', label: 'Normal: VinaX AI’s usual replies' },
@@ -66,13 +75,52 @@ interface Props {
   /** Open scrolled to this section. */
   section?: SettingsSection;
   onClose(): void;
+  /** Open the keyboard shortcuts dialog (General → Keyboard shortcuts). */
+  onShortcuts?(): void;
 }
 
-export function SettingsPanel({ models, groups, voice, search, section, onClose }: Props): ReactNode {
+export function SettingsPanel({ models, groups, voice, search, section, onClose, onShortcuts }: Props): ReactNode {
   const prefs = usePrefs();
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const box = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [askingAll, setAskingAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const canNotify = typeof Notification !== 'undefined';
+  const toggleNotify = async () => {
+    if (prefs.notifyDone) { prefs.set({ notifyDone: false }); return; }
+    if (!canNotify) { toast('This browser can’t show notifications'); return; }
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      try { permission = await Notification.requestPermission(); } catch { permission = 'denied'; }
+    }
+    if (permission !== 'granted') { toast('Allow notifications for VinaX in your browser first'); return; }
+    prefs.set({ notifyDone: true });
+  };
+  // Delete all chats: a batch at a time until none are left (DELETE /api/ai/conversations { all }).
+  const deleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      let total = 0;
+      for (let i = 0; i < 20; i += 1) {
+        const r = await deleteConversations({ all: true });
+        total += r.deleted;
+        if (r.deleted < 500) break;
+      }
+      toast(total === 1 ? 'Chat deleted' : `${total} chats deleted`);
+      resetChat();
+      setAskingAll(false);
+      onClose();
+      navigate('/vinaxai');
+    } catch {
+      toast('Couldn’t delete your chats. Try again.');
+    } finally {
+      setDeletingAll(false);
+      void qc.invalidateQueries({ queryKey: LIST_KEY });
+    }
+  };
   useDismissOnBack(true, onClose);
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
@@ -132,6 +180,18 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
             </Field>
             <Switch on={prefs.artifacts} label="Artifacts" sub="Whole files, pages, charts and diagrams open in their own panel" onToggle={() => prefs.set({ artifacts: !prefs.artifacts })} />
             <Switch on={prefs.inlinePreviews && prefs.artifacts} disabled={!prefs.artifacts} label="Live previews in replies" sub="Shows pages, charts and diagrams right in the chat" onToggle={() => prefs.set({ inlinePreviews: !prefs.inlinePreviews })} />
+            <Field id="font" label="Chat font">
+              <select id="vx-ai-set-font" value={prefs.font} onChange={(e) => prefs.set({ font: e.target.value as ChatFont })}>
+                {CHAT_FONTS.map((f) => <option key={f} value={f}>{FONTS[f]}</option>)}
+              </select>
+            </Field>
+            <Switch on={prefs.largeText} label="Larger text" sub="Bigger replies and message box" onToggle={() => prefs.set({ largeText: !prefs.largeText })} />
+            <Switch on={prefs.notifyDone} label="Notify me when a reply finishes" sub="A notification when the tab is in the background" onToggle={() => void toggleNotify()} />
+            {onShortcuts && (
+              <button type="button" className="vx-ai-chip vx-ai-settings-keys" onClick={onShortcuts}>
+                <KeyboardIcon className="w-4 h-4" /> Keyboard shortcuts
+              </button>
+            )}
           </section>
 
           <section id="vx-ai-set-personal" aria-labelledby="vx-ai-set-personal-h">
@@ -148,6 +208,12 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
             <Field id="style" label="Reply style">
               <select id="vx-ai-set-style" value={prefs.style} onChange={(e) => prefs.set({ style: e.target.value as ReplyStyle })}>
                 {STYLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field id="lang" label="Reply language" hint="Every reply is written in this language, whatever language you write in.">
+              <select id="vx-ai-set-lang" aria-describedby="vx-ai-set-lang-hint" value={REPLY_LANGUAGES.some((l) => l.code === prefs.replyLanguage) ? prefs.replyLanguage : 'auto'} onChange={(e) => prefs.set({ replyLanguage: e.target.value })}>
+                <option value="auto">Match the language I write in</option>
+                {REPLY_LANGUAGES.map((l) => <option key={l.code} value={l.code}>{languageLabel(l)}</option>)}
               </select>
             </Field>
             <p className="vx-ai-settings-note">Kept on this device and sent with each message so the reply can use it. It isn’t saved with your chats.</p>
@@ -260,6 +326,21 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
               <DownloadIcon className="w-4 h-4" /> Export all chats
             </button>
             <p className="vx-ai-settings-note">A JSON file of every chat, with all its versions. Your chats stay with your account.</p>
+            <Link to="/vinaxai/chats" className="vx-ai-chip vx-ai-gallery-link" onClick={onClose}>
+              <ChatsIcon className="w-4 h-4" /> All chats
+            </Link>
+            <p className="vx-ai-settings-note">Every chat in one list, where you can pick several and delete them together.</p>
+            {askingAll ? (
+              <span className="vx-ai-mem-ask" role="group" aria-label="Delete every chat?">
+                <button type="button" className="vx-ai-chip" onClick={() => setAskingAll(false)} disabled={deletingAll}>Keep</button>
+                <button type="button" className="vx-ai-chip is-danger" onClick={() => void deleteAll()} disabled={deletingAll}>{deletingAll ? 'Deleting…' : 'Delete all my chats'}</button>
+              </span>
+            ) : (
+              <button type="button" className="vx-ai-chip vx-ai-settings-danger" onClick={() => setAskingAll(true)}>
+                <TrashIcon className="w-4 h-4" /> Delete all chats
+              </button>
+            )}
+            <p className="vx-ai-settings-note">Deletes every chat and its shared links. Projects, memory and your artifacts’ chats go too. This can’t be undone.</p>
             <Link to="/vinaxai/artifacts" className="vx-ai-chip vx-ai-gallery-link" onClick={onClose}>
               <ArtifactsIcon className="w-4 h-4" /> Your artifacts
             </Link>

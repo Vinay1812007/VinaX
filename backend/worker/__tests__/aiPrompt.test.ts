@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MODELS, modelById } from '../functions/_lib/ai/models';
-import { ARTIFACTS_BLOCK, VISUALS_OWNER_TEXT, artifactsOffered, buildSystemPrompt, CITATION_RULES, FULL_PROMPT, firstNameOf, formatNow, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
+import { ARTIFACTS_BLOCK, VISUALS_OWNER_TEXT, artifactsOffered, buildSystemPrompt, CITATION_RULES, FULL_PROMPT, firstNameOf, formatNow, RESEARCH_RULES, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
 import { wireMessages } from '../functions/_lib/ai/wire';
 
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
@@ -49,7 +49,7 @@ describe('buildSystemPrompt', () => {
 
   it('adds the listener’s preferences after the rules, marked as theirs, and uses their chosen name', () => {
     const personal = sanitizePersonal({ name: 'Ash', about: 'I teach maths in Pune.', instructions: 'Use metric units.\u0007', style: 'concise' });
-    expect(personal).toEqual({ name: 'Ash', about: 'I teach maths in Pune.', instructions: 'Use metric units.', style: 'concise' });
+    expect(personal).toEqual({ name: 'Ash', about: 'I teach maths in Pune.', instructions: 'Use metric units.', style: 'concise', language: null });
     const p = buildSystemPrompt({ spec: full, vars, artifacts: false, personal });
     expect(p).toContain("The user's name is Ash.");
     expect(p).toContain('<user_preferences>');
@@ -66,6 +66,22 @@ describe('buildSystemPrompt', () => {
     expect(sanitizePersonal({ name: '<{{x}}>' })?.name ?? null).toBe('x');
     expect(sanitizePersonal({ about: 'a'.repeat(5_000) })!.about!.length).toBe(1_500);
     expect(buildSystemPrompt({ spec: full, vars, artifacts: false, personal: null })).not.toContain('<user_preferences>');
+  });
+
+  it('a reply language the listener picked is asked for by name; an unknown code is ignored', () => {
+    const personal = sanitizePersonal({ language: 'te' });
+    expect(personal).toEqual({ name: null, about: null, instructions: null, style: 'normal', language: 'te' });
+    const p = buildSystemPrompt({ spec: full, vars, artifacts: false, personal });
+    expect(p).toContain('Reply language the user picked — Telugu: write every reply in Telugu');
+    expect(sanitizePersonal({ language: 'klingon' })).toBeNull();
+  });
+
+  it('research adds the report rules after the citation rules, only with results', () => {
+    const search = { sources: [{ n: 1, url: 'https://a.com/x', title: 'A', site: 'a.com' }] };
+    const p = buildSystemPrompt({ spec: full, vars, artifacts: false, search, research: true });
+    expect(p.indexOf(CITATION_RULES)).toBeLessThan(p.indexOf(RESEARCH_RULES));
+    expect(buildSystemPrompt({ spec: full, vars, artifacts: false, search })).not.toContain(RESEARCH_RULES);
+    expect(buildSystemPrompt({ spec: full, vars, artifacts: false, search: { sources: [] }, research: true })).not.toContain(RESEARCH_RULES);
   });
 
   it('artifacts block on and off', () => {

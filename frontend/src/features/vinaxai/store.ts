@@ -52,14 +52,19 @@ function enqueue(ev: StreamEvent): void {
 /** Which model answers: the composer's choice, or an explicit one (Retry with…). */
 export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
 
-function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'thinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal' | 'incognito'> {
+/** The composer's Research switch (ChatView): on, the next messages ask for several searches and a report. */
+let researchOn = false;
+export const setResearch = (on: boolean): void => { researchOn = on; };
+export const isResearchOn = (): boolean => researchOn;
+
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'thinking' | 'webSearch' | 'research' | 'artifacts' | 'timezone' | 'locale' | 'personal' | 'incognito'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
   const prefs = usePrefs.getState();
   const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
   const personal = personalOf(prefs);
   const incognito = useChatStore.getState().incognito;
-  return { ...pick, thinking: prefs.thinking, webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}), ...(incognito ? { incognito: true } : {}) };
+  return { ...pick, thinking: prefs.thinking, webSearch: prefs.webSearch, ...(researchOn ? { research: true } : {}), artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}), ...(incognito ? { incognito: true } : {}) };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */
@@ -339,5 +344,6 @@ export function setIncognito(on: boolean): void {
 export function resetChat(): void {
   inflight?.abort();
   queue = [];
+  researchOn = false;
   dispatch({ type: 'reset' });
 }

@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../index';
-import { onRequestGet as listGet } from '../functions/api/ai/conversations';
+import { onRequestDelete as bulkDelete, onRequestGet as listGet } from '../functions/api/ai/conversations';
 import { onRequestDelete, onRequestGet, onRequestPatch } from '../functions/api/ai/conversations/[id]';
 import { onRequestGet as modelsGet } from '../functions/api/ai/models';
 import { issueSession } from '../functions/_lib/googleAuth';
@@ -111,6 +111,45 @@ describe('/api/ai/conversations/:id', () => {
     expect(fake.rows('ai_conversations')[0].deleted_at).toBeNull();
     expect((await onRequestDelete({ request: await req(`/api/ai/conversations/${C1}`, { method: 'DELETE' }), env: ENV, params: { id: C1 } })).status).toBe(200);
     expect(fake.rows('ai_conversations')[0].deleted_at).toEqual(expect.any(String));
+  });
+});
+
+describe('DELETE /api/ai/conversations (several at once)', () => {
+  const del = async (body: unknown, sub?: string) => bulkDelete({ request: await req('/api/ai/conversations', { method: 'DELETE', body: JSON.stringify(body), sub }), env: ENV });
+
+  it('hides the named chats of the account only, and removes their shared links', async () => {
+    const fake = seed();
+    fake.tables.ai_shares = [{ id: 'share-1', account_id: '1001', conversation_id: C1 }, { id: 'share-2', account_id: '2002', conversation_id: C2 }];
+    const res = await del({ ids: [C1, C2, C1] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 1 });
+    expect(fake.rows('ai_conversations').find((c) => c.id === C1)?.deleted_at).toEqual(expect.any(String));
+    expect(fake.rows('ai_conversations').find((c) => c.id === C2)?.deleted_at).toBeNull();
+    expect(fake.rows('ai_shares').map((s) => s.id)).toEqual(['share-2']);
+  });
+
+  it('all: true hides every live chat of the account', async () => {
+    const fake = seed();
+    const res = await del({ all: true });
+    expect(await res.json()).toEqual({ ok: true, deleted: 1 });
+    expect(fake.rows('ai_conversations').find((c) => c.id === C1)?.deleted_at).toEqual(expect.any(String));
+    expect(fake.rows('ai_conversations').find((c) => c.id === C2)?.deleted_at).toBeNull();
+    expect((await (await del({ all: true })).json())).toEqual({ ok: true, deleted: 0 });
+  });
+
+  it('refuses a bad list, and a session is needed', async () => {
+    seed();
+    expect((await del({ ids: [] })).status).toBe(400);
+    expect((await del({ ids: ['x'] })).status).toBe(400);
+    expect((await del({})).status).toBe(400);
+    expect((await del({ ids: Array.from({ length: 101 }, () => C1) })).status).toBe(400);
+    expect((await del({ ids: [C1] }, null as never)).status).toBe(401);
+  });
+
+  it('the Worker routes DELETE /api/ai/conversations to the handler, not 405', async () => {
+    seed();
+    const res = await worker.fetch(new Request('https://www.vinaxmusic.online/api/ai/conversations', { method: 'DELETE', headers: { 'cf-connecting-ip': '198.51.100.251' } }), { ...ENV, ASSETS_HOST: 'vinax.pages.dev' }, { waitUntil: () => undefined });
+    expect(res.status).toBe(401);
   });
 });
 

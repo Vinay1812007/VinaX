@@ -368,6 +368,22 @@ describe('the memory routes', () => {
     expect(await (await add('One more')).json()).toEqual({ error: 'full' });
   });
 
+  it('POST { texts } imports a list: cleaned, no repeats or secrets, up to the room left; the rest are counted as skipped', async () => {
+    const { fake } = seed();
+    const imp = async (texts: unknown) => addPost({ request: await req('/api/ai/memories', { method: 'POST', body: JSON.stringify({ texts }) }), env: ENV as never });
+    const res = await imp(['  Plays the veena ', 'prefers answers in telugu', 'My PIN is 123456', '', 'Teaches maths in Pune']);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ text: string; origin: string }>; added: number; skipped: number };
+    expect(body.added).toBe(2);
+    expect(body.skipped).toBe(2);
+    expect(body.items.map((i) => i.text)).toEqual(['Plays the veena', 'Teaches maths in Pune']);
+    expect(body.items[0].origin).toBe('user');
+    expect(fake.rows('ai_memories').filter((r) => r.account_id === '1001')).toHaveLength(4);
+    expect((await imp(Array.from({ length: 201 }, () => 'x'))).status).toBe(400);
+    fake.tables.ai_memories = Array.from({ length: MEMORY_MAX_ITEMS - 1 }, (_, i) => note(`44444444-4444-4444-8444-${String(i).padStart(12, '0')}`, '1001', `Note ${i}`));
+    expect(await (await imp(['One', 'Two'])).json()).toMatchObject({ added: 1, skipped: 1 });
+  });
+
   it('POST is refused while the owner has memory off; seeing and deleting still work', async () => {
     seed({}, { setting: { enabled: true, memory: false } });
     expect(await (await add('Plays the veena')).json()).toEqual({ error: 'memory_off' });

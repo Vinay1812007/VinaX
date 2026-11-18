@@ -7,7 +7,7 @@
  *     search: true,               // web search (phase 3)
  *     instructions: "…",          // the owner's instructions for every model (≤ 4,000 chars)
  *     limits: { messagesPerMinute, imagesPerMessage, filesPerMessage, filesPerChat,
- *               pdfMB, pdfPages, textMB, searchesPerDay },   // see LIMIT_RANGES
+ *               pdfMB, pdfPages, textMB, researchPerDay, searchesPerDay },   // see LIMIT_RANGES
  *     models: { "<model id>": { enabled, order } },
  *     dailyLimit: 25,             // messages per person per day (UTC); missing = no limit
  *     images: { enabled, perDay } } // Create image (images.ts): off unless enabled; perDay per person (default 10)
@@ -48,6 +48,8 @@ export interface AiLimits {
   pdfMB: number;
   pdfPages: number;
   textMB: number;
+  /** Research (research.ts) runs per person per day; each runs up to four searches. 0 = Research off. */
+  researchPerDay: number;
   /** null = the Worker's SEARCH_DAILY_LIMIT (else 100); 0 = the search API off. */
   searchesPerDay: number | null;
 }
@@ -61,6 +63,7 @@ export const LIMIT_RANGES = Object.freeze({
   pdfMB: [1, 50, 30],
   pdfPages: [1, 1_000, 500],
   textMB: [1, 5, 2],
+  researchPerDay: [0, 100, 10],
 } as const);
 export const MAX_SEARCHES_PER_DAY = 2_000;
 export const MAX_OWNER_INSTRUCTIONS = 4_000;

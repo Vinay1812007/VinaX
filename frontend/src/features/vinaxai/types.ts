@@ -36,6 +36,8 @@ export interface ReplyRoute {
   thinking?: { choice: ThinkingChoice; level: ThinkingLevel; used: ThinkingLevel };
   /** Auto only: the kind of message it judged this to be. */
   route?: { task: string; complexity: 'simple' | 'normal' | 'hard' };
+  /** The reply was a Research run (several searches, a cited report). */
+  research?: boolean;
 }
 
 export interface ModelsResponse {
@@ -43,6 +45,8 @@ export interface ModelsResponse {
   configured: boolean;
   /** Web search is offered (the owner allows it and something can search). */
   search?: boolean;
+  /** Research is offered: several planned searches, then a cited report (the owner allows it, with a daily allowance per person). */
+  research?: boolean;
   groups: string[];
   models: PickerModel[];
   /** Voice features that have a provider key, and the voices to offer (phase 6). */
@@ -87,10 +91,10 @@ export interface Source {
   snippet?: string;
 }
 
-/** The web sources of a reply. */
+/** The web sources of a reply; `research`: from several searches (Research). */
 export interface SourcesInfo {
   items: Source[];
-  via: 'grounding' | 'search';
+  via: 'grounding' | 'search' | 'research';
   queries?: string[];
   /** Google's search-suggestions HTML (grounding); shown in a sandboxed frame, as Google's terms require. */
   entryPointHtml?: string;
@@ -105,7 +109,14 @@ export interface Marker {
 /** A real step the Worker takes before the model answers (not a guess at the model's thinking). */
 export interface ReplyProgress { step: 'reading'; count: number; names: string[] }
 
-export type SearchStatus = { step: 'searching'; query: string } | { step: 'searched'; count: number; sites: string[] };
+export type SearchStatus =
+  | { step: 'searching'; query: string }
+  | { step: 'searched'; count: number; sites: string[] }
+  /** Research: the searches are being planned; then run (`done` of `queries.length` answered so far). */
+  | { step: 'planning' }
+  | { step: 'researching'; queries: string[]; done: number }
+  /** Today's Research allowance is used up: this reply searches once instead. */
+  | { step: 'research_limit' };
 
 export interface ReplyError {
   code: string;
@@ -227,7 +238,7 @@ export interface MemoryState {
 /** The named events of the chat stream. */
 export type StreamEvent =
   /** `wire`: how the provider's own lines in the stream are written (wire.ts). */
-  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean; wire?: string } & ReplyRoute }
+  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean; wire?: string; research?: boolean } & ReplyRoute }
   | { event: 'title'; data: { title: string } }
   | { event: 'thinking'; data: { delta: string } }
   | { event: 'text'; data: { delta: string } }

@@ -28,7 +28,7 @@ describe('the owner’s settings', () => {
   it('defaults: no instructions, the raised limits, and the Worker’s search cap', () => {
     const s = sanitizeAiSettings({ enabled: true });
     expect(s.instructions).toBe('');
-    expect(s.limits).toEqual({ messagesPerMinute: 20, imagesPerMessage: 10, filesPerMessage: 20, filesPerChat: 50, pdfMB: 30, pdfPages: 500, textMB: 2, searchesPerDay: null });
+    expect(s.limits).toEqual({ messagesPerMinute: 20, imagesPerMessage: 10, filesPerMessage: 20, filesPerChat: 50, pdfMB: 30, pdfPages: 500, textMB: 2, researchPerDay: 10, searchesPerDay: null });
     expect(DEFAULT_LIMITS.filesPerChat).toBe(LIMIT_RANGES.filesPerChat[2]);
   });
 

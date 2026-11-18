@@ -2066,3 +2066,113 @@ html:not(.hc) .vx-ai .vx-ai-gallery-thumb { background: rgb(var(--ink-100) / 0.0
 .vx-ai .vx-ai-chip.is-danger { background: var(--vx-danger); color: rgb(26 5 8); border-color: transparent; font-weight: 600; }
 html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
 .vx-ai .vx-ai-chip.is-danger:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* =============================================================================
+   2026-11-18 — the Claude round: Research, the Chats page, recent chats on
+   the welcome, "Ask about this" on a selection, Copy as CSV over tables,
+   keyboard shortcuts, the chat font and text size.
+   ========================================================================== */
+/* Research: the pill in the composer and the starter chip. */
+.vx-ai .vx-ai-pill-research { gap: 5px; }
+.vx-ai .vx-ai-starter.is-on { background: rgb(var(--ember-500) / 0.14); border-color: rgb(var(--ember-500) / 0.5); color: rgb(var(--ember-300)); }
+.vx-ai .vx-ai-starter.is-on svg { color: rgb(var(--ember-400)); }
+.vx-ai-sources-q { margin: -2px 0 8px; font-size: 0.75rem; color: rgb(var(--ink-500)); overflow-wrap: anywhere; }
+.vx-ai-menu-item > .vx-ai-switch { margin-left: auto; }
+
+/* Recent chats under the greeting. */
+.vx-ai-recent { width: 100%; }
+.vx-ai-recent-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 8px; }
+.vx-ai-recent-head h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 0.8125rem; font-weight: 500; color: rgb(var(--ink-400)); }
+.vx-ai-recent-head h3 svg { color: rgb(var(--ink-500)); }
+.vx-ai-recent-all { display: inline-flex; align-items: center; gap: 2px; min-height: 32px; padding: 0 6px; font-size: 0.8125rem; color: rgb(var(--ink-300)); border-radius: var(--vx-radius-control); }
+.vx-ai-recent-all:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai-recent-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; }
+.vx-ai-recent-card {
+  display: flex; flex-direction: column; gap: 6px; min-height: 72px; padding: 10px 12px;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: transparent; color: rgb(var(--ink-200));
+  transition: background var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-recent-card:hover { background: var(--vx-ai-hover); color: rgb(var(--ink-100)); }
+.vx-ai-recent-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ai-recent-title { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; font-weight: 500; min-width: 0; }
+.vx-ai-recent-title > span:not(.sr-only) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vx-ai-recent-when { margin-top: auto; font-size: 0.75rem; color: rgb(var(--ink-500)); }
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .vx-ai .vx-ai-welcome .vx-ai-recent { animation: vx-ai-claude-lift var(--dur-base) var(--ease-standard) var(--dur-quick) backwards; }
+}
+
+/* The Chats page. */
+.vx-ai-chats .vx-ai-proj-top { align-items: center; }
+.vx-ai-chats-search { flex: 1 1 220px; max-width: 360px; margin: 0; }
+.vx-ai-chats-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; margin-bottom: 6px; padding: 0 10px; }
+.vx-ai-check { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; font-size: 0.8125rem; color: rgb(var(--ink-300)); cursor: pointer; }
+.vx-ai-check input, .vx-ai-chats-pick { width: 18px; height: 18px; accent-color: rgb(var(--ember-500)); cursor: pointer; flex: none; }
+.vx-ai-chats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.vx-ai-chats-list li { display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: var(--vx-radius-control); }
+.vx-ai-chats-list li:hover, .vx-ai-chats-list li:focus-within { background: var(--vx-ai-hover); }
+.vx-ai-chats-list li.is-picked { background: rgb(var(--ember-500) / 0.08); }
+.vx-ai-chats-link { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: rgb(var(--ink-200)); border-radius: inherit; }
+.vx-ai-chats-link:hover { color: rgb(var(--ink-100)); }
+.vx-ai-chats-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.9375rem; }
+.vx-ai-chats-title > span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-chats-when { flex: none; font-size: 0.75rem; color: rgb(var(--ink-500)); font-variant-numeric: tabular-nums; }
+.vx-ai-chats-more { margin: 12px auto 0; display: flex; }
+.vx-ai .vx-ai-chats .vx-ai-calm { min-height: 30vh; }
+
+/* "Ask about this" over a selection, and the quote above the composer. */
+.vx-ai-ask-sel {
+  position: absolute; z-index: 5; transform: translate(-50%, calc(-100% - 8px));
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+  border-radius: var(--radius-pill); font-size: 0.8125rem; font-weight: 600;
+  background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); box-shadow: var(--vx-ai-lift);
+}
+.vx-ai-ask-sel:hover { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-ai-quote {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 8px 8px 12px;
+  border-left: 3px solid rgb(var(--ember-500) / 0.7); border-radius: var(--vx-radius-control);
+  background: rgb(var(--ink-100) / 0.05); color: rgb(var(--ink-300)); font-size: 0.8125rem; line-height: 1.45;
+}
+.vx-ai-quote > svg { flex: none; margin-top: 2px; color: rgb(var(--ink-500)); }
+.vx-ai-quote-text { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.vx-ai-quote-x { width: 24px; height: 24px; margin: -2px -2px 0 0; color: rgb(var(--ink-300)); }
+.vx-ai-quote-x:hover, .vx-ai-quote-x:focus-visible { background: var(--vx-ai-hover); }
+
+/* Copy as CSV sits in a table's top corner, shown on hover (always on touch). */
+.vx-ai-table-wrap { position: relative; margin: 0 0 0.9em; }
+.vx-ai-table-wrap > .vx-ai-table { margin: 0; }
+.vx-ai-table-csv {
+  position: absolute; top: 4px; right: 4px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px;
+  border-radius: var(--vx-radius-control); font-size: 0.6875rem; font-weight: 600; font-family: var(--vx-ai-sans);
+  background: rgb(var(--ink-800)); color: rgb(var(--ink-300)); border: 1px solid var(--glass-border);
+  opacity: 0; transition: opacity var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-table-wrap:hover .vx-ai-table-csv, .vx-ai-table-csv:focus-visible, .vx-ai-table-wrap:focus-within .vx-ai-table-csv { opacity: 1; }
+@media (hover: none) { .vx-ai-table-csv { opacity: 1; } }
+.vx-ai-table-csv:hover { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); }
+
+/* The keyboard shortcuts dialog. */
+.vx-ai-keys { width: min(460px, 100%); }
+.vx-ai-keys-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.vx-ai-keys-head h2 { margin: 0; }
+.vx-ai-keys-list { margin: 0; display: flex; flex-direction: column; }
+.vx-ai-keys-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; border-bottom: 1px solid var(--glass-border); }
+.vx-ai-keys-row:last-child { border-bottom: 0; }
+.vx-ai-keys-row dt { font-size: 0.875rem; color: rgb(var(--ink-200)); }
+.vx-ai-keys-row dd { margin: 0; display: inline-flex; gap: 4px; }
+.vx-ai-keys kbd {
+  display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 6px;
+  border-radius: 6px; border: 1px solid var(--glass-border); background: rgb(var(--ink-100) / 0.06);
+  font: 600 0.75rem/1 var(--vx-ai-sans, inherit); color: rgb(var(--ink-100));
+}
+.vx-ai-settings-keys, .vx-ai-settings-danger { margin-top: 10px; }
+.vx-ai .vx-ai-settings-danger { color: var(--vx-danger); }
+.vx-ai-mem-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.vx-ai-mem-import { margin-top: 12px; }
+.vx-ai-mem-import .vx-ai-mem-row { margin-top: 8px; }
+
+/* The chat font and text size (Settings → General). */
+.vx-ai[data-font='system'] .vx-ai-turn-reply > .vx-ai-md, .vx-ai[data-font='system'] .vx-ai-md :is(h1, h2, h3, h4), .vx-ai[data-font='system'] .vx-ai-bubble, .vx-ai[data-font='system'] .vx-ai-composer textarea { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+.vx-ai[data-font='serif'] .vx-ai-turn-reply > .vx-ai-md, .vx-ai[data-font='serif'] .vx-ai-md :is(h1, h2, h3, h4), .vx-ai[data-font='serif'] .vx-ai-bubble, .vx-ai[data-font='serif'] .vx-ai-composer textarea { font-family: var(--vx-ai-serif, Georgia, serif); }
+.vx-ai[data-large='true'] .vx-ai-turn-reply > .vx-ai-md { font-size: 1.1875rem; line-height: 1.75; }
+.vx-ai[data-large='true'] .vx-ai-bubble, .vx-ai[data-large='true'] .vx-ai-composer textarea { font-size: 1.125rem; }
+.vx-ai[data-large='true'] .vx-ai-md :is(h1, h2, h3) { font-size: 1.4em; }

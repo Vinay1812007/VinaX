@@ -623,11 +623,15 @@ The free Worker plan allows 10 ms CPU per request; relaying a long reply chunk b
 
 ### The chat endpoint and stream
 
-`POST /api/ai/chat`: session, `RATE_LIMIT_30` per IP and per account, body <= 2 MB, text <= 400,000 characters. `parentMessageId` places the turn (edits make siblings, `"root"`), empty content retries, `continueFrom` continues. Events: `meta` (ids, model, wire, thinking, route), `progress`, `title`, the provider's lines, `status`/`sources`, `error` (`{ code, retryable, alternatives? }`), `done` (`{ stopReason, usage?, saved }`). Refusals include `403 model_locked`, `409 conversation_full` (2,000 messages), `429 daily_limit`, `503 ai_disabled`.
+`POST /api/ai/chat`: session, `RATE_LIMIT_30` per IP and per account, body <= 2 MB, text <= 400,000 characters. `research: true` runs [Research](#research-researchts); `personal.language` (a `LIVE_LANGUAGES` code) holds every reply to that language. `DELETE /api/ai/conversations { ids } | { all: true }` deletes several chats at once (the Chats page's selection, Settings → Delete all chats; 500 a request, shared links removed). `parentMessageId` places the turn (edits make siblings, `"root"`), empty content retries, `continueFrom` continues. Events: `meta` (ids, model, wire, thinking, route), `progress`, `title`, the provider's lines, `status`/`sources`, `error` (`{ code, retryable, alternatives? }`), `done` (`{ stopReason, usage?, saved }`). Refusals include `403 model_locked`, `409 conversation_full` (2,000 messages), `429 daily_limit`, `503 ai_disabled`.
 
 ### Claude (owner-only)
 
 `adapters/anthropic.ts` calls the Messages API by plain fetch (the SDK would parse the stream in the Worker). Adaptive summarised thinking, no `temperature`, history capped at 340,000 characters to stay under Haiku 5.5's 100K-token price step. `claudeAccess.ts` holds `CLAUDE_EMAILS`, matched against the account's Google-verified email; everyone else sees Claude locked and gets `403 model_locked`. No ladder or fallback ever calls Claude.
+
+### Research (`research.ts`)
+
+The composer's **Research** switch (the + menu, or the chip on the welcome) is Claude's Research scaled to a free search allowance: `planQueries` asks the `title` ladder for two to four different searches (`PLAN_PROMPT`; the question is material), the plain query is added when the planner left it out, `researchWeb` runs them all at once through `searchWeb` (each counted as one search), and `mergeSources` makes one numbered list (round-robin, duplicates out, at most 12). The prompt gets `<search_results>`, the citation rules and `RESEARCH_RULES` (answer first, short headings, cite everything, "What's still unclear"). Stream: `status` `planning` → `researching { queries, done }` → `searched`, `sources` with `via: "research"` and the queries, `meta.research: true`. Per person `limits.researchPerDay` (default 10, `ai_take_daily` kind `research:<account>`); past it the reply sends `status research_limit` and searches once like any turn. A planner that fails in 9 s means one plain search. Never grounding. `GET /api/ai/models` says `research: true` when it is offered.
 
 ### Web search (`search.ts`)
 
@@ -655,13 +659,13 @@ The web view sends call audio to the earpiece. `AudioRoutePlugin.java` (`VinaxAu
 ### Projects, memory, sharing, feedback
 
 - **Projects** (`projects.ts`): instructions <= 8,000 characters and up to 20 knowledge files (200,000 characters) in `<project_knowledge>`; max 100.
-- **Memory**: <= 50 notes (`ai_memories`, switches `ai_memory_prefs`), learned in `waitUntil` every third message or on "remember" cues; `looksSensitive` rejects personal data. Incognito chats skip it.
+- **Memory**: <= 50 notes (`ai_memories`, switches `ai_memory_prefs`), learned in `waitUntil` every third message or on "remember" cues; `looksSensitive` rejects personal data. Incognito chats skip it. Settings → Memory has **Import** (`POST /api/ai/memories { texts }`, one note per line, repeats and secrets skipped, up to the room left) and **Export** (a text file).
 - <a id="sharing"></a>**Sharing**: snapshot of the active branch in `ai_shares` (one link per chat, random 22-character id, `noindex`, no attachments or account info).
 - **Thumbs up/down** (`feedback.ts`): one rating per reply in `ai_feedback`; the console shows 30-day totals (`ai_feedback_stats`).
 
 ### Owner switches (`vinax-ai` setting)
 
-`enabled` (kill switch; anything but `true` = off), `testers` (account ids), `search`, `models` (per-model off/order), `instructions` (<= 4,000), `dailyLimit` (messages per person per UTC day), `memory`, `images`, and `limits` clamped by `LIMIT_RANGES` in `config.ts` (`messagesPerMinute`, `imagesPerMessage`, `filesPerMessage`, `filesPerChat`, `pdfMB`, `pdfPages`, `textMB`, `searchesPerDay`).
+`enabled` (kill switch; anything but `true` = off), `testers` (account ids), `search`, `models` (per-model off/order), `instructions` (<= 4,000), `dailyLimit` (messages per person per UTC day), `memory`, `images`, and `limits` clamped by `LIMIT_RANGES` in `config.ts` (`messagesPerMinute`, `imagesPerMessage`, `filesPerMessage`, `filesPerChat`, `pdfMB`, `pdfPages`, `textMB`, `researchPerDay` (0 = Research off), `searchesPerDay`).
 
 ### The console's providers card
 
@@ -669,7 +673,11 @@ Console > App Health > AI Assistant (`GET /api/admin/ai`, owner only): keys set/
 
 ### Data stored
 
-`ai_conversations`, `ai_messages` (`sources`, `artifacts`), `ai_attachments` + bucket `ai-attachments`, `ai_memories`, `ai_memory_prefs`, `ai_shares`, `ai_feedback`, `ai_daily_usage`; functions `ai_take_daily`, `ai_conversation_search`, `ai_artifact_list`, `ai_export`, `ai_feedback_stats`. Page settings live on the device (`vinax.vxai.prefs.v1`).
+`ai_conversations`, `ai_messages` (`sources`, `artifacts`), `ai_attachments` + bucket `ai-attachments`, `ai_memories`, `ai_memory_prefs`, `ai_shares`, `ai_feedback`, `ai_daily_usage`; functions `ai_take_daily`, `ai_conversation_search`, `ai_artifact_list`, `ai_export`, `ai_feedback_stats`. Page settings live on the device (`vinax.vxai.prefs.v1`: model, thinking, web search, voices, personalisation, reply language, chat font and text size, the finished-reply notification).
+
+### The page, the way Claude's is (2026-11-18)
+
+`features/vinaxai/`: the welcome shows the recent chats (`RecentChats.tsx`); `/vinaxai/chats` lists every chat with a selection and delete (`AllChats.tsx`, lazy); keyboard shortcuts in `shortcuts.ts` (⌘⇧O new chat, ⌘⇧K search chats, ⌘⇧S sidebar, ⇧Esc to the box, ⌘⇧C copy the last reply, ⌘, settings, ⌘/ the list; Esc in the box stops a reply; the app's palette keeps ⌘K) with `ShortcutsDialog.tsx`; selecting text in a reply shows **Ask about this**, which quotes it above the composer (`useSelectionAsk.ts`, `withQuote` puts it in the message as a `>` quote); tables carry **Copy as CSV** (`tableCsv.ts`); Settings → General has the chat font, Larger text, a finished-reply notification (`Notification` API, background tab only) and the shortcuts; Personalisation has the reply language (`languages.ts`).
 
 ## Recommendations on the device
 
@@ -996,7 +1004,7 @@ VinaX is free, with no ads. Sign in with Google or with email and a password. **
   - Your library follows your account.
   - Settings > Your data > Back up and restore exports a file, and restores it with Merge or Replace.
 - **Look:** Settings > Appearance.
-- **VinaX AI:** a chat assistant (sign-in needed). It has models, web search, files, memory, projects and Live voice.
+- **VinaX AI:** a chat assistant (sign-in needed). It has models, web search, **Research** (several searches and a cited report), files, memory (import and export), projects, Live voice, recent chats on the welcome, a **Chats** page, a reply language, and keyboard shortcuts (`Ctrl/Cmd + /`). Select text in a reply for **Ask about this**.
 - **Android:** Home > **Get the VinaX app**. It adds downloads, lock-screen controls, widgets, push and casting.
 - **Keys:**
 

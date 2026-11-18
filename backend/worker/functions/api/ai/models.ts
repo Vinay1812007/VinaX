@@ -1,7 +1,7 @@
 /**
  * VinaX AI — GET /api/ai/models: what the model picker offers.
  *
- *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
+ *   → 200 { enabled, configured, search, research, groups: [...], models: [{ id, name, provider, group,
  *            description, flags: { vision, web, thinking, code, pdf }, available, reason?,
  *            thinkingLevels: ["fast" | "standard" | "extended" | "max"],   // levels with a real provider switch (thinking.ts)
  *            kinds: ["fast" | "reasoning" | "code" | "vision" | "long"],    // capability filters in the picker
@@ -110,5 +110,7 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const chatLadders = (['default', 'code', 'deep', 'vision', 'long', 'fast'] as const).flatMap((l) => ladderModels(registry, l)).filter((spec) => providerConfigured(env, spec.provider));
   // Create image: the owner's switch, and Workers AI must be bound.
   const images = { enabled: settings.images.enabled && typeof env.AI?.run === 'function', perDay: settings.images.perDay, maxPrompt: MAX_PROMPT_CHARS };
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, images, autoThinking: autoLevels(chatLadders) });
+  // Research (research.ts): several searches through the search API (never grounding), while the owner allows it.
+  const research = settings.search && settings.limits.researchPerDay > 0 && searchConfigured(env, settings.limits.searchesPerDay);
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, research, groups: PICKER_GROUPS, models, voice, limits, images, autoThinking: autoLevels(chatLadders) });
 };

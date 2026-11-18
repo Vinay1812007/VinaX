@@ -12,7 +12,9 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CodeBlock } from './CodeBlock';
+import { CodeBlock, copyText } from './CodeBlock';
+import { tableToCsv, type TreeNode } from './tableCsv';
+import { CopyIcon } from './icons';
 import { PlaylistCard } from './PlaylistCard';
 import { QuestionsBlock, QuizBlock } from './ChoiceBlocks';
 import { escapeCurrency } from './mathText';
@@ -112,9 +114,16 @@ const components: Components = {
     if (lang.toLowerCase() === 'quiz') return <QuizBlock text={textOf(code)} />;
     return <CodeBlock code={textOf(code).replace(/\n$/, '')} lang={lang.toLowerCase()} />;
   },
-  table: ({ children }) => (
-    <div className="vx-ai-table" tabIndex={0}>
-      <table>{children}</table>
+  // A table carries "Copy as CSV" in its corner (tableCsv.ts), the way a code block carries Copy.
+  table: ({ node, children }) => (
+    <div className="vx-ai-table-wrap">
+      <div className="vx-ai-table" tabIndex={0}>
+        <table>{children}</table>
+      </div>
+      <button type="button" className="vx-ai-table-csv" onClick={() => void copyText(tableToCsv((node ?? { type: 'root' }) as TreeNode), 'Table copied as CSV')} aria-label="Copy table as CSV" title="Copy as CSV">
+        <CopyIcon className="w-3.5 h-3.5" />
+        <span>CSV</span>
+      </button>
     </div>
   ),
 };

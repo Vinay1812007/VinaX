@@ -4,13 +4,17 @@
  *   wide (≥1024px):  [ sidebar 260px, collapsible ] [ header · thread · composer ]
  *   narrow:          [ header ☰ · thread · composer ]  + the sidebar as a drawer
  *
- * A new chat opens on a greeting with the composer in the middle and four
- * suggestion chips that fill in a starter (they never send); the header's
+ * A new chat opens on a greeting with the composer in the middle, suggestion
+ * chips that fill in a starter (they never send), a Research switch and the
+ * recent chats (RecentChats.tsx); the header's
  * Incognito button makes the new chat one that never uses memory. Signed-out
  * visitors never get here: the app's sign-in gate answers first.
  * /vinaxai/projects and /vinaxai/project/:projectId show the projects in the
  * same frame (Projects.tsx, lazy); a project's page uses this composer to
- * start a chat in the project. See README.md (VinaX AI).
+ * start a chat in the project. /vinaxai/chats lists every chat (AllChats.tsx).
+ * Keyboard shortcuts (shortcuts.ts), "Ask about this" on a selection
+ * (useSelectionAsk.ts) and the finished-reply notification live here too.
+ * See README.md (VinaX AI).
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -29,7 +33,7 @@ import { NowPlayingPill } from './NowPlayingPill';
 import { finishDraft } from './keepOnLeave';
 import { usePrefs } from './prefs';
 import { SideRail, Sidebar } from './Sidebar';
-import { continueReply, createImage, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
+import { continueReply, createImage, resetChat, retryReply, selectBranch, sendMessage, setIncognito, setResearch, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
@@ -37,16 +41,31 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview, type Artifact, mayHaveArtifacts } from './artifacts';
-import { ArrowDownIcon, CodeIcon, DiagramIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, PencilIcon, SettingsIcon, ShareIcon, SparkIcon, ThinkIcon, WaveIcon } from './icons';
+import { ArrowDownIcon, CloseIcon, CodeIcon, DiagramIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, PencilIcon, QuoteIcon, ResearchIcon, SettingsIcon, ShareIcon, SparkIcon, ThinkIcon, WaveIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
 import { PaneSkeleton } from './Skeleton';
 import { ShareDialog } from './ShareDialog';
+import { RecentChats } from './RecentChats';
+import { matchShortcut } from './shortcuts';
+import { useSelectionAsk, withQuote } from './useSelectionAsk';
+import { copyText } from './CodeBlock';
+import { toast } from '@/store/toastStore';
 
-/** Live voice loads only when someone opens it. */
-/** Projects load only when a project page opens. */
+/** Projects load only when a project page opens; the Chats page and the shortcuts dialog likewise. */
 const ProjectsArea = lazy(() => import('./Projects'));
+const AllChatsArea = lazy(() => import('./AllChats'));
+const ShortcutsDialog = lazy(() => import('./ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })));
+
+/** A system notification for a reply that finished while the tab was in the background (Settings → General). */
+export function notifyReplyDone(title: string | null, text: string): void {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || document.visibilityState !== 'hidden') return;
+  try {
+    const n = new Notification(title ? `VinaX AI · ${title}` : 'VinaX AI replied', { body: plainText(text).slice(0, 160), tag: 'vinaxai-reply', silent: true });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch { /* not supported here */ }
+}
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
 export function plainText(md: string): string {
@@ -108,8 +127,8 @@ function useKeyboardInset(el: React.RefObject<HTMLDivElement | null>): void {
 export function ChatView(): ReactNode {
   const { id, projectId: projectPage } = useParams();
   const { pathname } = useLocation();
-  // Which page: a chat, the projects list or one project.
-  const view: 'chat' | 'projects' | 'project' = projectPage ? 'project' : pathname.startsWith('/vinaxai/projects') ? 'projects' : 'chat';
+  // Which page: a chat, every chat, the projects list or one project.
+  const view: 'chat' | 'chats' | 'projects' | 'project' = projectPage ? 'project' : pathname.startsWith('/vinaxai/projects') ? 'projects' : pathname.startsWith('/vinaxai/chats') ? 'chats' : 'chat';
   const navigate = useNavigate();
   const account = useAccount();
   const firstName = account?.user.name?.trim().split(/\s+/)[0] ?? null;
@@ -156,7 +175,7 @@ export function ChatView(): ReactNode {
   // Another chat closes the panel.
   useEffect(() => { usePanel.getState().close(); }, [conversationId]);
 
-  usePageTitle(view === 'chat' ? title ?? 'VinaX AI' : 'Projects');
+  usePageTitle(view === 'chat' ? title ?? 'VinaX AI' : view === 'chats' ? 'Chats' : 'Projects');
   // The project a chat is in, named in the header with a link back to it.
   const projects = useQuery({ queryKey: PROJECTS_KEY, queryFn: listProjects, staleTime: 60_000, enabled: view === 'chat' && !!chatProject });
   const inProject = view === 'chat' && chatProject ? projects.data?.items.find((p) => p.id === chatProject) ?? null : null;
@@ -195,6 +214,14 @@ export function ChatView(): ReactNode {
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
+  // Research (the + menu): the next messages run several searches and answer with a report; off again on a new chat.
+  const [research, setResearchOn] = useState(false);
+  const researchOffered = !!models.data?.research;
+  const toggleResearch = (on: boolean) => { setResearchOn(on); setResearch(on); };
+  useEffect(() => { if (!researchOffered && research) toggleResearch(false); }, [researchOffered, research]);
+  // "Ask about this": a selection in a reply, quoted above the composer (useSelectionAsk.ts).
+  const [quote, setQuote] = useState<string | null>(null);
+  useEffect(() => { setQuote(null); }, [conversationId]);
   // Replies kept on this device when the page last closed mid-reply are saved now (once per page load).
   useEffect(() => { void finishDraft(); }, []);
   // The now-playing pill's "Ask about this song": fills the composer, never sends (like the starters).
@@ -250,14 +277,18 @@ export function ChatView(): ReactNode {
   };
   const send = async () => {
     if (imageMode && imagesInfo) return makeImage();
-    const text = draft;
+    const typed = draft;
+    const quoted = quote;
+    const text = withQuote(quoted, typed);
     const files = tray.take();
     setDraft('');
+    setQuote(null);
     haptic('light');
     stick.current = true;
     const out = await sendMessage(text, { files, ...(view === 'project' && projectPage ? { projectId: projectPage } : {}) });
     if (!out.ok && out.beforeStart) {
-      setDraft((d) => d || text);
+      setDraft((d) => d || typed);
+      setQuote((q) => q ?? quoted);
       tray.restore(files);
     }
   };
@@ -324,12 +355,15 @@ export function ChatView(): ReactNode {
     requestAnimationFrame(() => [...(scroller.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])].find((el) => el.dataset.messageId === jumpTo)?.scrollIntoView({ block: 'start' }));
   }, [jumpTo, jumpArtifact, id, conversationId, streaming, messages, thread, versions, setParams]);
 
-  // Announce a finished reply (only then) to screen readers.
+  // Announce a finished reply (only then) to screen readers, and to the device when the tab is in the background.
   const [announce, setAnnounce] = useState('');
   useEffect(() => {
     if (!finished) return;
     const last = thread[thread.length - 1];
-    if (last?.role === 'assistant') setAnnounce(last.error ? last.error.message : `VinaX AI replied: ${plainText(last.text).slice(0, 400)}`);
+    if (last?.role === 'assistant') {
+      setAnnounce(last.error ? last.error.message : `VinaX AI replied: ${plainText(last.text).slice(0, 400)}`);
+      if (usePrefs.getState().notifyDone && !last.error && last.text) notifyReplyDone(title, last.text);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -359,16 +393,62 @@ export function ChatView(): ReactNode {
 
   const root = useRef<HTMLDivElement>(null);
   useKeyboardInset(root);
+  const selection = useSelectionAsk(root, view === 'chat' && !!conversationId && !streaming);
+  const askAboutSelection = () => {
+    if (!selection) return;
+    setQuote(selection.text);
+    document.getSelection()?.removeAllRanges();
+    requestAnimationFrame(() => composer.current?.focus());
+  };
 
   const newChat = () => {
     resetChat();
     tray.clear();
     setDraft('');
+    setQuote(null);
+    setResearchOn(false);
     setImageMode(false);
     setDrawer(false);
     navigate('/vinaxai');
     composer.current?.focus();
   };
+
+  // Keyboard shortcuts (shortcuts.ts), the way Claude's chat has them.
+  const [shortcuts, setShortcuts] = useState(false);
+  const act = useRef<(id: NonNullable<ReturnType<typeof matchShortcut>>) => void>(() => undefined);
+  act.current = (which) => {
+    switch (which) {
+      case 'new-chat': newChat(); break;
+      case 'toggle-sidebar': if (wide) prefs.set({ sidebarCollapsed: !prefs.sidebarCollapsed }); else setDrawer((d) => !d); break;
+      case 'search-chats':
+        if (wide) prefs.set({ sidebarCollapsed: false }); else setDrawer(true);
+        requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>('.vx-ai-side-search input')?.focus());
+        break;
+      case 'focus-composer': composer.current?.focus(); break;
+      case 'copy-last': {
+        const last = [...thread].reverse().find((m) => m.role === 'assistant' && m.text.trim());
+        if (last) void copyText(last.text, 'Reply copied'); else toast('No reply to copy yet');
+        break;
+      }
+      case 'settings': setSettings('general'); break;
+      case 'help': setShortcuts(true); break;
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      // Escape in the message box stops the reply being written.
+      if (e.key === 'Escape' && !e.shiftKey && !e.metaKey && !e.ctrlKey && (e.target as HTMLElement | null)?.id === 'vx-ai-input') {
+        if (useChatStore.getState().streaming) { e.preventDefault(); stopReply(); }
+        return;
+      }
+      const which = matchShortcut(e);
+      if (!which) return;
+      e.preventDefault();
+      act.current(which);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const composerEl = (
     <Composer
@@ -385,7 +465,20 @@ export function ChatView(): ReactNode {
       onThinking={(v) => prefs.set({ thinking: v })}
       autoThinking={models.data?.autoThinking}
       search={models.data?.search ? { value: prefs.webSearch, onChange: (v) => prefs.set({ webSearch: v }) } : undefined}
-      tray={<PendingChips files={tray.files} onRemove={tray.remove} />}
+      tray={(
+        <>
+          {quote && (
+            <div className="vx-ai-quote" role="group" aria-label="Quoted from the reply">
+              <QuoteIcon className="w-4 h-4" />
+              <span className="vx-ai-quote-text">{quote}</span>
+              <button type="button" className="vx-ai-pill-x vx-ai-quote-x" onClick={() => setQuote(null)} aria-label="Remove the quote">
+                <CloseIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          <PendingChips files={tray.files} onRemove={tray.remove} />
+        </>
+      )}
       onFiles={(fs) => tray.add(fs)}
       hasFiles={tray.files.some((f) => f.status === 'ready')}
       sendBlocked={tray.busy || cannotSee}
@@ -393,6 +486,8 @@ export function ChatView(): ReactNode {
       onLive={voice?.live && view === 'chat' ? openLive : undefined}
       onSettings={() => setSettings(voice && (voice.dictation || voice.readAloud || voice.live) ? 'voice' : 'chat')}
       image={imagesInfo ? { on: imageMode, maxPrompt: imagesInfo.maxPrompt, onChange: (on) => { setImageMode(on); requestAnimationFrame(() => composer.current?.focus()); } } : undefined}
+      research={researchOffered && view !== 'project' ? { on: research, onChange: (on) => { toggleResearch(on); requestAnimationFrame(() => composer.current?.focus()); } } : undefined}
+      placeholder={quote ? 'Ask about the quoted part' : undefined}
     />
   );
   const visionChip = cannotSee && (
@@ -435,7 +530,13 @@ export function ChatView(): ReactNode {
   if (models.isPending) body = <PaneSkeleton kind={view !== 'chat' ? 'cards' : needLoad || !empty ? 'chat' : 'welcome'} />;
   else if (models.isError || !models.data?.configured) body = <Calm title="VinaX AI is unavailable right now" body="Please try again in a little while." action={<button type="button" className="vx-ai-chip" onClick={() => void models.refetch()}>Try again</button>} />;
   else if (!models.data.enabled) body = <Calm title="VinaX AI is taking a break" body="It will be back soon. Your music keeps playing in the meantime." />;
-  else if (view !== 'chat') {
+  else if (view === 'chats') {
+    body = (
+      <Suspense fallback={<PaneSkeleton kind="cards" />}>
+        <AllChatsArea />
+      </Suspense>
+    );
+  } else if (view !== 'chat') {
     body = (
       <Suspense fallback={<PaneSkeleton kind="cards" />}>
         <ProjectsArea
@@ -469,7 +570,14 @@ export function ChatView(): ReactNode {
                 {s.label}
               </button>
             ))}
+            {researchOffered && (
+              <button type="button" className={`vx-ai-chip vx-ai-starter${research ? ' is-on' : ''}`} aria-pressed={research} onClick={() => { toggleResearch(!research); requestAnimationFrame(() => composer.current?.focus()); }}>
+                <ResearchIcon className="w-4 h-4" />
+                Research
+              </button>
+            )}
           </div>
+          {!incognito && <RecentChats />}
           {footer}
         </div>
       </div>
@@ -524,6 +632,8 @@ export function ChatView(): ReactNode {
   return (
     <div
       className={`vx-ai${sideOpen && wide ? ' has-side' : ''}${dragging ? ' is-dragging' : ''}`}
+      data-font={prefs.font !== 'default' ? prefs.font : undefined}
+      data-large={prefs.largeText ? 'true' : undefined}
       ref={root}
       onDragOver={(e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
@@ -567,7 +677,7 @@ export function ChatView(): ReactNode {
                 <span><span className="sr-only">Project: </span>{inProject.name}</span>
               </Link>
             )}
-            {view !== 'chat' ? <span className="vx-ai-title">Projects</span> : title && <span className="vx-ai-title" title={title}>{title}</span>}
+            {view !== 'chat' ? <span className="vx-ai-title">{view === 'chats' ? 'Chats' : 'Projects'}</span> : title && <span className="vx-ai-title" title={title}>{title}</span>}
             {incognito && !empty && <span className="vx-ai-incognito-badge"><IncognitoIcon className="w-4 h-4" /> Incognito</span>}
           </div>
           <div className="vx-ai-header-end">
@@ -605,7 +715,17 @@ export function ChatView(): ReactNode {
       {panel.open && (
         <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} />
       )}
+      {selection && !quote && (
+        <button type="button" className="vx-ai-ask-sel" style={{ left: selection.left, top: selection.top }} onClick={askAboutSelection}>
+          <QuoteIcon className="w-4 h-4" /> Ask about this
+        </button>
+      )}
       <div className="sr-only" aria-live="polite">{announce}</div>
+      {shortcuts && (
+        <Suspense fallback={null}>
+          <ShortcutsDialog onClose={() => setShortcuts(false)} />
+        </Suspense>
+      )}
       {settings && (
         <SettingsPanel
           models={pickerModels}
@@ -614,6 +734,7 @@ export function ChatView(): ReactNode {
           search={!!models.data?.search}
           section={settings}
           onClose={() => setSettings(null)}
+          onShortcuts={() => { setSettings(null); setShortcuts(true); }}
         />
       )}
       {sharing && conversationId && <ShareDialog conversationId={conversationId} title={title} onClose={() => setSharing(false)} />}

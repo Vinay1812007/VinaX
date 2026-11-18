@@ -53,7 +53,8 @@ export function SourcesRow({ sources }: { sources: SourcesInfo }): ReactNode {
   if (!sources.items.length) return null;
   return (
     <section className="vx-ai-sources" aria-label="Sources">
-      <h3 className="vx-ai-sources-h">Sources</h3>
+      <h3 className="vx-ai-sources-h">{sources.via === 'research' ? `Research sources · ${sources.items.length}` : 'Sources'}</h3>
+      {sources.via === 'research' && queriesText(sources.queries) && <p className="vx-ai-sources-q">{queriesText(sources.queries)}</p>}
       <ol>
         {sources.items.map((s) => (
           <li key={s.n}>
@@ -79,10 +80,26 @@ export function SourcesRow({ sources }: { sources: SourcesInfo }): ReactNode {
   );
 }
 
+const short = (q: string): string => (q.length > 60 ? `${q.slice(0, 57)}…` : q);
+
 export function statusText(s: SearchStatus): string {
   if (s.step === 'searching') return `Searching the web for “${s.query.length > 80 ? `${s.query.slice(0, 77)}…` : s.query}”`;
+  if (s.step === 'planning') return 'Planning the research';
+  if (s.step === 'researching') {
+    const n = s.queries.length;
+    return s.done > 0
+      ? `Researching: ${s.done} of ${n} search${n === 1 ? '' : 'es'} done`
+      : `Researching ${n} search${n === 1 ? '' : 'es'}: ${s.queries.slice(0, 3).map(short).join(' · ')}${n > 3 ? ' …' : ''}`;
+  }
+  if (s.step === 'research_limit') return 'Today’s research is used up, so this reply searches once';
   if (!s.count) return 'No useful results; answering without them';
   return `Found ${s.count} result${s.count === 1 ? '' : 's'}${s.sites.length ? ` · ${s.sites.slice(0, 3).join(', ')}` : ''}`;
+}
+
+/** The research's searches, under the Sources heading. */
+export function queriesText(queries: string[] | undefined): string | null {
+  if (!queries?.length) return null;
+  return `Searched: ${queries.map(short).join(' · ')}`;
 }
 
 /** "Reading report.pdf and 2 more files" while the reply reads its files. */
@@ -102,9 +119,10 @@ export function ProgressLine({ progress }: { progress: ReplyProgress }): ReactNo
 }
 
 export function SearchStatusLine({ status }: { status: SearchStatus }): ReactNode {
+  const live = status.step === 'searching' || status.step === 'planning' || status.step === 'researching';
   return (
     <p className="vx-ai-status" role="status">
-      <span className={status.step === 'searching' ? 'vx-ai-shimmer' : undefined}>{statusText(status)}</span>
+      <span className={live ? 'vx-ai-shimmer' : undefined}>{statusText(status)}{live ? '…' : ''}</span>
     </p>
   );
 }
