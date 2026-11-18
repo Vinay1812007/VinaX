@@ -7,6 +7,7 @@ import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { RATE_LIMIT_TIERS } from '../worker/functions/_lib/ratelimit';
 import { fileKv, fixedWindowLimiter, workersAiRest } from './bindings';
+import { corsAdditions, preflight } from './cors';
 import { sendWebResponse, toWebRequest } from './http';
 
 export interface ExecCtx {
@@ -70,15 +71,18 @@ export function createApp(opts: {
       if (!res.writableFinished) abort.abort();
     });
     let response: Response;
+    let origin: string | null = null;
     try {
       const request = toWebRequest(req, { protocol: opts.protocol, signal: abort.signal });
-      response = await opts.worker.fetch(request, opts.env, ctx);
+      origin = request.headers.get('origin');
+      // The app calls the API host cross-origin (server/cors.ts).
+      response = preflight(request) ?? (await opts.worker.fetch(request, opts.env, ctx));
     } catch (e) {
       console.error(`[error] ${req.method} ${req.url}`, e);
       response = new Response('Internal Server Error', { status: 500, headers: { 'content-type': 'text/plain', 'cache-control': 'no-store' } });
     }
     try {
-      await sendWebResponse(res, response, (req.method ?? 'GET').toUpperCase());
+      await sendWebResponse(res, response, (req.method ?? 'GET').toUpperCase(), corsAdditions(origin, response.headers));
     } catch (e) {
       console.error(`[error] sending ${req.method} ${req.url}`, e);
       if (!res.headersSent) {

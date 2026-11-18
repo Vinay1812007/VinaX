@@ -688,7 +688,11 @@ Build and run locally: `cd backend && npm run server:build && VINAX_PROTO=http n
 4. Traffic: a Cloudflare Tunnel (free) from the VM, created in the dashboard (Zero Trust > Networks > Tunnels > Create, then `sudo cloudflared service install <token>` on the VM), with a public hostname such as `api.vinaxmusic.online` -> `http://127.0.0.1:8787`. The server listens on 127.0.0.1 only, so `cf-connecting-ip` and `cf-ipcountry` can only come from Cloudflare.
 5. Jobs: turn the Worker's cron trigger off, then set `VINAX_CRON=on` and restart. Never both, or the 5-minute jobs run twice.
 
-Until the app calls the new host, the Worker keeps serving every route; adding the server changes nothing in production by itself.
+**Production (2026-11-18):** an Oracle Cloud Always Free VM (VM.Standard.E2.1.Micro, 1 GB RAM + 2 GB swap, Ubuntu 24.04, Hyderabad) runs the server; the locally managed tunnel `vinax-api` (`/etc/cloudflared/config.yml`) serves it at `https://api.vinaxmusic.online`. Its env file was filled from the Worker's own secrets by a one-off encrypted transfer (a temporary Worker version, rolled straight back), so the values match the Worker's.
+
+**How the app reaches it:** `frontend/src/apiHost.ts`, imported by `main.tsx` right after `apexRedirect`, wraps `fetch` and `navigator.sendBeacon` on the real site (www and apex only; local dev, previews and e2e are untouched) and sends every `/api/*` call, relative or `https://www.vinaxmusic.online/api/...`, to the API host. The Android app loads the same page from www, so it switches with the web. `/api/apk` and `/api/push/unsubscribe` (same-origin only by design) stay on the Worker. When the API host cannot be reached (network error, or Cloudflare's own 5xx page instead of a JSON answer) the call is repeated on the site's origin and calls go there for the next minute: a stopped VM degrades to the Worker and its daily quota, never to errors. Every call is now cross-origin, so `server/cors.ts` answers preflights from the app's origins itself (the methods and the exact headers asked for, cached a day) and adds `Access-Control-Allow-Origin`, `Vary: Origin` and `Access-Control-Expose-Headers: *` to answers that lack them; no cookies are used (Bearer tokens), so no credentials mode. The Worker stays deployed as that fallback and for `admin.`, `update.`, `/img` and `/apk`.
+
+To undo the switch, delete the `import './apiHost';` line in `main.tsx` and release: every call is back on the Worker at once.
 
 ### Secrets for operators
 

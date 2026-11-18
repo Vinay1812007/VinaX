@@ -1,4 +1,6 @@
 import './apexRedirect';
+// 2026-11-18 — /api/* goes to the API host (no daily request limit); before anything can call fetch.
+import './apiHost';
 import './services/storage/earlyMigrations';
 import React from 'react';
 import ReactDOM from 'react-dom/client';

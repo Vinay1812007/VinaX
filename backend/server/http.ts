@@ -66,8 +66,8 @@ export function toWebRequest(req: IncomingMessage, opts: RequestOptions): Reques
   return request;
 }
 
-/** The response headers Node should send, as [name, value] pairs. */
-export function outgoingHeaders(response: Response): Array<[string, string]> {
+/** The response headers Node should send, as [name, value] pairs (plus `extra`, e.g. CORS). */
+export function outgoingHeaders(response: Response, extra: Array<[string, string]> = []): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   const encoded = ENCODINGS.test(response.headers.get('content-encoding') ?? '');
   response.headers.forEach((value, name) => {
@@ -76,12 +76,13 @@ export function outgoingHeaders(response: Response): Array<[string, string]> {
     out.push([name, value]);
   });
   for (const cookie of response.headers.getSetCookie()) out.push(['set-cookie', cookie]);
+  out.push(...extra);
   return out;
 }
 
 /** Write a web Response to Node's ServerResponse, streaming the body. */
-export async function sendWebResponse(res: ServerResponse, response: Response, method: string): Promise<void> {
-  const headers = outgoingHeaders(response);
+export async function sendWebResponse(res: ServerResponse, response: Response, method: string, extra: Array<[string, string]> = []): Promise<void> {
+  const headers = outgoingHeaders(response, extra);
   res.writeHead(response.status, response.statusText || undefined, headers.flat());
   const body = response.body;
   const noBody = method === 'HEAD' || response.status === 204 || response.status === 304 || (response.status >= 100 && response.status < 200);
