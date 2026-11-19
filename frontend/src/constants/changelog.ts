@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.19.1': {
+    title: 'The Android app keeps clear of the status bar and the gesture bar',
+    changes: [
+      { type: 'fixed', text: 'On Android the top bar no longer sits under the status bar, and the tab bar and mini player no longer hide under the gesture bar at the bottom.' },
+      { type: 'improved', text: 'The status bar\'s icons follow the app\'s look: white over the dark look, dark over the light one.' },
+    ],
+  },
   '1.19.0': {
     title: 'VinaX Music: songs play to the end, Flow picks video quality, smarter queues, faster…',
     changes: [
