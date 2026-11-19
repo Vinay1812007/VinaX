@@ -140,3 +140,33 @@ describe('V2 Up Next rules — Never repeat', () => {
     expect(rejectReason(s, filter())).toBeNull();
   });
 });
+
+describe('1.19 — flow and the Discovery lean', () => {
+  it('a stretch follows the energy of the song before it when scores are close', () => {
+    const calm = song('calm', 'C', { title: 'Soft melody' });
+    const loud = song('loud', 'L', { title: 'Dance party' });
+    const scores = new Map([['loud', 1.0], ['calm', 0.98]]);
+    const energy = (s: Song): number => (s.id === 'loud' ? 0.9 : 0.25);
+    const before = [song('prev', 'P', { title: 'Slow' })];
+    // Without flow the best score wins; with it, the calm song follows a calm one.
+    expect(pickSequence([loud, calm], before, 1, key).songs[0].id).toBe('loud');
+    expect(pickSequence([loud, calm], before, 1, key, { scoreOf: (s) => scores.get(s.id) ?? 0, energyOf: (s) => (s.id === 'prev' ? 0.2 : energy(s)) }).songs[0].id).toBe('calm');
+    // A clearly better score still wins over a small energy step.
+    scores.set('loud', 1.5);
+    expect(pickSequence([loud, calm], before, 1, key, { scoreOf: (s) => scores.get(s.id) ?? 0, energyOf: (s) => (s.id === 'prev' ? 0.2 : energy(s)) }).songs[0].id).toBe('loud');
+  });
+  it('Discovery leans the score toward own music on familiar and new music on discover', () => {
+    const base = scoring();
+    const own: Candidate = { song: song('o', 'Own'), sources: new Set<Source>(['liked']), at: 0 };
+    const fresh: Candidate = { song: song('f', 'New'), sources: new Set<Source>(['explore']), at: 0 };
+    const gap = (lean: 'familiar' | 'balanced' | 'discover'): number => scoreCandidate(own, { ...base, discovery: lean }) - scoreCandidate(fresh, { ...base, discovery: lean });
+    expect(gap('familiar')).toBeGreaterThan(gap('balanced'));
+    expect(gap('discover')).toBeLessThan(gap('balanced'));
+  });
+  it('a release from this year or last gets a small lift', () => {
+    const base = scoring();
+    const old: Candidate = { song: song('old', 'A', { year: '2015' }), sources: new Set<Source>(['anchor']), at: 0 };
+    const now: Candidate = { song: song('now', 'A', { year: String(new Date().getFullYear()) }), sources: new Set<Source>(['anchor']), at: 0 };
+    expect(scoreCandidate(now, { ...base, year_now: new Date().getFullYear() })).toBeGreaterThan(scoreCandidate(old, { ...base, year_now: new Date().getFullYear() }));
+  });
+});

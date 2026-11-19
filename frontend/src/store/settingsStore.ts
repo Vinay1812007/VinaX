@@ -206,7 +206,9 @@ const defaults = {
   autoplay: true,
   keepScreenOn: true,
   lockScreenLyrics: true,
-  crossfade: true,
+  // 1.19 — off by default: with it on, every song handed over five seconds
+  // before its end, which listeners heard as "the last seconds are skipped".
+  crossfade: false,
   crossfadeSeconds: 5,
   haptics: true,
   smartDownloads: false,
@@ -400,7 +402,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 7,
+      version: 8,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
@@ -435,6 +437,9 @@ export const useSettingsStore = create<SettingsState>()(
         delete legacy.accent;
         delete legacy.accentCustom;
         delete legacy.dynamicTheme;
+        // v8 (1.19) — crossfade is off unless the listener chose a length of
+        // their own: the old default (on, 5 s) cut every song's ending short.
+        if (version < 8 && state.crossfade !== false && (state.crossfadeSeconds === undefined || state.crossfadeSeconds === 5)) state.crossfade = false;
         try {
           window.localStorage.removeItem('vinax.home.shown.v1');
           window.localStorage.removeItem('vinax.aihome.recent.v1');

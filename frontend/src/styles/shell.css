@@ -95,9 +95,15 @@
   padding: 8px 8px 8px 20px;
   background: rgb(var(--ink-950));
 }
-.vx-winbar-brand { display: grid; flex: none; place-items: center; width: 40px; height: 48px; margin-right: 8px; }
-.vx-winbar-brand img { border-radius: 8px; transition: transform var(--dur-quick) var(--ease-standard); }
+.vx-winbar-brand { display: inline-flex; flex: none; align-items: center; gap: 10px; height: 48px; margin-right: 8px; color: rgb(var(--ink-100)); text-decoration: none; }
+.vx-winbar-brand img { flex: none; border-radius: 8px; transition: transform var(--dur-quick) var(--ease-standard); }
 .vx-winbar-brand:hover img { transform: scale(1.06); }
+/* 1.19 — "VinaX Music" beside the mark: the name in the display face, "Music" in the accent. */
+.vx-wordmark { font-family: var(--font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; white-space: nowrap; }
+.vx-wordmark em { font-style: normal; font-weight: 700; color: var(--accent-text); }
+.vx-topbar-brand { display: inline-flex; align-items: center; gap: 8px; color: rgb(var(--ink-100)); text-decoration: none; }
+.vx-topbar-brand .vx-wordmark { font-size: 18px; }
+@media (max-width: 1023px) { .vx-winbar .vx-wordmark { display: none; } }
 .vx-winbar-nav {
   display: flex;
   flex: 1 1 auto;

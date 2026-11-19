@@ -287,6 +287,59 @@
   .vx-flow-menu > button { width: 44px; height: 44px; }
 }
 .vx-flow-action.is-liked > svg { color: rgb(var(--ember-500)); }
+/* 1.19 — the quality disc: the height playing now ("540p", "1080p", "4K"), and
+   a small menu of every rendition the clip has. */
+.vx-flow-quality { position: relative; }
+.vx-flow-quality-badge {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--vxf-disc);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.vx-flow-action:hover > .vx-flow-quality-badge { background: var(--vxf-disc-hover); }
+.vx-flow-action:active > .vx-flow-quality-badge { transform: scale(0.92); }
+.vx-flow-action[aria-expanded='true'] > .vx-flow-quality-badge { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+@media (max-width: 899px) { .vx-flow-quality-badge { min-width: 44px; height: 44px; } }
+.vx-flow-quality-menu {
+  position: absolute;
+  right: calc(100% + 10px);
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  min-width: 164px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--elev-3), inset 0 0 0 1px var(--line-1);
+  animation: vx-pop-in var(--dur-base) var(--ease-spring) backwards;
+}
+.vx-flow-quality-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.vx-flow-quality-menu > button:hover { background: var(--surface-3); }
+.vx-flow-quality-menu > button[aria-checked='true'] { color: var(--accent-text); }
+.vx-flow-quality-menu > button[aria-checked='true']::after { content: '✓'; font-weight: 800; }
 /* The song menu's own trigger, dressed as a rail disc (46px). */
 .vx-flow-menu > button {
   width: 46px;

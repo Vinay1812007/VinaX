@@ -62,8 +62,10 @@ export function playableReel(v: Video | null | undefined): v is Video {
 }
 
 /** The clip a reel plays, best first: the preview (always served), then the full stream. */
-export function reelSources(v: Video): string[] {
-  return [...new Set([v.previewUrl, v.streamUrl].filter((u): u is string => !!u))];
+export function reelSources(v: Video, first: string | null = null): string[] {
+  // 1.19 — `first`: the rendition the viewer chose (or Auto picked); the
+  // catalogue's own clip and the full stream still follow as fallbacks.
+  return [...new Set([first, v.previewUrl, v.streamUrl].filter((u): u is string => !!u))];
 }
 
 /* ------------------------------------------------------------------ pages */

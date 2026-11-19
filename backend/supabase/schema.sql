@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 25
+-- VinaX database · schema version 26
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -57,6 +57,10 @@
 --  score; and, in section 11, stats_song_problems (songs that fail to play
 --  or have no lyrics) and stats_experiment (A/B test results per version
 --  from the recommendation events' exposure maps)
+--  version 26 makes weekly_summary light enough to answer: it reads two
+--  weeks of listening (not 38 days) and no longer runs the 120-day At risk
+--  scan inside (the Worker asks stats_at_risk separately, and tolerates a
+--  slow answer); the job had failed every hour since Monday on a timeout;
 --  version 25 drops song_reactions, song_reaction_counts and stats_reactions
 --  (end of section 6b): song reactions left the app in 2.0, so their rows
 --  go too (/api/reactions still answers old apps without the database);
@@ -2634,7 +2638,7 @@ language sql stable set search_path = public, pg_temp as $$
   ),
   lt as (
     select s.account_id, t.day, t.seconds
-    from listen_time(null, (select (d_to - 38)::timestamp at time zone 'Asia/Kolkata' from b)) t
+    from listen_time(null, (select (d_to - 15)::timestamp at time zone 'Asia/Kolkata' from b)) t
     join s on s.listener_id = t.listener_id
   )
   select jsonb_build_object(
@@ -2657,7 +2661,8 @@ language sql stable set search_path = public, pg_temp as $$
         select song_artist as artist, count(*) as plays, count(distinct account_id) as people
         from ev where cur and kind = 'play' and song_artist is not null
         group by 1 order by plays desc, people desc limit 5) t), '[]'::jsonb),
-    'atRisk', (stats_at_risk(7, 1) ->> 'total')::int,
+    -- Version 26: At risk is read by the Worker on its own (stats_at_risk), not here.
+    'atRisk', null,
     'errors', (select count(*) from events, b where kind = 'error' and at >= b.t_from and at < b.t_to),
     'errorsPrev', (select count(*) from events, b where kind = 'error' and at >= b.t_prev and at < b.t_from),
     'feedback', (select count(*) from feedback, b where at >= b.t_from and at < b.t_to)
@@ -2909,4 +2914,4 @@ insert into meta (key, value, updated_at)
   values ('schema', jsonb_build_object('version', 25, 'appliedAt', now()), now())
   on conflict (key) do update set value = jsonb_build_object('version', 25, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 25 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 26 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

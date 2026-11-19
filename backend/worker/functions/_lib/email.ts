@@ -218,60 +218,72 @@ export function edgeTimezone(request: Request): string | null {
 
 export interface Layout { title: string; lines: string[]; button?: { label: string; href: string }; footer: string; /** A short line above the title ("Account", "Console"). */ kicker?: string }
 
-/** VinaX colours, as the app paints them: plum canvas, ember accent, warm cream text. */
-const C = {
-  canvas: '#0f0b14',
-  card: '#1a1320',
-  cardBorder: '#2b2033',
-  box: '#241a2b',
-  text: '#eadfe6',
-  muted: '#a899ad',
-  title: '#fff4ea',
-  accent: '#ffa42e',
-  accent2: '#ff6384',
-  onAccent: '#1a0f08',
+/**
+ * 1.19 — the emails wear the app's own look: black canvas with a faint green
+ * glow, one frosted ("glass") card, the mark and the "VinaX Music" wordmark,
+ * green buttons. Every colour has a solid fallback: mail apps paint no
+ * gradients or translucency reliably, so the card is readable on #141414 alone.
+ */
+export const C = {
+  canvas: '#000000',
+  canvasGlow: '#07140b',
+  card: '#141414',
+  cardGlass: 'rgba(255,255,255,0.05)',
+  cardBorder: '#2a2a2a',
+  cardEdge: 'rgba(255,255,255,0.14)',
+  box: '#1d1d1d',
+  text: '#e6e6e6',
+  muted: '#a7a7a7',
+  title: '#ffffff',
+  accent: '#1ed760',
+  accent2: '#19b6c9',
+  onAccent: '#000000',
+  danger: '#f3727f',
 } as const;
 
 /**
- * One branded card that reads the same in every mail app: the VinaX mark and
- * wordmark on top, an ember-to-rose ribbon, the title, the lines, one button
- * and a quiet footer. Table layout with inline styles and bgcolor fallbacks
+ * One branded card that reads the same in every mail app: the mark and the
+ * wordmark on top, the green ribbon, the title, the lines, one button and a
+ * quiet footer. Table layout with inline styles and bgcolor fallbacks
  * (Outlook paints no gradients, so every gradient has a solid colour under
  * it). `lines` are already-escaped HTML.
  */
 export function layout({ title, lines, button, footer, kicker }: Layout): string {
   const btn = button
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 6px"><tr><td bgcolor="${C.accent}" style="background:${C.accent};background-image:linear-gradient(90deg,${C.accent},${C.accent2});border-radius:999px"><a href="${escapeHtml(button.href)}" style="display:inline-block;color:${C.onAccent};text-decoration:none;font-weight:700;font-size:15px;padding:13px 24px;border-radius:999px">${escapeHtml(button.label)}</a></td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 6px"><tr><td bgcolor="${C.accent}" style="background:${C.accent};border-radius:999px;box-shadow:0 8px 24px rgba(30,215,96,0.25)"><a href="${escapeHtml(button.href)}" style="display:inline-block;color:${C.onAccent};text-decoration:none;font-weight:800;font-size:15px;padding:13px 26px;border-radius:999px;letter-spacing:-0.01em">${escapeHtml(button.label)}</a></td></tr></table>`
     : '';
-  const kick = kicker ? `<p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${C.accent}">${escapeHtml(kicker)}</p>` : '';
+  const kick = kicker ? `<p style="margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:${C.accent}">${escapeHtml(kicker)}</p>` : '';
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;padding:0;background:${C.canvas};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${C.text}" bgcolor="${C.canvas}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.canvas}" style="background:${C.canvas};padding:32px 16px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px">
-<tr><td style="padding:0 6px 18px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.canvas}" style="background:${C.canvas};background-image:radial-gradient(60% 50% at 20% 0%,${C.canvasGlow},${C.canvas} 70%);padding:36px 16px 28px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+<tr><td style="padding:0 6px 20px">
   <table role="presentation" cellpadding="0" cellspacing="0"><tr>
     <td style="padding-right:12px"><a href="${SITE}" style="text-decoration:none"><img src="${LOGO_URL}" width="44" height="44" alt="VinaX" style="display:block;width:44px;height:44px;border-radius:12px;border:0"></a></td>
-    <td style="vertical-align:middle"><a href="${SITE}" style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${C.title};text-decoration:none">VinaX</a><br><span style="font-size:12px;color:${C.muted}">Free music, for everyone</span></td>
+    <td style="vertical-align:middle"><a href="${SITE}" style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${C.title};text-decoration:none">VinaX <span style="color:${C.accent}">Music</span></a><br><span style="font-size:12px;color:${C.muted}">Free music, for everyone</span></td>
   </tr></table>
 </td></tr>
-<tr><td bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.cardBorder};border-radius:18px;overflow:hidden">
+<tr><td bgcolor="${C.card}" style="background:${C.card};background-image:linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02));border:1px solid ${C.cardBorder};border-top-color:${C.cardEdge};border-radius:20px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.6)">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td height="4" bgcolor="${C.accent}" style="height:4px;line-height:4px;font-size:0;background:${C.accent};background-image:linear-gradient(90deg,${C.accent},${C.accent2})">&nbsp;</td></tr>
+    <tr><td height="3" bgcolor="${C.accent}" style="height:3px;line-height:3px;font-size:0;background:${C.accent};background-image:linear-gradient(90deg,${C.accent},${C.accent2})">&nbsp;</td></tr>
     <tr><td style="padding:30px 28px 28px">
       ${kick}
-      <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;color:${C.title};font-weight:800;letter-spacing:-0.01em">${escapeHtml(title)}</h1>
+      <h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;color:${C.title};font-weight:800;letter-spacing:-0.02em">${escapeHtml(title)}</h1>
       ${lines.map((l) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:${C.text}">${l}</p>`).join('\n')}
       ${btn}
     </td></tr>
   </table>
 </td></tr>
-<tr><td style="padding:18px 8px 0;font-size:12px;line-height:1.6;color:${C.muted}">${footer}<br><a href="${SITE}" style="color:${C.muted}">vinaxmusic.online</a> · Hindi, Telugu, Tamil, Punjabi and 8 more languages · free, no subscription.</td></tr>
+<tr><td style="padding:20px 8px 0;font-size:12px;line-height:1.6;color:${C.muted}">${footer}<br><a href="${SITE}" style="color:${C.muted}">vinaxmusic.online</a> · Hindi, Telugu, Tamil, Punjabi and 8 more languages · free, no subscription.</td></tr>
 </table>
 </td></tr></table></body></html>`;
 }
 
+/** A frosted box inside the card (facts, codes, numbers), as inline styles. */
+export const BOX_STYLE = `background:${C.box};background-image:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0));border:1px solid ${C.cardBorder};border-radius:14px`;
+
 const SUPPORT = 'support@vinaxmusic.online';
-const ACCOUNT_FOOTER = `You get this because this address has a <a href="${SITE}" style="color:#a899ad">VinaX</a> account. Questions? Reply to this email or write to ${SUPPORT}.`;
+const ACCOUNT_FOOTER = `You get this because this address has a <a href="${SITE}" style="color:${C.muted}">VinaX</a> account. Questions? Reply to this email or write to ${SUPPORT}.`;
 
 const firstName = (name: string | null | undefined): string | null => {
   const n = (name ?? '').trim().split(/\s+/)[0];
@@ -309,7 +321,7 @@ function factLines(f: SignInFacts): { html: string[]; text: string[] } {
   if (f.ip) rows.push(['IP address', f.ip]);
   if (place) rows.push(['Near', `${place} (approximate)`]);
   return {
-    html: [`<span style="display:block;background:${C.box};border:1px solid ${C.cardBorder};border-radius:12px;padding:12px 16px;line-height:1.8">${rows.map(([k, v]) => `<strong style="color:${C.title}">${k}:</strong> ${escapeHtml(v)}`).join('<br>')}</span>`],
+    html: [`<span style="display:block;${BOX_STYLE};padding:12px 16px;line-height:1.8">${rows.map(([k, v]) => `<strong style="color:${C.title}">${k}:</strong> ${escapeHtml(v)}`).join('<br>')}</span>`],
     text: rows.map(([k, v]) => `${k}: ${v}`),
   };
 }
@@ -355,10 +367,10 @@ export function codeEmail(to: string, code: string, reset: boolean): Email {
       title,
       lines: [
         `${why} Enter this code in VinaX to carry on:`,
-        `<span style="display:inline-block;background:${C.box};border:1px solid ${C.cardBorder};border-radius:12px;padding:12px 20px;font-size:28px;font-weight:800;letter-spacing:.3em;color:${C.title}">${escapeHtml(code)}</span>`,
+        `<span style="display:inline-block;${BOX_STYLE};padding:14px 22px;font-size:30px;font-weight:800;letter-spacing:.3em;color:${C.accent}">${escapeHtml(code)}</span>`,
         'It works for 15 minutes. If this wasn&rsquo;t you, ignore this email: nothing changes without the code.',
       ],
-      footer: `You get this because someone typed this address into <a href="${SITE}" style="color:#a899ad">VinaX</a>. Questions? Reply to this email or write to ${SUPPORT}.`,
+      footer: `You get this because someone typed this address into <a href="${SITE}" style="color:${C.muted}">VinaX</a>. Questions? Reply to this email or write to ${SUPPORT}.`,
     }),
     text: `${title}\n\n${why} Enter this code in VinaX to carry on:\n\n${code}\n\nIt works for 15 minutes. If this wasn't you, ignore this email: nothing changes without the code.`,
   };

@@ -310,7 +310,8 @@ begin
   v := weekly_summary();
   assert (v ->> 'to')::date = _ist_today() - 1 and (v ->> 'from')::date = _ist_today() - 7, 'weekly_summary: last seven whole days';
   assert (v ->> 'totalUsers') is not null and jsonb_typeof(v -> 'topSongs') = 'array' and jsonb_typeof(v -> 'topArtists') = 'array', 'weekly_summary: shape';
-  assert (v ->> 'listenSeconds') is not null and (v ->> 'atRisk') is not null and (v ->> 'errors') is not null, 'weekly_summary: totals';
+  -- version 26: atRisk is null here (the Worker reads stats_at_risk on its own).
+  assert (v ->> 'listenSeconds') is not null and (v ->> 'errors') is not null, 'weekly_summary: totals';
   v := weekly_summary(_ist_today() + 1);
   assert (v ->> 'activeUsers')::int >= 1 and (v ->> 'plays')::int >= 1 and (v ->> 'listenSeconds')::int > 0, 'weekly_summary: a week that includes today';
   assert jsonb_array_length(v -> 'topSongs') >= 1 and (v ->> 'totalUsers')::int >= 1 and (v ->> 'newUsers')::int >= 1, 'weekly_summary: top songs, users';

@@ -1,5 +1,12 @@
 import type { Song } from '@/types';
 import type { Mood } from '@/services/recommendation/mood';
+import { MOOD_ENERGY } from '@/services/personalization/session';
+
+/** 1.19 — the listener's Discovery setting, as the scorer reads it. */
+export type DiscoveryLean = 'familiar' | 'balanced' | 'discover';
+/** Sources that bring NEW music (as against the listener's own likes and plays). */
+const NEW_MUSIC_SOURCES: ReadonlySet<Source> = new Set<Source>(['related-artist', 'genre', 'explore', 'anchor']);
+const OWN_MUSIC_SOURCES: ReadonlySet<Source> = new Set<Source>(['liked', 'favourite-play', 'liked-artist', 'liked-similar']);
 
 /**
  * V2 — the pure rules of the Up Next engine: what may be picked, how a
@@ -109,6 +116,14 @@ export interface ScoreContext {
    * the listener switched the awareness off.
    */
   moment?: { languages: ReadonlySet<string>; artists: ReadonlySet<string>; confidence: number };
+  /**
+   * 1.19 — Discovery (Settings › Recommendations): `familiar` leans on the
+   * listener's own likes and plays, `discover` on music they have not heard,
+   * `balanced` (the default) does neither.
+   */
+  discovery?: DiscoveryLean;
+  /** 1.19 — this year: a song from this year or last is fresh (a small lift, larger on `discover`). */
+  year_now?: number;
   salt: number;
 }
 
@@ -126,7 +141,18 @@ export const WEIGHTS = Object.freeze({
   jitter: 0.12,
   /** 1.12 — a song by an artist, or in a language, the listener plays at this time of day. */
   moment: 0.3,
+  /** 1.19 — a song from this year or last. */
+  fresh: 0.08,
+  /** 1.19 — how far the Discovery setting moves a source's standing. */
+  lean: 0.2,
+  /** 1.19 — how much a jump in energy between one song and the next costs when a stretch is put in order. */
+  flow: 0.35,
 });
+
+/** 1.19 — a song's place on the calm-to-energetic axis (0..1), from its mood. */
+export function energyOf(mood: Mood): number {
+  return MOOD_ENERGY[mood] ?? 0.5;
+}
 
 export function scoreCandidate(c: Candidate, x: ScoreContext): number {
   const song = c.song;
@@ -150,6 +176,15 @@ export function scoreCandidate(c: Candidate, x: ScoreContext): number {
     const fit = x.moment.artists.has(lead) ? 1 : l && x.moment.languages.has(l) ? 0.4 : 0;
     score += WEIGHTS.moment * x.moment.confidence * fit;
   }
+  // 1.19 — Discovery: lean toward the listener's own music, or away from it.
+  if (x.discovery && x.discovery !== 'balanced') {
+    const own = [...c.sources].some((s) => OWN_MUSIC_SOURCES.has(s));
+    const fresh = [...c.sources].some((s) => NEW_MUSIC_SOURCES.has(s)) && !x.likedIds.has(song.id) && !liked;
+    if (x.discovery === 'familiar') score += own ? WEIGHTS.lean : fresh ? -WEIGHTS.lean : 0;
+    else score += fresh ? WEIGHTS.lean : own ? -WEIGHTS.lean * 0.5 : 0;
+  }
+  // 1.19 — a new release gets a small lift (a larger one when the listener wants new music).
+  if (x.year_now && Number.isFinite(year) && year >= x.year_now - 1) score += WEIGHTS.fresh * (x.discovery === 'discover' ? 2 : 1);
   score += WEIGHTS.jitter * jitter(song.id, x.salt);
   return score;
 }
@@ -248,12 +283,29 @@ export const SPACING_STEPS: readonly Spacing[] = Object.freeze([SPACING, { gap: 
  * step (the last step — any order, albums included — only when nothing else
  * is left), and says so in `relaxed`.
  */
-export function pickSequence(ranked: readonly Song[], before: readonly Song[], n: number, keyOf: (s: Song) => string): { songs: Song[]; relaxed: string[] } {
+/**
+ * 1.19 — flow: with `scoreOf` and `energyOf`, each slot weighs the best few
+ * allowed candidates (`look`) and takes the one whose energy sits closest to
+ * the song before it, so a stretch rises and falls instead of lurching from a
+ * ballad to a dance number and back. Without them the best score wins.
+ */
+export interface SequenceFlow {
+  scoreOf: (s: Song) => number;
+  energyOf: (s: Song) => number;
+  /** How many of the best allowed candidates a slot weighs. */
+  look?: number;
+  /** The cost of a full 0→1 energy jump, in score. */
+  flow?: number;
+}
+
+export function pickSequence(ranked: readonly Song[], before: readonly Song[], n: number, keyOf: (s: Song) => string, flow?: SequenceFlow): { songs: Song[]; relaxed: string[] } {
   const out: Song[] = [];
   const relaxed: string[] = [];
   const used = new Set<string>();
   const usedKeys = new Set<string>();
   const context = before.slice(-12);
+  const look = Math.max(1, flow?.look ?? 8);
+  const cost = flow?.flow ?? WEIGHTS.flow;
   for (let slot = 0; slot < n; slot += 1) {
     let chosen: Song | null = null;
     for (let step = 0; step < SPACING_STEPS.length && !chosen; step += 1) {
@@ -262,15 +314,28 @@ export function pickSequence(ranked: readonly Song[], before: readonly Song[], n
       const recentLeads = rule.gap > 0 ? seq.slice(-rule.gap).map(leadOf) : [];
       const lastTen = seq.slice(-9).map(leadOf);
       const prevAlbum = seq[seq.length - 1]?.album?.id ?? null;
+      const prev = seq[seq.length - 1];
+      const prevEnergy = flow && prev ? flow.energyOf(prev) : null;
+      let best: { song: Song; value: number } | null = null;
+      let seen = 0;
       for (const song of ranked) {
         if (used.has(song.id) || usedKeys.has(keyOf(song))) continue;
         const lead = leadOf(song);
         if (lead && recentLeads.includes(lead)) continue;
         if (lead && lastTen.filter((l) => l === lead).length >= rule.maxPerTen) continue;
         if (prevAlbum && song.album?.id === prevAlbum && step < SPACING_STEPS.length - 1) continue;
-        chosen = song;
+        if (!flow) {
+          best = { song, value: 0 };
+          break;
+        }
+        const value = flow.scoreOf(song) - (prevEnergy === null ? 0 : cost * Math.abs(flow.energyOf(song) - prevEnergy));
+        if (!best || value > best.value) best = { song, value };
+        seen += 1;
+        if (seen >= look) break;
+      }
+      if (best) {
+        chosen = best.song;
         if (step > 0 && !relaxed.includes(`spacing-${step}`)) relaxed.push(`spacing-${step}`);
-        break;
       }
     }
     if (!chosen) break;

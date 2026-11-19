@@ -448,7 +448,7 @@ export function AppLayout() {
       const start = (document as { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition;
       if (!was || was === next || typeof start !== 'function' || reducedMotion()) return paint();
       root.classList.add('vx-theme-vt');
-      start.call(document, paint).finished.finally(() => root.classList.remove('vx-theme-vt'));
+      start.call(document, paint).finished.catch(() => undefined).finally(() => root.classList.remove('vx-theme-vt'));
     };
     apply();
     document.documentElement.dataset.density = density;

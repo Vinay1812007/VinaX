@@ -51,7 +51,8 @@
  * streams: joining failed and nobody but the host heard anything.
  */
 import { getSong } from '@/services/api';
-import { audioEngine } from '@/services/audio/engine';
+import { audioEngine, orderedSources } from '@/services/audio/engine';
+import { useSettingsStore } from '@/store/settingsStore';
 import {
   createRoom,
   endRoom,
@@ -880,7 +881,12 @@ function runGuest(code: string): () => void {
     const next = r.queue?.[0]?.song;
     if (next?.id && !fetched.has(next.id)) {
       fetched.add(next.id);
-      void fullSong(next);
+      // 1.19 — and start buffering its audio: when the host moves on, this
+      // phone has the first seconds already and comes in with the host
+      // instead of a second or two behind (the gap phones felt most).
+      void fullSong(next).then((song) => {
+        if (song && alive && useTogether.getState().onThisPhone) audioEngine.preloadNext(orderedSources(song, useSettingsStore.getState().audioQuality)[0] ?? null);
+      });
     }
     if (behind) {
       clock.sync(d);

@@ -27,6 +27,7 @@ import {
   LIKED_COOLDOWN_MS,
   PLAYED_COOLDOWN_MS,
   SERVED_COOLDOWN_MS,
+  energyOf,
   languageOf,
   leadOf,
   medianYear,
@@ -37,6 +38,7 @@ import {
   type FilterContext,
   type RejectReason,
   type ScoreContext,
+  type SequenceFlow,
   type Source,
 } from './rules';
 import { planLookups, planWideLookups, runLookups, type CatalogueApi, type Fetched } from './sources';
@@ -257,6 +259,9 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     exposure: (s) => ledger.penalty(songKey(s)) * (likedIds.has(s.id) ? 0.25 : 1),
     ...(tune ? { tune: (s: Song) => tuneScoreAdjust(s, tune, languages[0] ?? null) } : {}),
     ...(moment?.confidence ? { moment: { languages: new Set(moment.languages), artists: new Set(moment.artists.map((a) => a.key)), confidence: moment.confidence } } : {}),
+    // 1.19 — the Discovery setting leans the ranking; this year marks a fresh release.
+    discovery: ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced'),
+    year_now: new Date(now).getFullYear(),
     salt: ctx.salt ?? 0,
   };
   return {
@@ -310,17 +315,28 @@ function filterFor(env: Env, queued: { ids: ReadonlySet<string>; keys: ReadonlyS
   };
 }
 
+/** The score each candidate had in the last ranking (1.19: the flow picker weighs it against the energy step). */
+const lastScores = new Map<string, number>();
+
 /** The pool's usable candidates under a filter, best first. */
 function rank(p: Pool, env: Env, filter: FilterContext): Candidate[] {
   const scored: Array<{ c: Candidate; s: number }> = [];
   const downloads = useDownloadsStore.getState().items;
+  lastScores.clear();
   for (const c of p.items.values()) {
     if (c.unplayable && !downloads[c.song.id]) continue;
     if (rejectReason(c.song, filter) !== null) continue;
-    scored.push({ c, s: scoreCandidate(c, env.score) });
+    const s = scoreCandidate(c, env.score);
+    lastScores.set(c.song.id, s);
+    scored.push({ c, s });
   }
   scored.sort((a, b) => b.s - a.s);
   return scored.map((x) => x.c);
+}
+
+/** 1.19 — how a stretch is put in order: best score, nudged toward a smooth energy curve. */
+function flowFor(env: Env): SequenceFlow {
+  return { scoreOf: (s) => lastScores.get(s.id) ?? 0, energyOf: (s) => energyOf(env.score.moodOf(s)) };
 }
 
 /** The liked songs and the listener's repeat plays, straight into the pool (no network). */
@@ -412,7 +428,7 @@ function publishDebug(p: Pool, env: Env, filter: FilterContext, songs: Song[], r
       songs.map((song, i) => ({ position: i + 1, rank: rankOf.get(song.id), song, finalScore: scoreOf.get(song.id) ?? 0, source: sourceOf(song.id), components: [], picker: 'local' as const })),
       {
         trace: {
-          mode: 'balanced',
+          mode: env.score.discovery ?? 'balanced',
           shape: env.mood ?? 'steady',
           lock: env.languages[0] ?? null,
           languagePolicy: env.languages.length > 1 ? 'prefer' : 'lock',
@@ -493,7 +509,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const relaxed: string[] = [];
   const attempt = (relax: Relax = {}): { songs: Song[]; relaxed: string[]; usable: number; ranked: Song[] } => {
     const ranked = rank(p, env, filterFor(env, queued, relax)).map((c) => c.song);
-    const picked = pickSequence(ranked, before, limit, songKey);
+    const picked = pickSequence(ranked, before, limit, songKey, flowFor(env));
     return { ...picked, usable: ranked.length, ranked };
   };
 
@@ -590,7 +606,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       played: playedMap(ctx.history ?? [], songKey, now),
     };
     const ranked = rank(p, live, filterFor(live, { ids, keys }));
-    const picked = pickSequence(ranked.map((c) => c.song), [...before, ...songs, seedNow], Math.min(n, 12), songKey).songs;
+    const picked = pickSequence(ranked.map((c) => c.song), [...before, ...songs, seedNow], Math.min(n, 12), songKey, flowFor(live)).songs;
     if (ranked.length - picked.length < POOL_LOW_WATER) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
     return picked;
   };

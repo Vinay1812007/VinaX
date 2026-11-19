@@ -30,7 +30,7 @@ interface WindowEntry {
 /** Coarse energy per mood — no audio analysis available, so we map the
  *  keyword-inferred mood onto an energy axis. Energetic songs sit high,
  *  melancholy low; neutral stays mid so it never skews a run. */
-const MOOD_ENERGY: Record<Mood, number> = {
+export const MOOD_ENERGY: Record<Mood, number> = {
   energetic: 0.9,
   romantic: 0.55,
   devotional: 0.45,

@@ -68,6 +68,9 @@
     if (/push|notification|fcm|messaging|vapid/.test(text)) {
       if (/not supported|unsupported|not available/.test(text)) return { category: 'notifications', what: android ? 'Notifications not supported on this Android version' : 'Notifications not supported on this device or browser' };
       if (/denied|permission|blocked/.test(text)) return { category: 'notifications', what: 'Notifications were blocked on the device' };
+      // 1.19 — Firebase's own answers, so the owner knows which is theirs to fix.
+      if (/fis_auth_error|authentication_failed/.test(text)) return { category: 'notifications', what: 'Notifications blocked by Firebase: the app’s key may not use the Installations API (Google Cloud → Credentials → allow Firebase Installations and Cloud Messaging APIs)' };
+      if (/service_not_available/.test(text)) return { category: 'notifications', what: 'Notifications could not register: Google Play services had no connection to Firebase at the time' };
       return { category: 'notifications', what: 'Notifications could not be set up' };
     }
     if (/play|audio|media|decode|notallowederror|src not supported|no supported source|buffer|stream/.test(text)) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
-import { inferContext, isQueueContext, queueInsertAt, shuffledStart, shuffleUpcoming, unshuffleUpcoming, type QueueRun } from './queueOrder';
+import { inferContext, isQueueContext, queueInsertAt, shuffledStart, shuffleUpcoming, spreadArtists, unshuffleUpcoming, type QueueRun } from './queueOrder';
 
 const song = (id: string): Song => ({
   kind: 'song', id, title: id, subtitle: '', artists: [], album: null,
@@ -72,5 +72,17 @@ describe('inferContext — Playing from', () => {
     expect(isQueueContext({ kind: 'album', label: '' })).toBe(false);
     expect(isQueueContext({ kind: 'nope', label: 'X' })).toBe(false);
     expect(isQueueContext({ kind: 'page', label: 'X', path: 'https://evil' })).toBe(false);
+  });
+});
+
+describe('spreadArtists (1.19)', () => {
+  it('keeps one artist\'s songs apart when another artist can sit between them', () => {
+    const out = spreadArtists(['a1', 'a2', 'b1', 'a3', 'c1'], (x) => x[0]);
+    expect(out).toEqual(['a1', 'b1', 'a2', 'c1', 'a3']);
+  });
+  it('leaves a list alone when no artist repeats, and when nothing can be swapped in', () => {
+    expect(spreadArtists(['a1', 'b1', 'c1'], (x) => x[0])).toEqual(['a1', 'b1', 'c1']);
+    expect(spreadArtists(['a1', 'a2', 'a3'], (x) => x[0])).toEqual(['a1', 'a2', 'a3']);
+    expect(spreadArtists(['', '', 'b1'], (x) => x[0] ?? '')).toEqual(['', '', 'b1']);
   });
 });

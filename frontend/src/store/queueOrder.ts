@@ -44,6 +44,30 @@ export function shuffleSongs<T>(items: readonly T[], rand: () => number = Math.r
   return out;
 }
 
+/** The lead artist a shuffle keeps apart (the same key the Up Next rules use). */
+function leadKey(song: Song): string {
+  return (song.artists?.[0]?.name ?? song.subtitle?.split(',')[0] ?? '').trim().toLowerCase();
+}
+
+/**
+ * 1.19 — a shuffle that keeps one artist's songs apart. After the shuffle,
+ * every song that would follow another by the same artist is swapped with
+ * the next song by someone else (when there is one), so a playlist with
+ * three songs by one singer does not play them back to back. Stable for
+ * everything else: no other order changes.
+ */
+export function spreadArtists<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const out = [...items];
+  for (let i = 1; i < out.length; i += 1) {
+    const key = keyOf(out[i]);
+    if (!key || key !== keyOf(out[i - 1])) continue;
+    const j = out.findIndex((x, n) => n > i && keyOf(x) !== key);
+    if (j < 0) break;
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 function split(tail: readonly Song[], runOf: (id: string) => QueueRun): Record<QueueRun, Song[]> {
   const runs: Record<QueueRun, Song[]> = { manual: [], list: [], auto: [] };
   for (const s of tail) runs[runOf(s.id)].push(s);
@@ -53,7 +77,7 @@ function split(tail: readonly Song[], runOf: (id: string) => QueueRun): Record<Q
 /** Shuffle switched on: the list after the current song is shuffled; adds stay first, Autoplay last. */
 export function shuffleUpcoming(queue: readonly Song[], index: number, runOf: (id: string) => QueueRun, rand: () => number = Math.random): Song[] {
   const runs = split(queue.slice(index + 1), runOf);
-  return [...queue.slice(0, index + 1), ...runs.manual, ...shuffleSongs(runs.list, rand), ...runs.auto];
+  return [...queue.slice(0, index + 1), ...runs.manual, ...spreadArtists(shuffleSongs(runs.list, rand), leadKey), ...runs.auto];
 }
 
 /**

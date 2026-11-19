@@ -12,7 +12,7 @@ it('migrates retired queue and Home controls while preserving listener preferenc
   }));
   await useSettingsStore.persist.rehydrate();
   const saved = JSON.parse(localStorage.getItem(KEYS.settings) ?? '{}');
-  expect(saved.version).toBe(7);
+  expect(saved.version).toBe(8);
   expect(localStorage.getItem('vinax.home.shown.v1')).toBeNull();
   expect(localStorage.getItem('vinax.aihome.recent.v1')).toBeNull();
   // 1.15.1 — a record from before 1.15 keeps its theme choice.

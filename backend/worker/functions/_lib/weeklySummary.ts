@@ -13,7 +13,7 @@
  */
 import { ownerEmails } from './adminAuth';
 import { db, q, type DbEnv } from './db';
-import { CONSOLE, emailConfigured, emailSettingsOf, escapeHtml, layout, sendEmail, type Email, type EmailEnv, type SendResult } from './email';
+import { BOX_STYLE, C, CONSOLE, emailConfigured, emailSettingsOf, escapeHtml, layout, sendEmail, type Email, type EmailEnv, type SendResult } from './email';
 import { setting } from './settings';
 
 export interface WeeklyRow { title?: string; artist: string; plays: number; people: number }
@@ -32,7 +32,8 @@ export interface WeeklySummary {
   listenSecondsPrev: number;
   topSongs: WeeklyRow[];
   topArtists: WeeklyRow[];
-  atRisk: number;
+  /** Null when the At risk count could not be read in time (schema 26: it is asked for separately). */
+  atRisk: number | null;
   errors: number;
   errorsPrev: number;
   feedback: number;
@@ -41,6 +42,8 @@ export interface WeeklySummary {
 const IST_MS = 330 * 60_000;
 export const SEND_HOUR_IST = 9;
 export const SENT_MARKER = 'weekly-summary-sent';
+/** Failed reads in one week before the job stops trying until the next. */
+export const GIVE_UP_AFTER = 3;
 
 /** The India-time date (YYYY-MM-DD) of the Monday that starts the week holding `now`. */
 export function mondayOf(now: number): string {
@@ -100,16 +103,16 @@ export function weeklySummaryEmail(to: string | string[], s: WeeklySummary, opts
   ];
   const tileHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 8px">${
     [0, 2].map((i) => `<tr>${tiles.slice(i, i + 2).map(([k, v, c]) =>
-      `<td width="48%" style="background:#241a2b;border:1px solid #2b2033;border-radius:12px;padding:12px 14px;vertical-align:top"><span style="display:block;font-size:12px;color:#a899ad">${escapeHtml(k)}</span><strong style="display:block;font-size:22px;line-height:1.3;color:#fff4ea">${escapeHtml(v)}</strong><span style="display:block;font-size:12px;color:${c.startsWith('▼') ? '#ff6384' : '#5ad39a'}">${escapeHtml(c)}</span></td>`,
+      `<td width="48%" style="${BOX_STYLE};padding:12px 14px;vertical-align:top"><span style="display:block;font-size:12px;color:${C.muted}">${escapeHtml(k)}</span><strong style="display:block;font-size:22px;line-height:1.3;color:${C.title}">${escapeHtml(v)}</strong><span style="display:block;font-size:12px;color:${c.startsWith('▼') ? C.danger : C.accent}">${escapeHtml(c)}</span></td>`,
     ).join('<td width="4%" style="font-size:0;line-height:0">&nbsp;</td>')}</tr>`).join('')
   }</table>`;
   const list = (title: string, rows: WeeklyRow[], label: (r: WeeklyRow) => string): string =>
     rows.length
-      ? `<strong>${escapeHtml(title)}</strong><br>${rows.map((r, i) => `${i + 1}. ${escapeHtml(label(r))} <span style="color:#a899ad">· ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? 'person' : 'people'}</span>`).join('<br>')}`
-      : `<strong>${escapeHtml(title)}</strong><br><span style="color:#a899ad">Nothing played last week.</span>`;
+      ? `<strong>${escapeHtml(title)}</strong><br>${rows.map((r, i) => `${i + 1}. ${escapeHtml(label(r))} <span style="color:${C.muted}">· ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? 'person' : 'people'}</span>`).join('<br>')}`
+      : `<strong>${escapeHtml(title)}</strong><br><span style="color:${C.muted}">Nothing played last week.</span>`;
   const songLabel = (r: WeeklyRow): string => `${r.title ?? 'Unknown song'} — ${r.artist}`;
   const health = [
-    `${fmtInt(s.atRisk)} ${s.atRisk === 1 ? 'regular listener has' : 'regular listeners have'} not been back for a week (At risk).`,
+    s.atRisk === null ? 'The At risk count was not ready in time this week (the console has it).' : `${fmtInt(s.atRisk)} ${s.atRisk === 1 ? 'regular listener has' : 'regular listeners have'} not been back for a week (At risk).`,
     `${fmtInt(s.errors)} app ${s.errors === 1 ? 'error' : 'errors'} (${change(s.errors, s.errorsPrev).replace(' vs last week', '')}) and ${fmtInt(s.feedback)} new feedback ${s.feedback === 1 ? 'message' : 'messages'}.`,
     `${fmtInt(s.totalUsers)} people have signed in to VinaX so far.`,
   ];
@@ -159,9 +162,17 @@ const rows = (v: unknown): WeeklyRow[] => (Array.isArray(v) ? v : []).slice(0, 5
 
 /** weekly_summary() for the week before `monday` (YYYY-MM-DD, India time). */
 export async function readWeeklySummary(env: DbEnv, monday: string): Promise<{ ok: true; value: WeeklySummary } | { ok: false; error: string }> {
-  const r = await db.rpc<Record<string, unknown>>(env, 'weekly_summary', { p_to: monday }, { timeoutMs: 60_000 });
+  // Schema 26 — the numbers and the At risk count are two calls: At risk scans
+  // 120 days of listening and used to push the whole read past its timeout
+  // (the job failed every hour of the week). A slow At risk now costs one line.
+  const [r, risk] = await Promise.all([
+    db.rpc<Record<string, unknown>>(env, 'weekly_summary', { p_to: monday }, { timeoutMs: 60_000 }),
+    db.rpc<Record<string, unknown>>(env, 'stats_at_risk', { p_quiet_days: 7, p_limit: 1 }, { timeoutMs: 25_000 }),
+  ]);
   if (!r.ok) return { ok: false, error: r.error };
   const v = r.value ?? {};
+  const atRiskRaw = v.atRisk ?? (risk.ok ? risk.value?.total : null);
+  const atRisk = atRiskRaw === null || atRiskRaw === undefined ? null : num(atRiskRaw);
   return {
     ok: true,
     value: {
@@ -171,7 +182,7 @@ export async function readWeeklySummary(env: DbEnv, monday: string): Promise<{ o
       plays: num(v.plays), playsPrev: num(v.playsPrev),
       listenSeconds: num(v.listenSeconds), listenSecondsPrev: num(v.listenSecondsPrev),
       topSongs: rows(v.topSongs), topArtists: rows(v.topArtists),
-      atRisk: num(v.atRisk), errors: num(v.errors), errorsPrev: num(v.errorsPrev), feedback: num(v.feedback),
+      atRisk, errors: num(v.errors), errorsPrev: num(v.errorsPrev), feedback: num(v.feedback),
     },
   };
 }
@@ -204,6 +215,10 @@ export async function runWeeklySummary(env: EmailEnv, now = Date.now()): Promise
   if (!week) return { skipped: 'not due', nextFor: mondayOf(now) };
   const to = await weeklyRecipients(env, raw);
   if (!to.length) return { skipped: 'no recipient' };
+  // 1.19 — three failed reads in one week are enough: the job stops trying
+  // until next Monday instead of failing (and alerting) every hour.
+  const tries = await db.select<{ id: number }>(env, 'job_runs', q().eq('job', 'weekly-summary').is('ok', 'false').gte('started_at', `${week}T00:00:00Z`).select('id').limit(GIVE_UP_AFTER));
+  if (tries.ok && tries.rows.length >= GIVE_UP_AFTER) return { skipped: `gave up for the week of ${week}: the numbers could not be read ${GIVE_UP_AFTER} times` };
   const data = await readWeeklySummary(env, week);
   if (!data.ok) throw new Error(`weekly-summary: numbers unreadable (${data.error})`);
   const sent = await sendEmail(env, weeklySummaryEmail(to, data.value));

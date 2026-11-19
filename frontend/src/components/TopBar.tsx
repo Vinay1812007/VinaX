@@ -109,8 +109,10 @@ export function WindowBar({ onCommands }: { onCommands: () => void }) {
   const onSearch = pathname.startsWith('/search');
   return (
     <header className="vx-winbar" aria-label="VinaX">
-      <Link to="/" className="vx-winbar-brand" aria-label="VinaX home">
+      <Link to="/" className="vx-winbar-brand" aria-label="VinaX Music home">
         <img src="/icons/icon.svg?v=14" alt="" width={32} height={32} />
+        {/* 1.19 — the app's name beside the mark. */}
+        <span className="vx-wordmark" aria-hidden>VinaX <em>Music</em></span>
       </Link>
       <nav aria-label="Main navigation" className="vx-winbar-nav">
         <NavLink to="/" end aria-label={t('Home')} title={t('Home')} className={({ isActive }) => cn('vx-winbar-home', isActive && 'is-active')}>
@@ -184,7 +186,11 @@ export function TopBar({ onCommands, windowBar }: { onCommands: () => void; wind
           <IconButton size="sm" label="Go forward" onClick={() => navigate(1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
         </div>
       ) : (
-        <Link to="/" aria-label="VinaX home" className="shrink-0"><img src="/icons/icon.svg?v=14" alt="" width={28} height={28} /></Link>
+        <Link to="/" aria-label="VinaX Music home" className="vx-topbar-brand shrink-0">
+          <img src="/icons/icon.svg?v=14" alt="" width={28} height={28} />
+          {/* 1.19 — on Home the bar carries the app's name; elsewhere the page's name takes the room. */}
+          {pathname === '/' && <span className="vx-wordmark" aria-hidden>VinaX <em>Music</em></span>}
+        </Link>
       )}
       {pagePlay && (
         // A mouse shortcut that repeats the page's own play button (which keyboards and screen readers use), so it stays out of both.
@@ -192,7 +198,7 @@ export function TopBar({ onCommands, windowBar }: { onCommands: () => void; wind
           <PlayIcon className="w-5 h-5" />
         </button>
       )}
-      <span className="vx-topbar-context">{title}</span>
+      {!(pathname === '/' && !windowBar) && <span className="vx-topbar-context">{title}</span>}
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />

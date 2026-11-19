@@ -280,9 +280,10 @@
 }
 .vx-home .vxh-disc svg { width: 14px; height: 14px; margin-left: 2px; }
 .vx-home .vxh-tile:hover .vxh-disc, .vx-home .vxh-tile:focus-visible .vxh-disc { opacity: 1; transform: none; }
-/* Beside the hero, the panel is a two-column list of eight. */
+/* 1.19 — the panel runs the full width since 2.0 (it used to sit beside the
+   hero as a two-column list), so a wide Home shows four tiles across, not two
+   stretched ones. */
 @container home (min-width: 1180px) {
-  .vx-home .vxh-jump .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vx-home .vxh-jump .vxh-tile.is-wide-only { display: flex; }
 }
 
@@ -427,6 +428,11 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   scrollbar-width: none;
 }
 .vx-home .vxh-chips::-webkit-scrollbar { display: none; }
+/* 1.19 — on a computer the chips wrap onto a second line instead of running
+   off the edge with no way to tell more were there. Phones keep the swipe. */
+@media (min-width: 1024px) {
+  .vx-home .vxh-chips { flex-wrap: wrap; row-gap: 8px; margin-inline: 0; padding-inline: 0; overflow: visible; }
+}
 /* 15.0 — the same chips as a row under the greeting; off unless the app
    style asks for it (templates/verdant.css, monsoon.css, onyx.css). */
 .vx-home .vxh-topchips { display: none; margin-bottom: 20px; }

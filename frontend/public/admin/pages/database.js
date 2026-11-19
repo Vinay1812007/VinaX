@@ -107,7 +107,9 @@
           var toggle = ui.toggle('', j.enabled, function (on) { return save(j, { enabled: on }, j.label + (on ? ' switched on' : ' switched off')); }, { 'aria-label': 'Run ' + j.label + ' automatically', disabled: !owner });
           var choices = arr(j.choices).length ? arr(j.choices) : [j.every];
           var sched = ui.dropdown('How often', choices.map(function (m) { return { value: m, label: everyLabel(m) + (m === j.defaultEvery ? ' (normal)' : '') }; }), j.every, function (v) { save(j, { every: Number(v) }, j.label + ': ' + everyLabel(Number(v)).toLowerCase()); }, { disabled: !owner });
-          var last = j.neverRan ? h('span.muted', 'Not run yet') : h('span', j.ok === true ? ui.pill('✓ Worked', 'ok') : j.ok === false ? ui.pill('✗ Failed', 'bad') : ui.pill('Still running'), ' ', ui.ago(j.lastAt));
+          // 1.19 — a run with no end for more than 20 minutes did not finish (the server stopped it): it is not "still running".
+          var stale = j.ok == null && j.lastAt && (Date.now() - Date.parse(j.lastAt)) > 20 * 60 * 1000;
+          var last = j.neverRan ? h('span.muted', 'Not run yet') : h('span', j.ok === true ? ui.pill('✓ Worked', 'ok') : j.ok === false ? ui.pill('✗ Failed', 'bad') : stale ? ui.pill('✗ Did not finish', 'bad') : ui.pill('Still running'), ' ', ui.ago(j.lastAt));
           var problem = j.ok === false && j.summary && j.summary.error ? h('p.small.job-problem', 'What went wrong: ' + fmt.trunc(String(j.summary.error), 160)) : null;
           return ui.card({ title: j.label, sub: j.about, tone: j.overdue ? 'warn' : null,
             actions: [h('label.job-switch', h('span.muted.small', j.enabled ? 'On' : 'Off'), toggle)],

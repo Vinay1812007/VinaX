@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router-dom';
-import type { Video } from '@/services/api/videos';
+import { qualityBadge, qualityLabel, type Video } from '@/services/api/videos';
+import { autoTarget, availableRenditions, pickRendition, readPreference, writePreference, type QualityPreference, type Rendition } from '@/services/canvas/quality';
 import { useLibraryStore } from '@/store/libraryStore';
 import { isFavoriteIn } from '@/utils/favIndex';
 import { languageLabel } from '@/constants/languages';
@@ -51,8 +52,36 @@ export interface ReelCardProps {
 export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
   const { video, index, total, active, next, near, muted, reduceMotion, hint } = props;
   const ref = useRef<HTMLVideoElement>(null);
-  const sources = reelSources(video);
+  // 1.19 — the clip's renditions (4K, 1080p, 720p, 540p… whichever the CDN
+  // has), probed once per clip; Auto picks for the screen, or the viewer pins
+  // one from the rail and keeps it for every reel.
+  const [renditions, setRenditions] = useState<Rendition[] | null>(null);
+  const [pref, setPref] = useState<QualityPreference>(readPreference);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const resumeAt = useRef(0);
+  useEffect(() => {
+    if (!near || !video.previewUrl) return;
+    let on = true;
+    void availableRenditions(video.previewUrl).then((list) => {
+      if (on) setRenditions(list);
+    });
+    return () => {
+      on = false;
+    };
+  }, [near, video.previewUrl]);
+  const chosen = renditions ? pickRendition(renditions, pref, autoTarget()) : null;
+  const sources = useMemo(() => reelSources(video, chosen?.url ?? null), [video, chosen?.url]);
   const [srcIdx, setSrcIdx] = useState(0);
+  // A new choice starts again from its first source, where the clip left off.
+  useEffect(() => {
+    setSrcIdx(0);
+  }, [chosen?.url]);
+  const chooseQuality = (p: QualityPreference): void => {
+    resumeAt.current = ref.current?.currentTime ?? 0;
+    writePreference(p);
+    setPref(p);
+    setQualityOpen(false);
+  };
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
@@ -62,6 +91,8 @@ export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
   const liked = useLibraryStore((s) => video.songIds.some((id) => isFavoriteIn(s.favorites, id)));
   const src = sources[srcIdx] ?? null;
   const mounted = active || next;
+  const playingHeight = renditions?.find((r) => r.url === src)?.height ?? 0;
+  const pickable = (renditions ?? []).filter((r) => r.height > 0);
 
   useEffect(() => () => {
     if (singleTimer.current != null) window.clearTimeout(singleTimer.current);
@@ -153,6 +184,17 @@ export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
             loop={reduceMotion}
             disablePictureInPicture
             aria-label={`${video.title} video`}
+            onLoadedMetadata={(e) => {
+              // A quality change remounts the element: carry on where the clip was.
+              if (resumeAt.current > 0) {
+                try {
+                  e.currentTarget.currentTime = resumeAt.current;
+                } catch {
+                  /* not seekable yet */
+                }
+                resumeAt.current = 0;
+              }
+            }}
             onPlaying={() => {
               setPaused(false);
               props.onPlaying(video);
@@ -221,6 +263,33 @@ export const ReelCard = memo(function ReelCard(props: ReelCardProps) {
             <ShareIcon className="w-6 h-6" />
             <span aria-hidden>Share</span>
           </button>
+          {pickable.length > 0 && (
+            <div className="vx-flow-quality">
+              <button
+                type="button"
+                className="vx-flow-action"
+                aria-label={`Video quality: ${pref === 'auto' ? 'Auto' : qualityLabel(pref)}${playingHeight ? `, playing ${qualityLabel(playingHeight)}` : ''}`}
+                aria-haspopup="menu"
+                aria-expanded={qualityOpen}
+                onClick={() => setQualityOpen((o) => !o)}
+              >
+                <span className="vx-flow-quality-badge" aria-hidden>{playingHeight ? qualityBadge(playingHeight) : 'SD'}</span>
+                <span aria-hidden>Quality</span>
+              </button>
+              {qualityOpen && (
+                <div role="menu" aria-label="Video quality" className="vx-flow-quality-menu">
+                  <button type="button" role="menuitemradio" aria-checked={pref === 'auto'} onClick={() => chooseQuality('auto')}>
+                    Auto{pref === 'auto' && playingHeight ? ` · ${qualityBadge(playingHeight)}` : ''}
+                  </button>
+                  {pickable.map((r) => (
+                    <button key={r.height} type="button" role="menuitemradio" aria-checked={pref === r.height} onClick={() => chooseQuality(r.height)}>
+                      {qualityLabel(r.height)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

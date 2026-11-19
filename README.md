@@ -37,8 +37,8 @@ This README is the only document in the repository. Version source of truth: `fr
 ## What a listener gets
 
 - **Account.** Google or email and password sign-in. Library, history, taste and settings live on the device and sync to the account. Discover, Charts, Search and entity pages work signed out.
-- **Self-building queue.** Up Next fills five songs at a time. Radio, Tune this queue (Familiar / Balanced / Discover) and Never repeat control the picks.
-- **Player.** Synced lyrics, sleep timer, crossfade, loudness normalisation, casting, drive mode, disco lights, karaoke, video clips, and **Flow** (music videos one per screen, in the listener's languages).
+- **Self-building queue.** Up Next fills five songs at a time. Radio, Tune this queue, Discovery (Familiar / Balanced / Discover leans the ranking toward the listener's own music or toward new music) and Never repeat control the picks; each stretch follows a smooth energy curve, and Shuffle keeps one artist's songs apart.
+- **Player.** Synced lyrics, sleep timer, crossfade (off by default since 1.19: on, it handed every song over five seconds early), loudness normalisation, casting, drive mode, disco lights, karaoke, video clips, and **Flow** (music videos one per screen, in the listener's languages, with a quality picker: Auto or any rendition the clip CDN has, 4K down to 360p).
 - **Library.** Favourites, playlists, Listen Later, smart collections, Your VinaX stats, and one-file backup with merge, replace and Undo.
 - **VinaX AI** at `/vinaxai`: an opt-in chat assistant, and the only place with AI ([VinaX AI](#vinax-ai)). Up Next, Radio, Home, playlists and lyrics run on the device or through plain catalogue lookups; no listening data goes to an AI service.
 - **Friends.** Public profiles `/u/<handle>`, follows, Blend, shared playlists, and **Listen Together** jam rooms (a shared queue; mutual followers can **Join**).
@@ -85,7 +85,7 @@ Stack: React 19, react-router 6, zustand 4, React Query 5, Tailwind 3, Vite 8, T
 - **Stores.** State persists under `vinax.*` keys (registry `src/constants/storage-keys.ts`), writing through `services/storage/local.ts`. Its reads never throw, and `freezeLocalWrites()` guards restores. The taste profile is `vinax.profile.v1`; the listen log is in IndexedDB.
 - **Catalogue client.** `services/api/client.ts` `orchestratedRequest()` ranks the bases (`constants/endpoints.ts`, `VITE_API_BASES`) by health and hedges interactive calls. Timeouts: 8 s per attempt, 20 s overall. React Query uses `retry: 0`.
 - **Audio.** `services/audio/engine.ts` owns one `<audio>` element; `effects.ts` is the lazy Web Audio chain (vocals, EQ, loudness about -14 LUFS, limiter). Casting lives in `services/cast/`; Android casting is unverified on a device.
-- **Listen Together.** `services/together/`, `features/together/`, served by `/api/room`. Phones poll, and Supabase Realtime (`REALTIME_URL`, `REALTIME_KEY`) gives an instant line, but the server stays the truth. Measure sync with `node scripts/together-measure.mjs` after a build.
+- **Listen Together.** `services/together/`, `features/together/`, served by `/api/room`. Phones poll, and Supabase Realtime (`REALTIME_URL`, `REALTIME_KEY`) gives an instant line, but the server stays the truth. A guest looks up and starts buffering the room's next song as soon as the queue names it, so a song change lands together. Measure sync with `node scripts/together-measure.mjs` after a build.
 - **Service worker.** `public/sw.js` never caches `/api/*`, the catalogue or audio streams. Downloads are served from `vinax-audio-v1`.
 
 ### API routes
@@ -327,7 +327,7 @@ Off until both keys exist. Dashboard > Turnstile > Add widget, hostname `vinaxmu
 
 ### Account emails (Resend)
 
-Welcome, sign-in alert (time, browser, IP, place), admin invite, Monday weekly summary (`_lib/email.ts`); console sign-ins send nothing. Setup: Resend > Domains > `vinaxmusic.online`; add DKIM TXT `resend._domainkey`, `send` MX + SPF TXT as **DNS only** (plus `_dmarc` `v=DMARC1; p=none;`); Verify; Sending-access key -> `RESEND_API_KEY`. Test: Notification Rules > Account emails > Send me a test email (`validation_error` = domain not verified). Kinds switch off in the owner-only `email` setting. Free plan 100/day, 3,000/month.
+Welcome, sign-in alert (time, browser, IP, place), admin invite, Monday weekly summary (`_lib/email.ts`: one glass card in the app's black-and-green look with the mark and the VinaX Music wordmark; every colour has a solid fallback); console sign-ins send nothing. The weekly numbers come from `weekly_summary()` (two weeks of listening) and `stats_at_risk()` separately (schema 26), and the job stops after three failed reads in a week instead of failing every hour. Setup: Resend > Domains > `vinaxmusic.online`; add DKIM TXT `resend._domainkey`, `send` MX + SPF TXT as **DNS only** (plus `_dmarc` `v=DMARC1; p=none;`); Verify; Sending-access key -> `RESEND_API_KEY`. Test: Notification Rules > Account emails > Send me a test email (`validation_error` = domain not verified). Kinds switch off in the owner-only `email` setting. Free plan 100/day, 3,000/month.
 
 ## Operations
 
@@ -685,7 +685,7 @@ Everything runs on the device, so listening history never goes to a server. Path
 
 ### The pipeline
 
-`planNextSongs(seed, ctx)` in `services/recommendation/engine.ts` (lazy chunk) plans the queue; `buildRecommendations(ctx)` runs it without a seed for Home. The live queue uses the V2 planner in `services/nextup/` (ranked by `rules.ts`) with the same context and admission gate. Hard rules never relax.
+`planNextSongs(seed, ctx)` in `services/recommendation/engine.ts` (lazy chunk) plans the queue; `buildRecommendations(ctx)` runs it without a seed for Home. The live queue uses the V2 planner in `services/nextup/` (ranked by `rules.ts`: source, likes, pull, mood, era, exposure, listening moment, and since 1.19 the Discovery lean and a lift for a release from this year or last; `pickSequence` then orders each stretch by score minus the energy step from the song before, under the artist-spacing rules) with the same context and admission gate. Hard rules never relax.
 
 | # | Stage | Module | What |
 | --- | --- | --- | --- |

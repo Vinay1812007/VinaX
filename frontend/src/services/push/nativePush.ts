@@ -67,8 +67,50 @@ function sendReport(stage: string, result: string): void {
   void fetch(`${BASE}/api/push/fcm-report`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinax-platform': 'android' }, body: JSON.stringify({ stage, result: result.slice(0, 300), appVersion: __APP_VERSION__ }) }).catch(() => undefined);
 }
 
+/**
+ * 1.19 — Firebase's two set-up answers that no retry on the phone can mend:
+ * FIS_AUTH_ERROR (the app's Firebase key is not allowed to use the
+ * Installations API: a Google Cloud key restriction, fixed in the console)
+ * and SERVICE_NOT_AVAILABLE (Google Play services could not reach Firebase
+ * just then: no network, or a phone without Play services). Both were
+ * reported on every launch of every phone, so App Errors filled with them
+ * (300 of 337 reports) and Smart Alerts cried "errors rising" every hour.
+ * They now reach App Errors once a day per phone, and the Setup Check every
+ * time, where the owner can act on them.
+ */
+const SETUP_ANSWER_RE = /FIS_AUTH_ERROR|SERVICE_NOT_AVAILABLE|AUTHENTICATION_FAILED|TOO_MANY_REGISTRATIONS|no FCM token within/;
+const SETUP_REPORT_KEY = 'vinax.push.setup-reported.v1';
+const SETUP_REPORT_EVERY_MS = 24 * 60 * 60_000;
+
+/** True when this phone already sent this set-up answer to App Errors today. */
+export function setupAnswerReportedToday(message: string, now = Date.now(), storage: Pick<Storage, 'getItem' | 'setItem'> | null = safeStorage()): boolean {
+  const key = (SETUP_ANSWER_RE.exec(message)?.[0] ?? message).slice(0, 40);
+  try {
+    const raw = storage?.getItem(SETUP_REPORT_KEY);
+    const seen = (raw ? (JSON.parse(raw) as Record<string, number>) : {}) ?? {};
+    if (typeof seen[key] === 'number' && now - seen[key] < SETUP_REPORT_EVERY_MS) return true;
+    seen[key] = now;
+    storage?.setItem(SETUP_REPORT_KEY, JSON.stringify(seen));
+  } catch {
+    /* storage blocked: report as before */
+  }
+  return false;
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function report(message: string): void {
   lastReport = message;
+  if (SETUP_ANSWER_RE.test(message)) {
+    sendReport('setup', message);
+    if (setupAnswerReportedToday(message)) return;
+  }
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
 }
 

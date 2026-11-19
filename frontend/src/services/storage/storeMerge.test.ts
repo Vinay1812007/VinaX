@@ -30,7 +30,8 @@ describe('settings merge', () => {
     await useSettingsStore.persist.rehydrate();
     const s = useSettingsStore.getState();
     expect(s.uiScale).toBe('lg');
-    expect(s.crossfade).toBe(true);
+    // 'yes' is not a boolean: the default stands (off since 1.19).
+    expect(s.crossfade).toBe(false);
     expect(s.crossfadeSeconds).toBe(5);
     expect(s.eqGains).toEqual([0, 0, 0, 0, 0]);
     expect(s.pinnedLanguages).toEqual(['telugu']);

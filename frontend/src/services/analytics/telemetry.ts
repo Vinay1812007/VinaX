@@ -308,8 +308,18 @@ export function initTelemetry(): void {
   });
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const r = e.reason as { message?: string } | undefined;
-    reportError('promise', (r && r.message) || String(e.reason ?? 'rejection'));
+    const msg = (r && r.message) || String(e.reason ?? 'rejection');
+    // 1.19 — a View Transition the browser skipped (a second page change
+    // started before the first drew, or the tab was hidden) rejects its
+    // `ready` promise with these words. Nothing broke for the listener.
+    if (isSkippedTransition(msg)) return;
+    reportError('promise', msg);
   });
+}
+
+/** The browser's words for a View Transition it gave up on, not an error in the app. */
+export function isSkippedTransition(message: string): boolean {
+  return /transition was (aborted|skipped)|prepaint layout check failed|view transition.*(skipped|aborted)/i.test(message);
 }
 
 /** The browser's stand-in for an error thrown by a cross-origin script: no message, file or stack. */
