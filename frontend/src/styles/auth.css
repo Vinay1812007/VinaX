@@ -10,7 +10,7 @@
   flex-direction: column;
   align-items: center;
   gap: 20px;
-  padding: max(40px, 8dvh, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  padding: max(40px, 8dvh, var(--safe-top)) 16px max(32px, var(--safe-bottom));
   /* 1.15 — a dark grey that falls to black, the card in #121212 on it. */
   background: linear-gradient(180deg, rgb(var(--ink-700)) 0%, rgb(var(--ink-950)) 100%);
   background-repeat: no-repeat;

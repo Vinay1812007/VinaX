@@ -102,7 +102,7 @@ export function SiteGate({ children }: { children: ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        className="fixed left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+8px)] z-[70] flex items-center gap-2.5 w-max max-w-[min(92vw,560px)] rounded-xl bg-ink-850 px-4 py-2 text-[13px] leading-snug text-ink-200 shadow-lg pointer-events-none"
+        className="fixed left-1/2 -translate-x-1/2 top-[calc(var(--safe-top)+8px)] z-[70] flex items-center gap-2.5 w-max max-w-[min(92vw,560px)] rounded-xl bg-ink-850 px-4 py-2 text-[13px] leading-snug text-ink-200 shadow-lg pointer-events-none"
       >
         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
         <span className="min-w-0">{banner}</span>

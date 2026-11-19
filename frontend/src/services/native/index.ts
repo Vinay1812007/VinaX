@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export const isNativePlatform = (): boolean => Capacitor.isNativePlatform();
 export const isAndroid = (): boolean => Capacitor.getPlatform() === 'android';
@@ -75,4 +75,21 @@ export function haptic(style: 'light' | 'medium' = 'light'): void {
       /* ignore */
     }
   })();
+}
+
+/**
+ * 1.19.1 — the Android status bar's icons follow the app's look. Capacitor 8
+ * draws the app edge to edge, so the bar sits over the app's own top bar:
+ * white icons over the dark look, dark icons over the light one (its STYLE
+ * names mean the background's shade: DARK = light icons). Core registers the
+ * SystemBars plugin itself; a browser, or an older APK, simply ignores this.
+ */
+export function setSystemBarsStyle(theme: 'dark' | 'light'): void {
+  if (!isNativePlatform()) return;
+  try {
+    const bars = registerPlugin<{ setStyle(o: { style: 'DARK' | 'LIGHT' }): Promise<void> }>('SystemBars');
+    void bars.setStyle({ style: theme === 'dark' ? 'DARK' : 'LIGHT' }).catch(() => undefined);
+  } catch {
+    /* no such plugin on this build */
+  }
 }

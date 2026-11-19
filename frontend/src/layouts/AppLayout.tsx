@@ -59,7 +59,7 @@ import { runMigrations } from '@/services/storage/local';
 import { resolveRegion } from '@/services/location/inference';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { defaultLanguagesForCountry } from '@/constants/regions';
-import { isNativePlatform } from '@/services/native';
+import { isNativePlatform, setSystemBarsStyle } from '@/services/native';
 
 // Lazy: the palette costs nothing until the first ⌘/Ctrl+K.
 const CommandPalette = lazy(() => import('@/components/CommandPalette'));
@@ -437,7 +437,10 @@ export function AppLayout() {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = (): void => {
       const next = resolveTheme(theme, mq.matches);
-      const paint = (): void => applyThemeClasses(document.documentElement, template, next);
+      const paint = (): void => {
+        applyThemeClasses(document.documentElement, template, next);
+        setSystemBarsStyle(next);
+      };
       const was = paintedTheme.current;
       paintedTheme.current = next;
       // 1.18.2 — a change of look (not the first paint, not a glass or size

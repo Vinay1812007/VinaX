@@ -76,7 +76,7 @@ export function RecsDebugPanel() {
   if (!recsDebugEnabled()) return null;
   const latest = batches[0];
   return (
-    <div className="fixed left-2 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 max-w-[min(92vw,34rem)] text-[11px] font-mono">
+    <div className="fixed left-2 bottom-[calc(6rem+var(--safe-bottom))] z-40 max-w-[min(92vw,34rem)] text-[11px] font-mono">
       <button type="button" onClick={() => setOpen((v) => !v)} className="rounded-full bg-black/80 text-white px-3 py-1.5 border border-white/20" aria-expanded={open}>
         recs debug · {batches.length} batch{batches.length === 1 ? '' : 'es'}
       </button>

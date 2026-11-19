@@ -209,7 +209,7 @@ export function PullToRefresh({
           showIndicator ? 'opacity-100' : 'opacity-0',
         )}
         style={{
-          top: `calc(env(safe-area-inset-top, 0px) + 8px)`,
+          top: `calc(var(--safe-top) + 8px)`,
           transform: `translate(-50%, ${Math.max(0, pull - 44)}px)`,
         }}
       >

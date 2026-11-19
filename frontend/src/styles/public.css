@@ -16,7 +16,7 @@
 .vx-public-bar {
   position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; gap: 16px;
-  padding: max(10px, env(safe-area-inset-top)) clamp(16px, 4vw, 40px) 10px;
+  padding: max(10px, var(--safe-top)) clamp(16px, 4vw, 40px) 10px;
   background: rgb(var(--ink-950) / 0.82);
   backdrop-filter: blur(18px) saturate(1.4);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
@@ -102,12 +102,12 @@
 .vx-public-fine { margin-top: 16px !important; font-size: 12.5px !important; color: rgb(var(--ink-400)) !important; }
 .vx-public-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 
-.vx-public-foot { padding: 24px 16px calc(96px + env(safe-area-inset-bottom)); text-align: center; font-size: 13px; color: rgb(var(--ink-400)); }
+.vx-public-foot { padding: 24px 16px calc(96px + var(--safe-bottom)); text-align: center; font-size: 13px; color: rgb(var(--ink-400)); }
 .vx-public-foot a { color: rgb(var(--ink-300)); }
 .vx-public-foot a:hover { color: rgb(var(--ink-100)); }
 
 .vx-public-dock {
-  position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 40;
+  position: fixed; left: 16px; right: 16px; bottom: max(16px, var(--safe-bottom)); z-index: 40;
   display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: var(--radius-pill);
   font-size: 15px; font-weight: 800; color: var(--text-on-accent); background: var(--accent-gradient);
   box-shadow: var(--elev-4);

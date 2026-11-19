@@ -791,6 +791,7 @@ node scripts/eval-recs.mjs --baseline <commit>  # side by side; the commit must 
   - Touch targets are at least 44px.
   - Scripted scrolls use `scrollBehavior()`.
   - Sticky elements read `--vx-topbar-h`.
+  - Safe areas are read through `--safe-top` / `--safe-bottom` / `--safe-left` / `--safe-right` (index.css), never `env(safe-area-inset-*)` directly: the Android app (Capacitor 8, edge to edge) answers 0 for `env()` and publishes the real insets as `--safe-area-inset-*` on `<html>`, which those tokens read first. The status bar icons follow the theme (`setSystemBarsStyle`).
   - Every animation obeys both reduced-motion switches (OS and in-app).
   - The owner console gets its tokens from `npm run gen:admin-tokens`.
 
