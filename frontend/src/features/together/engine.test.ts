@@ -129,7 +129,10 @@ vi.mock('@/services/audio/engine', () => ({
     position: () => audio.position(),
     isAdvancing: () => audio.advancing,
     setRate: audio.setRate,
+    // 1.19 — a guest starts buffering the room's next song.
+    preloadNext: () => undefined,
   },
+  orderedSources: () => [],
 }));
 vi.mock('@/services/api', () => ({ getSong: api.getSong }));
 vi.mock('@/store/toastStore', () => ({ toast: api.toast }));
