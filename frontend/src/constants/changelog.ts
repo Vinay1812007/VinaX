@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.18.2': {
+    title: 'A theme picker with previews, a cross-fade between light and dark, and softer motion…',
+    changes: [
+      { type: 'new', text: 'Settings → Appearance shows the theme as three small pictures of the app (System, Light, Dark); pick one and the whole window fades to the new look instead of snapping.' },
+      { type: 'improved', text: 'Shelves on Home and the browse pages bring their cards in one after another, and artwork lifts a touch under the pointer.' },
+      { type: 'improved', text: 'The Lyrics card beside the player is now the song\'s colour as a gradient, readable in both looks.' },
+      { type: 'improved', text: 'On a phone the mini player rises in with the first song and the chosen tab\'s icon gives a small bounce.' },
+    ],
+  },
   '1.18.1': {
     title: 'VinaX AI: Claude answers again after long thinking, and 3D scenes get real models,…',
     changes: [
