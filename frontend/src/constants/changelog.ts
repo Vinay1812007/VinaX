@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.19.0': {
+    title: 'VinaX Music: songs play to the end, Flow picks video quality, smarter queues, faster…',
+    changes: [
+      { type: 'improved', text: 'The app is called VinaX Music beside its mark, in the window bar and at the top of Home on a phone.' },
+      { type: 'improved', text: 'Songs play to their last second: crossfade is off unless you turn it on (with it on, every song handed over five seconds early).' },
+      { type: 'improved', text: 'Flow shows the video quality (540p, 1080p, 4K…) on its rail and lets you pick one; Auto chooses for your screen and your choice sticks for every video.' },
+      { type: 'new', text: 'Up Next follows your Discovery setting (Familiar leans on your own music, Discover on new music), lifts new releases, and orders each stretch so the energy rises and falls instead of lurching; Shuffle keeps one artist\'s songs apart.' },
+    ],
+  },
   '1.18.2': {
     title: 'A theme picker with previews, a cross-fade between light and dark, and softer motion…',
     changes: [
