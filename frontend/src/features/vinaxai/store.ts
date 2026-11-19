@@ -234,9 +234,10 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
 /**
  * Send a message. By default it follows the branch on screen; an edit passes
  * the edited message's parent (null for the first message), which makes the
- * new message its sibling.
+ * new message its sibling. `choice` asks a particular model instead of the
+ * composer's (Fix it asks the model that wrote the artifact).
  */
-export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[]; projectId?: string | null } = {}): Promise<RunOutcome> {
+export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[]; projectId?: string | null; choice?: ModelChoice } = {}): Promise<RunOutcome> {
   const s = useChatStore.getState();
   const files = opts.files ?? [];
   if (s.streaming || (!text.trim() && !files.length)) return Promise.resolve({ ok: true });
@@ -248,7 +249,7 @@ export function sendMessage(text: string, opts: { parentId?: string | null; file
   // A new chat starts in the project it was sent from.
   const projectId = s.conversationId ? null : opts.projectId ?? null;
   return run({
-    ...requestBase(),
+    ...requestBase(opts.choice),
     conversationId: s.conversationId,
     ...(projectId ? { projectId } : {}),
     ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),

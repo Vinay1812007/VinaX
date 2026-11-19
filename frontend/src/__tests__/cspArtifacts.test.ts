@@ -27,7 +27,7 @@ describe('the sandbox site', () => {
   const runner = readFileSync(resolve(__dirname, '../../../sandbox/index.html'), 'utf8');
   it('reaches only the two script CDNs for files (three.js models, textures, decoders), never the app, and only VinaX may frame it', () => {
     const connect = /connect-src ([^;]+)/.exec(sandbox)![1].split(/\s+/);
-    expect(connect).toEqual(['https://cdn.jsdelivr.net', 'https://unpkg.com']);
+    expect(connect).toEqual(['https://cdn.jsdelivr.net', 'https://unpkg.com', 'blob:', 'data:']);
     expect(sandbox).not.toMatch(/connect-src[^;]*(vinaxmusic\.online|\*|https:\s)/);
     expect(sandbox).toMatch(/frame-ancestors https:\/\/www\.vinaxmusic\.online http:\/\/localhost:\*/);
     expect(sandbox).toMatch(/default-src 'none'/);

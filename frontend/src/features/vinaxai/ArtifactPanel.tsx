@@ -30,15 +30,17 @@ interface Props {
   versions: Array<{ messageId: string; artifact: Artifact }>;
   live: boolean;
   sheet: boolean;
-  /** A failed preview offers "Fix it" (the chat only; never on a shared page). */
-  onFix?(artifact: Artifact, error: string): void;
+  /** A failed preview offers "Fix it" (the chat only; never on a shared page); `modelId`: the model that wrote this version. */
+  onFix?(artifact: Artifact, error: string, modelId?: string | null): void;
+  /** The model that wrote each version, by message id (the chat page). */
+  modelOf?(messageId: string): string | null;
   /** The gallery: the chat it came from, under the kind. */
   from?: string | null;
   /** The gallery: open the chat at the reply that made the shown version. */
   onOpenChat?(messageId: string): void;
 }
 
-export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }: Props): ReactNode {
+export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat, modelOf }: Props): ReactNode {
   const { open, tab, width, setTab, setVersion, setWidth, close } = usePanel();
   useDismissOnBack(sheet && !!open, close);
   const root = useRef<HTMLElement>(null);
@@ -163,7 +165,7 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
         >
           {showing === 'preview'
             ? runsInSandbox(a.type)
-              ? <RunnerFrame kind={a.type} content={a.content} title={a.title} onFix={onFix && !live ? (error) => onFix(a, error) : undefined} />
+              ? <RunnerFrame kind={a.type} content={a.content} title={a.title} onFix={onFix && !live ? (error) => onFix(a, error, modelOf?.(versions[index].messageId) ?? null) : undefined} />
               : <div className="vx-ai-artifact-doc"><Markdown text={a.content} /></div>
             : <CodeBlock code={a.content} lang={codeLanguage(a)} />}
         </div>

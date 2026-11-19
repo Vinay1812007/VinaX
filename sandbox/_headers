@@ -3,10 +3,11 @@
 # Model-written code runs here: scripts only from cdnjs, jsDelivr and unpkg (three.js
 # r160's ES modules and addons live on jsDelivr; 2026-11-18); the only fetches allowed are
 # files on jsDelivr and unpkg (three's example models, textures and an HDR sky from the
-# jsDelivr GitHub mirror, Draco decoders), never the app, its API or anywhere else;
+# jsDelivr GitHub mirror, Draco decoders) and blob: / data: URLs the page makes itself
+# (three's model loader reads a .glb's embedded textures that way), never the app, its API or anywhere else;
 # framed only by VinaX itself.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; worker-src blob:; style-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; img-src data: blob: https:; font-src data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; media-src data: blob: https:; connect-src https://cdn.jsdelivr.net https://unpkg.com; frame-src 'self' blob: data:; form-action 'none'; base-uri 'none'; frame-ancestors https://www.vinaxmusic.online http://localhost:*
+  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; worker-src blob:; style-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; img-src data: blob: https:; font-src data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; media-src data: blob: https:; connect-src https://cdn.jsdelivr.net https://unpkg.com blob: data:; frame-src 'self' blob: data:; form-action 'none'; base-uri 'none'; frame-ancestors https://www.vinaxmusic.online http://localhost:*
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

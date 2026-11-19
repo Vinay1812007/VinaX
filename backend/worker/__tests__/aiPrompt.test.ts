@@ -46,7 +46,8 @@ describe('buildSystemPrompt', () => {
     expect(ARTIFACTS_BLOCK).toContain('"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"');
     expect(ARTIFACTS_BLOCK).toContain('"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"');
     expect(ARTIFACTS_BLOCK).toMatch(/setPixelRatio/);
-    expect(ARTIFACTS_BLOCK).toMatch(/RoomEnvironment/);
+    expect(ARTIFACTS_BLOCK).toContain("import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'");
+    expect(ARTIFACTS_BLOCK).toContain('there is no THREE.RoomEnvironment');
     expect(ARTIFACTS_BLOCK).toContain('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/');
     expect(ARTIFACTS_BLOCK).toContain('Soldier.glb');
     expect(ARTIFACTS_BLOCK).toContain('What you\'re seeing');

@@ -179,6 +179,8 @@ test('a preview that fails offers Fix it, which asks VinaX AI for a corrected ve
   expect(text).toMatch(/^The diagram "Request flow" didn't work\. The preview said:/);
   expect(text).toContain('Could not load mermaid');
   expect(text).toMatch(/send the complete corrected artifact\.$/);
+  // Asked of the model that wrote the diagram, not whatever Auto would pick.
+  expect(posted[1]).toMatchObject({ mode: 'model', model: MODEL.id });
 });
 
 test('Code view: a long, wide artifact scrolls inside the panel both ways, with line numbers that stay put', async ({ page }) => {

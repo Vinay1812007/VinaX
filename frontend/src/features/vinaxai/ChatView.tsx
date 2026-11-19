@@ -293,11 +293,13 @@ export function ChatView(): ReactNode {
     }
   };
   // "Fix it" on a failed preview: ask for a corrected artifact, with the error the preview gave.
-  const fixArtifact = (a: Artifact, error: string) => {
+  // Asked of the model that wrote the artifact when it is still offered (Auto would send a repair to a smaller model).
+  const fixArtifact = (a: Artifact, error: string, modelId?: string | null) => {
     if (useChatStore.getState().streaming) return;
     stick.current = true;
     const what = a.type === 'mermaid' ? 'diagram' : a.type === 'svg' ? 'picture' : a.type === 'react' ? 'component' : 'page';
-    void sendMessage(`The ${what} "${a.title || 'artifact'}" didn't work. The preview said:\n\n${error.slice(0, 600)}\n\nPlease fix it and send the complete corrected artifact.`);
+    const same = modelId && pickerModels.find((m) => m.id === modelId && m.available) ? modelId : null;
+    void sendMessage(`The ${what} "${a.title || 'artifact'}" didn't work. The preview said:\n\n${error.slice(0, 600)}\n\nPlease fix it and send the complete corrected artifact.`, same ? { choice: { mode: 'model', model: same } } : {});
   };
   // A questions block's choices: sent as the listener's next message.
   const answerQuestions = useCallback((text: string) => {
@@ -713,7 +715,7 @@ export function ChatView(): ReactNode {
         <div className={`vx-ai-main${empty && view === 'chat' ? ' is-empty' : ''}`}>{body}</div>
       </div>
       {panel.open && (
-        <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} />
+        <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} modelOf={(id) => messages[id]?.model?.id ?? null} />
       )}
       {selection && !quote && (
         <button type="button" className="vx-ai-ask-sel" style={{ left: selection.left, top: selection.top }} onClick={askAboutSelection}>

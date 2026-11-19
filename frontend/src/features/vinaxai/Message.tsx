@@ -228,8 +228,8 @@ interface ReplyProps {
   /** Which version of each artifact this reply holds (1 = first), and how to open one. */
   versionOf?(id: string, messageId: string): number;
   onOpenArtifact?(artifact: Artifact, messageId: string): void;
-  /** A failed live preview's "Fix it". */
-  onFixArtifact?(artifact: Artifact, error: string): void;
+  /** A failed live preview's "Fix it"; `modelId` is the model that wrote the reply, asked again when it can be. */
+  onFixArtifact?(artifact: Artifact, error: string, modelId?: string | null): void;
   onRetry?(choice?: ModelChoice): void;
   onContinue?(): void;
   /** Read aloud is offered. */
@@ -322,7 +322,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
           : (
             <div key={i} className="vx-ai-artifact-slot">
               <ArtifactCard artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />
-              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} onFix={onFixArtifact ? (error) => onFixArtifact(seg.artifact, error) : undefined} onOpen={onOpenArtifact ? () => onOpenArtifact(seg.artifact, message.id) : undefined} />}
+              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} onFix={onFixArtifact ? (error) => onFixArtifact(seg.artifact, error, model?.id ?? null) : undefined} onOpen={onOpenArtifact ? () => onOpenArtifact(seg.artifact, message.id) : undefined} />}
             </div>
           )))
         : <Markdown text={text} sources={message.sources?.items} />)}
