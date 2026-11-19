@@ -30,6 +30,7 @@ import {
   Segmented,
   SettingsSearchCtx,
   SettingsViewCtx,
+  ThemePicker,
   Toggle,
   loadSettingsView,
   matchesQuery,
@@ -532,16 +533,7 @@ export default function SettingsPage() {
 
           <Section title="Appearance" id="appearance" lede="Theme, glass, language, size and motion.">
             <Row stack label="Theme" note="System follows your device’s light or dark setting." keywords="dark light system mode night day appearance">
-              <Segmented
-                label="Theme"
-                value={s.theme}
-                onChange={s.setTheme}
-                options={[
-                  { value: 'system', label: 'System' },
-                  { value: 'light', label: 'Light' },
-                  { value: 'dark', label: 'Dark' },
-                ]}
-              />
+              <ThemePicker value={s.theme} onChange={s.setTheme} />
             </Row>
             <Row stack label="Glass effect" note="From solid panels to frosted glass, with the playing song’s colour behind them." keywords="transparency see-through frosted solid glass">
               <RangeRow from="Solid" to="Glass">

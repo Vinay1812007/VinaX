@@ -13,6 +13,7 @@ import { FAQ, GUIDES } from './helpContent';
 const SRC = join(__dirname, '..', '..');
 const read = (p: string): string => readFileSync(p, 'utf8');
 const SETTINGS_PAGE = join(SRC, 'pages', 'SettingsPage.tsx');
+const SETTINGS_CONTROLS = join(SRC, 'features', 'settings', 'SettingsControls.tsx');
 
 /** SettingsPage plus the '@/…' modules it imports (its rows live in a few of them). */
 function settingsSources(): string {
@@ -74,8 +75,9 @@ describe('Help text matches the app', () => {
   });
 
   it('the theme choices are the ones Settings offers', () => {
-    const page = read(SETTINGS_PAGE);
-    const block = /label="Theme"[\s\S]*?options=\{\[([\s\S]*?)\]\}/.exec(page)?.[1] ?? '';
+    // 1.18.2 — the choices live on the theme picker (ThemePicker, SettingsControls.tsx).
+    const controls = read(SETTINGS_CONTROLS);
+    const block = /THEME_OPTIONS[^=]*=\s*\[([\s\S]*?)\];/.exec(controls)?.[1] ?? '';
     const options = [...block.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
     expect(options.length).toBeGreaterThan(0);
     const guide = GUIDES.find((g) => g.steps.some((s) => s.includes('Settings → Appearance → Theme')));

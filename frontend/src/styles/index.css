@@ -324,7 +324,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
 p { text-wrap: pretty; }
 
 ::selection {
-  background: rgb(var(--ink-100) / 0.3);
+  background: rgb(var(--ember-500) / 0.4);
   color: rgb(var(--ink-100));
 }
 

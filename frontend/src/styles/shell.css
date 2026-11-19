@@ -532,6 +532,8 @@ html.reduce-motion .vx-pmenu { animation: none; }
 }
 .vx-dock-item:active .vx-dock-pill { transform: scale(0.9); }
 .vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); font-weight: 700; }
+/* 1.18.2 — the tab just chosen gives its icon a small bounce. */
+.vx-dock-active .vx-dock-pill { animation: vxDockPop var(--dur-slow) var(--ease-bounce); }
 
 /* ---------------------------------------------------------- player bar */
 .vx-deck-wrap { background: rgb(var(--ink-950)); }
@@ -652,6 +654,9 @@ html.reduce-motion .vx-pmenu { animation: none; }
   backdrop-filter: blur(var(--vx-mat-chrome-blur)) saturate(var(--vx-mat-sat));
   box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
 }
+/* 1.18.2 — the card rises in when the first song starts. */
+.np-mini { animation: vx-mini-in var(--dur-slow) var(--ease-enter) backwards; }
+@keyframes vx-mini-in { from { opacity: 0; transform: translateY(12px); } }
 .np-mini-thumb { border-radius: 4px; }
 .np-mini-thumb img { border-radius: 4px; }
 .np-mini .np-mini-play { width: 40px; height: 40px; border-radius: 50%; background: transparent; color: rgb(var(--ink-100)); }
@@ -731,6 +736,18 @@ html.reduce-motion .vx-pmenu { animation: none; }
 }
 .vx-media-rail > * { scroll-snap-align: start; }
 .vx-media-rail::-webkit-scrollbar { display: none; }
+/* 1.18.2 — a shelf's cards arrive one after another: the first eight rise
+   in a few frames apart (the rest are off screen and just appear). The step
+   is a share of --dur-base, so reduced motion collapses it with the rest. */
+.vx-media-rail > * { animation: vx-card-in var(--dur-slow) var(--ease-enter) backwards; animation-delay: calc(var(--dur-base) * 0.14 * var(--vx-stagger, 0)); }
+.vx-media-rail > :nth-child(2) { --vx-stagger: 1; }
+.vx-media-rail > :nth-child(3) { --vx-stagger: 2; }
+.vx-media-rail > :nth-child(4) { --vx-stagger: 3; }
+.vx-media-rail > :nth-child(5) { --vx-stagger: 4; }
+.vx-media-rail > :nth-child(6) { --vx-stagger: 5; }
+.vx-media-rail > :nth-child(7) { --vx-stagger: 6; }
+.vx-media-rail > :nth-child(n + 8) { --vx-stagger: 7; }
+@keyframes vx-card-in { from { opacity: 0; transform: translateY(10px); } }
 @media (min-width: 1024px) {
   .vx-media-rail.vx-media-grid {
     display: grid;
@@ -918,6 +935,11 @@ html.vx-vt .vx-route.animate-fade-up { animation: none; }
 html.reduce-motion::view-transition-group(*),
 html.reduce-motion::view-transition-old(*),
 html.reduce-motion::view-transition-new(*) { animation: none !important; }
+/* 1.18.2 — a theme change (Settings, or the device switching at dusk) runs
+   inside a View Transition too (layouts/AppLayout.tsx): the whole window
+   cross-fades from one look to the other instead of snapping. */
+html.vx-theme-vt::view-transition-old(root),
+html.vx-theme-vt::view-transition-new(root) { animation-duration: var(--dur-page); animation-timing-function: var(--ease-standard); }
 
 /* ---------------------------------------------------------------- motion */
 @media (prefers-reduced-motion: reduce) {

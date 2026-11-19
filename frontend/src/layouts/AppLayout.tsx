@@ -31,7 +31,8 @@ const VersionNotice = lazy(() => import('@/components/OwnerMessages').then((m) =
 const AnnouncementPopup = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.AnnouncementPopup })));
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
-import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
+import { applyGlassLevel, applyThemeClasses, resolveTheme, type ResolvedTheme } from '@/utils/theme';
+import { reducedMotion } from '@/utils/motion';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
 import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
@@ -430,10 +431,25 @@ export function AppLayout() {
   }, [locationKey, navigationType]);
 
   const theme = useSettingsStore((s) => s.theme);
+  const paintedTheme = useRef<ResolvedTheme | null>(null);
   useEffect(() => {
     // 1.15.1 — System follows the device, live; Light and Dark are fixed.
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = (): void => applyThemeClasses(document.documentElement, template, resolveTheme(theme, mq.matches));
+    const apply = (): void => {
+      const next = resolveTheme(theme, mq.matches);
+      const paint = (): void => applyThemeClasses(document.documentElement, template, next);
+      const was = paintedTheme.current;
+      paintedTheme.current = next;
+      // 1.18.2 — a change of look (not the first paint, not a glass or size
+      // change) cross-fades the whole window inside a View Transition
+      // (shell.css html.vx-theme-vt); browsers without it, and reduced
+      // motion, keep the plain swap.
+      const root = document.documentElement;
+      const start = (document as { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition;
+      if (!was || was === next || typeof start !== 'function' || reducedMotion()) return paint();
+      root.classList.add('vx-theme-vt');
+      start.call(document, paint).finished.finally(() => root.classList.remove('vx-theme-vt'));
+    };
     apply();
     document.documentElement.dataset.density = density;
     // v5.17.0 — display size, high contrast.

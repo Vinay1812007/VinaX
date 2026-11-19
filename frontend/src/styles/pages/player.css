@@ -1179,7 +1179,20 @@ a.vx-rail-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline;
 .vx-rail-mix { margin: 0 0 6px; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 400; }
 /* A card on the panel: #1f1f1f with an 8px corner (the lyrics card takes the artwork's colour). */
 .vx-rail-card { margin-top: 16px; padding: 16px; border-radius: var(--radius-md, 8px); background: rgb(var(--ink-100) / 0.07); box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline); }
-.vx-rail-card.is-lyrics { padding: 0; overflow: hidden; background: rgb(var(--art)); }
+/* 1.18.2 — the lyrics card is the artwork's colour as a gradient: in the
+   dark look a black wash keeps white words readable on a pale cover, in the
+   light look a white wash turns the colour pastel under dark words. */
+.vx-rail-card.is-lyrics {
+  --rail-lyrics-wash: rgb(0 0 0 / 0.22);
+  padding: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(var(--rail-lyrics-wash), var(--rail-lyrics-wash)),
+    linear-gradient(155deg, rgb(var(--art)) 0%, color-mix(in srgb, rgb(var(--art)) 72%, rgb(var(--ink-950))) 100%);
+  transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
+}
+.vx-rail-card.is-lyrics:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), 0 12px 28px -12px rgb(0 0 0 / 0.55); }
+html.light .vx-rail-card.is-lyrics { --rail-lyrics-wash: rgb(255 255 255 / 0.5); }
 .vx-rail-card .vx-upnext.is-rail { margin: 8px -8px 0; }
 .vx-rail-sub { margin: 16px 0 8px; color: rgb(var(--ink-100)); font-size: 16px; font-weight: 700; }
 .vx-rail-more { align-self: flex-start; margin-top: 16px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 700; }
@@ -1191,14 +1204,15 @@ a.vx-rail-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline;
   display: block;
   width: 100%;
   padding: 16px;
-  background: linear-gradient(rgb(0 0 0 / 0.25), rgb(0 0 0 / 0.25));
+  background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.12));
   text-align: left;
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-rail-lyrics-card:hover { background: linear-gradient(rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.15)); }
-.vx-rail-lyrics-label { display: block; margin-bottom: 8px; color: rgb(var(--ink-100)); font-size: 16px; font-weight: 700; }
-.vx-rail-lyrics-card p { color: rgb(0 0 0 / 0.7); font-size: 18px; font-weight: 700; line-height: 1.45; }
-.vx-rail-lyrics-card p.is-now { color: rgb(var(--ink-100)); font-size: 20px; font-weight: 700; line-height: 1.4; }
+.vx-rail-lyrics-card:hover { background: linear-gradient(180deg, rgb(var(--ink-100) / 0.04), rgb(0 0 0 / 0.08)); }
+.vx-rail-lyrics-label { display: block; margin-bottom: 10px; color: rgb(var(--ink-100) / 0.72); font-size: var(--type-overline); font-weight: 700; letter-spacing: var(--tracking-overline); text-transform: uppercase; }
+.vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); font-size: 16px; font-weight: 600; line-height: 1.45; }
+.vx-rail-lyrics-card p.is-now { color: rgb(var(--ink-100)); font-size: 20px; font-weight: 750; line-height: 1.35; letter-spacing: var(--tracking-title); text-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
+html.light .vx-rail-lyrics-card p.is-now { text-shadow: none; }
 
 /* ============================================================ lyrics page */
 .vx-lyrics-page { max-width: 760px; margin: 0 auto; padding-bottom: 32px; }
@@ -1428,7 +1442,6 @@ html.light .vx-lyrics-page [data-line].vx-lyric-dim { color: rgb(var(--ink-100) 
 html.light .vx-lyrics-page [data-line].vx-lyric-passed { color: rgb(var(--ink-100) / 0.34); }
 html.light .vx-lyrics-page .vx-np-tabs { background: rgb(255 255 255 / 0.45); }
 html.light .vx-rail-card.is-lyrics { background: linear-gradient(rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55)), rgb(var(--art)); }
-html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
 
 /* 1.16 — Disco lights (/disco): a full-screen light show on a canvas, with
    the controls floating over it. Tap the lights to hide the controls; any

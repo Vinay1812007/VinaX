@@ -2,7 +2,7 @@ import { createContext, useContext, useId, useLayoutEffect, useRef, useState, ty
 import { useT } from '@/i18n';
 import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { ChevronRightIcon } from '@/components/Icons';
+import { CheckIcon, ChevronRightIcon } from '@/components/Icons';
 
 /**
  * 9.0 "Encore" — the Settings building blocks. Presentational only: every
@@ -405,6 +405,53 @@ export function Group({ title, icon, children }: { title?: string; icon?: ReactN
         </h3>
       )}
       <div className="vx-set-rows">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * 1.18.2 — the theme choice as three small pictures of the app (window bar,
+ * sidebar, a shelf, the play button) in each look: System is half and half,
+ * split on the diagonal. The same radio group as Segmented (arrow keys move
+ * the choice, one tab stop); the chosen card wears a green ring and a tick.
+ */
+export type ThemeChoice = 'system' | 'light' | 'dark';
+const THEME_OPTIONS: Array<{ value: ThemeChoice; label: string; hint: string }> = [
+  { value: 'system', label: 'System', hint: 'Follows your device' },
+  { value: 'light', label: 'Light', hint: 'White panels' },
+  { value: 'dark', label: 'Dark', hint: 'Black panels' },
+];
+export function ThemePicker({ value, onChange }: { value: ThemeChoice; onChange: (v: ThemeChoice) => void }) {
+  const roving = useRovingChoice(THEME_OPTIONS.map((o) => o.value), value, onChange);
+  return (
+    <div role="radiogroup" aria-label="Theme" className="vx-theme-pick">
+      {THEME_OPTIONS.map((o, i) => (
+        <button
+          key={o.value}
+          ref={roving.ref(i)}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          tabIndex={roving.tabIndex(i)}
+          onKeyDown={(e) => roving.onKeyDown(e, i)}
+          onClick={() => onChange(o.value)}
+          className={cn('vx-theme-opt', `is-${o.value}`, value === o.value && 'is-on')}
+        >
+          <span className="vx-theme-thumb" aria-hidden>
+            <span className="vx-theme-thumb-bar" />
+            <span className="vx-theme-thumb-side" />
+            <span className="vx-theme-thumb-main">
+              <i /><i /><i />
+            </span>
+            <span className="vx-theme-thumb-play" />
+          </span>
+          <span className="vx-theme-opt-text">
+            <span className="vx-theme-opt-label">{o.label}</span>
+            <span className="vx-theme-opt-hint">{o.hint}</span>
+          </span>
+          <span className="vx-theme-opt-tick" aria-hidden><CheckIcon className="w-3.5 h-3.5" /></span>
+        </button>
+      ))}
     </div>
   );
 }
