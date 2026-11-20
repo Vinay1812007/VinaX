@@ -208,6 +208,15 @@ describe('Autoplay', () => {
     expect(next()).toEqual(['queued:mine', 'autoplay:sim']);
   });
 
+  it('a song you add that Autoplay already picked leaves Autoplay, so it plays once', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    autoplayMock.mockResolvedValue([song('sim1'), song('sim2')]);
+    st().playSong(song('solo'));
+    await vi.advanceTimersByTimeAsync(0);
+    st().enqueue(song('sim2'));
+    expect(next()).toEqual(['queued:sim2', 'autoplay:sim1']);
+  });
+
   it('is off with repeat on, and switching Autoplay off takes its songs out', async () => {
     useSettingsStore.setState({ autoplay: true });
     autoplayMock.mockResolvedValue([song('sim')]);

@@ -226,6 +226,12 @@ export function dropAutoplay(s: QueueSnapshot): QueueSnapshot {
   return next.some((e) => e.run === 'autoplay') ? withUpcoming(s, next.filter((e) => e.run !== 'autoplay')) : s;
 }
 
+/** A song you add leaves Autoplay, so it never plays twice in a row of picks. */
+export function dropFromAutoplay(s: QueueSnapshot, ids: ReadonlySet<string>): QueueSnapshot {
+  const next = upcoming(s);
+  return next.some((e) => e.run === 'autoplay' && ids.has(e.song.id)) ? withUpcoming(s, next.filter((e) => !(e.run === 'autoplay' && ids.has(e.song.id)))) : s;
+}
+
 /** Autoplay's songs go at the very end. */
 export function appendAutoplay(s: QueueSnapshot, songs: readonly Song[]): QueueSnapshot {
   if (!songs.length) return s;

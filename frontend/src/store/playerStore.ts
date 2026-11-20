@@ -32,6 +32,7 @@ import {
   clearQueued,
   contextFromPage,
   dropAutoplay,
+  dropFromAutoplay,
   isQueueContext,
   isQueued,
   jumpTo,
@@ -900,7 +901,7 @@ export const usePlayerStore = create<PlayerState>()(
           // Spotify: Add to queue puts the song at the end of Next in queue,
           // after the playing song and every song added before it.
           const before = get().index;
-          apply(addToQueue(snap(), [song]));
+          apply(addToQueue(dropFromAutoplay(snap(), new Set([song.id])), [song]));
           if (get().runs[before + 1] === 'queued' && get().queue[before + 1] === song) preloadUpcoming();
           // 10.1 — the snackbar shows which song went in, and opens the queue.
           if (!opts?.quiet) toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
@@ -922,7 +923,7 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           for (const song of fresh) recordQueueAdd(song);
-          apply(addToQueue(s, fresh));
+          apply(addToQueue(dropFromAutoplay(s, new Set(fresh.map((x) => x.id))), fresh));
           preloadUpcoming();
           if (!opts?.quiet) toast(fresh.length === 1 ? 'Added 1 song to queue' : tr('Added {n} songs to queue', { n: fresh.length }));
         },

@@ -5,6 +5,7 @@ import {
   alignRuns,
   clearQueued,
   dropAutoplay,
+  dropFromAutoplay,
   inferContext,
   isQueueContext,
   jumpTo,
@@ -97,6 +98,7 @@ describe('queueRules', () => {
   it('clearQueued and dropAutoplay take out only their run', () => {
     expect(show(clearQueued(snap('x | q:m b a:s')))).toBe('x | b a:s');
     expect(show(dropAutoplay(snap('x | q:m b a:s')))).toBe('x | q:m b');
+    expect(show(dropFromAutoplay(snap('x | b a:s a:t'), new Set(['s'])))).toBe('x | b a:t');
   });
 
   it('shuffleOn reorders only the list; shuffleOff puts it back from the last list song played', () => {
