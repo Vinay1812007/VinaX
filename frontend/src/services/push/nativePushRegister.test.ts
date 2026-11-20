@@ -6,8 +6,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+/** Plugins in this test's APK: the push plugin, not VinaX's own VinaxPush. */
+const plugins = { has: new Set(['PushNotifications']) };
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android', isPluginAvailable: () => false },
+  Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android', isPluginAvailable: (name: string) => plugins.has.has(name) },
 }));
 vi.mock('@/services/analytics/telemetry', () => ({ reportError: vi.fn() }));
 
@@ -128,6 +130,27 @@ describe('registerNativePush', () => {
     listeners.pushNotificationActionPerformed({ notification: { data: { link: '/song/x-1' } } });
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/song/x-1');
+  });
+});
+
+describe('1.19.2 an app without the push plugin', () => {
+  it('sets nothing up, at open or on resume, and reports nothing to App Errors', async () => {
+    plugins.has = new Set();
+    try {
+      const { reportError } = await import('@/services/analytics/telemetry');
+      vi.mocked(reportError).mockClear();
+      push.createChannel.mockClear();
+      push.register.mockClear();
+      const { registerNativePush, refreshNativePush } = await import('./nativePush');
+      await registerNativePush(() => undefined);
+      await refreshNativePush(); // on resume too
+      await flush();
+      expect(push.createChannel).not.toHaveBeenCalled();
+      expect(push.register).not.toHaveBeenCalled();
+      expect(reportError).not.toHaveBeenCalled();
+    } finally {
+      plugins.has = new Set(['PushNotifications']);
+    }
   });
 });
 

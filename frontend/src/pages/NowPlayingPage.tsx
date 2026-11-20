@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 // 1.13 — the Together tab's panel (start, join, scan a QR): loaded when the tab is first opened.
 const TogetherPanel = lazy(() => import('@/features/together/TogetherPanel'));
+// 1.19.2 — the Sound settings inside the Playback sheet; loaded when the sheet opens.
+const SoundSettings = lazy(() => import('@/components/SoundSettings').then((m) => ({ default: m.SoundSettings })));
 import { isEpisode, podcastPath } from '@/features/podcasts/paths';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { Link, useNavigate } from 'react-router-dom';
@@ -957,7 +959,7 @@ export default function NowPlayingPage() {
         </div>
       </div>
 
-      {/* More options: volume, speed, sleep, A-B loop, marks, Tune this queue. */}
+      {/* More options: volume, speed, sleep, A-B loop, marks, Tune this queue, Sound. */}
       <Sheet open={showMore} onClose={() => setShowMore(false)} labelledBy="vx-np-opts-title" size="lg" className="vx-np-opts">
         <SheetHeader id="vx-np-opts-title" title={tx('Playback')} onClose={() => setShowMore(false)} />
         <div className="vx-np-opt">
@@ -1078,6 +1080,13 @@ export default function NowPlayingPage() {
               {tx(ambientArmed ? 'Ambient mode on' : 'Ambient mode off')}
             </button>
           </div>
+        </div>
+        {/* 1.19.2 — Sound: equalizer, balance, mono, loudness, and spatial audio / Dolby Atmos where the device has them. */}
+        <div className="vx-np-opt is-block vx-np-sound">
+          <span className="vx-np-opt-label">{tx('Sound')}</span>
+          <Suspense fallback={null}>
+            <SoundSettings variant="sheet" />
+          </Suspense>
         </div>
       </Sheet>
 

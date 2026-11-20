@@ -1,5 +1,5 @@
 import type { Song } from '@/types';
-import { getOfflineSources } from '@/services/downloads';
+import { dropBrokenCachedAudio, getOfflineSources } from '@/services/downloads';
 import { useSettingsStore } from '@/store/settingsStore';
 
 import { networkFacts, orderByQuality, resolveStreamQuality, type AudioQualityPref, type StreamQualityPref } from './quality';
@@ -495,6 +495,11 @@ class AudioEngine {
     const detail = mediaErrorDetail(this.el?.error ?? null, this.sources[this.sourceIdx]);
     const next = action === 'retry-same' ? 'retrying' : this.sourceIdx < this.sources.length - 1 ? 'next source' : 'no sources left';
     const failing = this.song;
+    // 1.19.2 — a saved copy the player cannot read will not get better on a
+    // retry: drop it so the next play skips it (see dropBrokenCachedAudio).
+    const failedSrc = this.sources[this.sourceIdx] ?? '';
+    const code = this.el?.error?.code;
+    if (failedSrc.includes('/offline-audio/') && (code === 3 || code === 4)) void dropBrokenCachedAudio(failing.id);
     void import('@/services/analytics/telemetry')
       .then((m) => m.reportError('playback', `audio element error: ${detail}; ${next}`, failing))
       .catch(() => undefined);

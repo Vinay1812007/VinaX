@@ -813,6 +813,25 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
 .vx-np-opt.is-block { display: block; }
 .vx-np-opt.is-block .vx-np-opt-label { display: block; margin-bottom: 10px; }
 .vx-np-opt input[type='range'] { width: 150px; }
+/* 1.19.2 — Sound inside the Playback sheet: SoundSettings' own rows, without
+   its heading and card, lined up with the sheet's rows. Its sliders keep
+   their own widths (the EQ bands are upright). */
+.vx-np-sound .vx-sound-sheet { margin: 0; }
+.vx-np-sound .vx-sound-sheet > div:first-child { display: none; }
+.vx-np-sound .vx-sound-sheet > div:nth-child(2) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.vx-np-sound .vx-sound-sheet > div:nth-child(2) > div { border-color: var(--vx-border); }
+.vx-np-sound .vx-sound-sheet > div:nth-child(2) > div > div:first-child > p:first-child { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 600; }
+.vx-np-sound .vx-sound-sheet > div:nth-child(2) > div.flex-col { flex-direction: column; align-items: stretch; gap: 12px; }
+.vx-np-opt.vx-np-sound input[type='range'] { width: auto; accent-color: rgb(var(--ember-500)); }
+.vx-np-opt.vx-np-sound input[type='range'][aria-label='Stereo balance'] { width: 10rem; }
 .vx-np-opt [aria-label='Tune this queue'] {
   scrollbar-width: none;
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);

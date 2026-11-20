@@ -304,6 +304,9 @@ export function initTelemetry(): void {
     // A script from another site (Google sign-in, the Cloudflare check) threw:
     // the browser hides everything but "Script error.", so there is nothing to act on.
     if (isOpaqueScriptError(e)) return;
+    // 1.19.2 — the browser's note that a resize callback ran past one frame:
+    // it delivers the rest next frame and nothing breaks (27 App Errors rows).
+    if (isResizeObserverNotice(e.message)) return;
     reportError('js', e.message || 'error');
   });
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
@@ -315,6 +318,11 @@ export function initTelemetry(): void {
     if (isSkippedTransition(msg)) return;
     reportError('promise', msg);
   });
+}
+
+/** The browser's ResizeObserver notice ("loop limit exceeded" / "loop completed with undelivered notifications"), not an error. */
+export function isResizeObserverNotice(message: string | undefined): boolean {
+  return /^ResizeObserver loop (limit exceeded|completed with undelivered notifications)/.test(message ?? '');
 }
 
 /** The browser's words for a View Transition it gave up on, not an error in the app. */

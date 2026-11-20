@@ -8,6 +8,7 @@
  * Google and answers with VinaX's own session. Nothing else about the account
  * is read on the device.
  */
+import { Capacitor } from '@capacitor/core';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
 import { isNativePlatform, platformName } from '@/services/native';
@@ -142,6 +143,9 @@ let nativeReady: Promise<unknown> | null = null;
 
 /** Android: the native Google sheet. */
 export async function signInNative(): Promise<SignInResult> {
+  // 1.19.2 — an app whose native part lacks the sign-in plugin: say
+  // "unavailable" (the page offers email sign-in) without an App Errors row.
+  if (!Capacitor.isPluginAvailable('SocialLogin')) return 'unavailable';
   try {
     const { SocialLogin } = await import('@capgo/capacitor-social-login');
     if (!nativeReady) nativeReady = SocialLogin.initialize({ google: { webClientId: GOOGLE_WEB_CLIENT_ID } });

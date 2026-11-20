@@ -207,7 +207,7 @@ export function AppLayout() {
         else void App.minimizeApp();
       }).then((handle) => {
         remove = () => void handle.remove();
-      });
+      }).catch(() => undefined);
       // Quick-play home-screen widget: its tap launches the activity with
       // ?widget=play. When the app is ALREADY running, that arrives here as
       // appUrlOpen — flag it and go Home; HomePage auto-plays the Aura Mix
@@ -224,7 +224,7 @@ export function AppLayout() {
         if (url) openDeepLink(url);
       }).then((handle) => {
         removeUrl = () => void handle.remove();
-      });
+      }).catch(() => undefined);
       // The link that STARTED the app (a cold start has no appUrlOpen).
       if (!launchLinkHandled) {
         launchLinkHandled = true;
@@ -319,7 +319,7 @@ export function AppLayout() {
                 const store = useUpdateStore.getState();
                 store.setInfo(mergeResumeCheck(store.info, info));
               });
-            });
+            }).catch(() => undefined);
           },
         ).catch(() => undefined);
       }

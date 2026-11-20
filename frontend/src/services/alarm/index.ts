@@ -145,7 +145,7 @@ export function initAlarm(): void {
           if (!a.enabled || a.lastFired === today()) return;
           useAlarmStore.getState().markFired(today());
           fire();
-        });
+        }).catch(() => undefined);
       })
       .catch(() => {
         /* plugin unavailable — in-app polling still covers the open-app case */

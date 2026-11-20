@@ -13,7 +13,7 @@ import { applyEffects } from '@/services/audio/effects';
 let started = false;
 
 function pick(s: SettingsState) {
-  return { eqGains: s.eqGains, balance: s.balance, mono: s.mono, normalize: s.normalize };
+  return { eqGains: s.eqGains, balance: s.balance, mono: s.mono, normalize: s.normalize, spatial: s.spatialAudio };
 }
 
 export function initSoundEffects(): void {
@@ -28,7 +28,8 @@ export function initSoundEffects(): void {
       next.eqGains !== prev.eqGains ||
       next.balance !== prev.balance ||
       next.mono !== prev.mono ||
-      next.normalize !== prev.normalize
+      next.normalize !== prev.normalize ||
+      next.spatialAudio !== prev.spatialAudio
     ) {
       applyEffects(pick(next));
     }

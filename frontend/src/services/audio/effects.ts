@@ -2,8 +2,8 @@
  * v5.19.0 — Web Audio effects chain (lazy module; never on the first-load path).
  *
  *   MediaElementSource → vocals (karaoke) → 5-band EQ (60 / 250 / 1k / 4k /
- *   12k) → mono mix → StereoPanner (balance) → level gain (loudness) →
- *   DynamicsCompressor (peak limiter) → Analyser → out
+ *   12k) → mono mix → StereoPanner (balance) → spatial → level gain
+ *   (loudness) → DynamicsCompressor (peak limiter) → Analyser → out
  *
  *   vocals → K-weighting shelf → high-pass → meter analyser (a side tap that
  *   measures the song's loudness; it goes nowhere else)
@@ -33,6 +33,13 @@
  * mixes the channels may run before it. Karaoke is its only user, and it is
  * not one of the listener's sound effects (it runs even when the chain is
  * flat for disco lights).
+ *
+ * Spatial audio (1.19.2) turns the stereo song into two virtual speakers in
+ * front of the listener (HRTF panners at ±SPATIAL_ANGLE degrees) plus a short
+ * synthetic room, so on headphones the music sits around the head instead of
+ * inside it. Off, its dry path passes the signal untouched. It comes after
+ * balance, so balance still steers the mix, and before loudness and the
+ * limiter, so the room's extra level can never clip.
  *
  * Tainted sources: a cross-origin file loaded without CORS reaches the graph
  * as digital silence. The probe watches the analyser while the element is
@@ -70,6 +77,8 @@ export interface EffectSettings {
   balance: number;
   mono: boolean;
   normalize: boolean;
+  /** 1.19.2 — virtual speakers and a small room for headphones. */
+  spatial: boolean;
 }
 
 export interface EffectsStatus {
@@ -258,6 +267,127 @@ function applyVocals(v: VocalNodes, mode: VocalMode, glide: boolean): void {
   setParam(v.bass.gain, mix.bass, glide);
 }
 
+/** Where the two virtual speakers stand, degrees left and right of centre. */
+export const SPATIAL_ANGLE = 35;
+/** The room's share of the spatial mix, and its length in seconds. */
+export const SPATIAL_ROOM = 0.18;
+const SPATIAL_ROOM_S = 0.7;
+/** Spatial on/off glides in this long, so switching never clicks. */
+const SPATIAL_GLIDE_S = 0.08;
+
+interface SpatialNodes {
+  input: GainNode;
+  dry: GainNode;
+  splitter: ChannelSplitterNode | null;
+  left: PannerNode | null;
+  right: PannerNode | null;
+  wet: GainNode;
+  room: ConvolverNode | null;
+  roomLevel: GainNode;
+  output: GainNode;
+}
+
+/** The two speakers' positions: in front, `angle` degrees to each side, one metre away. */
+export function speakerPositions(angle = SPATIAL_ANGLE): { left: [number, number, number]; right: [number, number, number] } {
+  const r = (angle * Math.PI) / 180;
+  const x = Math.round(Math.sin(r) * 1000) / 1000;
+  const z = -Math.round(Math.cos(r) * 1000) / 1000;
+  return { left: [-x, 0, z], right: [x, 0, z] };
+}
+
+/** The spatial stage's levels: off is the dry signal alone, on is speakers plus room. */
+export function spatialMix(on: boolean): { dry: number; wet: number; room: number } {
+  return on ? { dry: 0, wet: 1, room: SPATIAL_ROOM } : { dry: 1, wet: 0, room: 0 };
+}
+
+function placePanner(p: PannerNode, pos: [number, number, number]): void {
+  p.panningModel = 'HRTF';
+  p.distanceModel = 'inverse';
+  p.refDistance = 1;
+  p.rolloffFactor = 0;
+  if (p.positionX) {
+    p.positionX.value = pos[0];
+    p.positionY.value = pos[1];
+    p.positionZ.value = pos[2];
+  } else {
+    (p as unknown as { setPosition: (x: number, y: number, z: number) => void }).setPosition(...pos);
+  }
+}
+
+/** A short decaying stereo noise tail: the impression of a room, not an echo. */
+function roomImpulse(c: BaseAudioContext): AudioBuffer {
+  const len = Math.max(1, Math.floor(c.sampleRate * SPATIAL_ROOM_S));
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  // Seeded so every build of the room sounds the same.
+  let seed = 0x9e3779b9;
+  const rand = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return ((seed >>> 0) / 0xffffffff) * 2 - 1;
+  };
+  for (let ch = 0; ch < 2; ch += 1) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < len; i += 1) data[i] = rand() * Math.pow(1 - i / len, 3);
+  }
+  return buf;
+}
+
+function buildSpatial(c: AudioContext): SpatialNodes {
+  const input = c.createGain();
+  const dry = c.createGain();
+  // A browser without 3D panners keeps the dry path only: spatial audio then
+  // changes nothing rather than breaking the chain.
+  let speakers: { splitter: ChannelSplitterNode; left: PannerNode; right: PannerNode } | null;
+  try {
+    const pos = speakerPositions();
+    const l = c.createPanner();
+    const r = c.createPanner();
+    placePanner(l, pos.left);
+    placePanner(r, pos.right);
+    speakers = { splitter: c.createChannelSplitter(2), left: l, right: r };
+  } catch {
+    speakers = null;
+  }
+  const splitter = speakers?.splitter ?? null;
+  const left = speakers?.left ?? null;
+  const right = speakers?.right ?? null;
+  const wet = c.createGain();
+  const roomLevel = c.createGain();
+  const output = c.createGain();
+  let room: ConvolverNode | null;
+  try {
+    room = c.createConvolver();
+    room.buffer = roomImpulse(c);
+  } catch {
+    // No convolver (or no memory for its buffer): speakers without the room.
+    room = null;
+  }
+  input.connect(dry);
+  dry.connect(output);
+  if (splitter && left && right) {
+    input.connect(splitter);
+    splitter.connect(left, 0);
+    splitter.connect(right, 1);
+    left.connect(wet);
+    right.connect(wet);
+    wet.connect(output);
+  }
+  if (room) {
+    input.connect(room);
+    room.connect(roomLevel);
+    roomLevel.connect(output);
+  }
+  return { input, dry, splitter, left, right, wet, room, roomLevel, output };
+}
+
+function applySpatial(n: SpatialNodes, on: boolean, glide: boolean): void {
+  const mix = spatialMix(on && !!n.left);
+  setParam(n.dry.gain, mix.dry, glide, SPATIAL_GLIDE_S);
+  setParam(n.wet.gain, mix.wet, glide, SPATIAL_GLIDE_S);
+  setParam(n.roomLevel.gain, mix.room, glide, SPATIAL_GLIDE_S);
+}
+
 interface Graph {
   el: HTMLAudioElement;
   source: MediaElementAudioSourceNode;
@@ -265,6 +395,7 @@ interface Graph {
   eq: BiquadFilterNode[];
   mono: GainNode;
   panner: StereoPannerNode;
+  spatial: SpatialNodes;
   /** Loudness normalisation's per-song gain. */
   level: GainNode;
   compressor: DynamicsCompressorNode;
@@ -289,12 +420,12 @@ interface Graph {
 
 let ctx: AudioContext | null = null;
 let graph: Graph | null = null;
-let current: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
+let current: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false, spatial: false };
 /** False while the chain runs only so disco lights can hear the beat: every stage stays flat. */
 let processing = true;
 /** Karaoke's vocals level; not a sound effect, so `processing` never flattens it. */
 let vocals: VocalMode = 'full';
-const FLAT: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
+const FLAT: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false, spatial: false };
 
 function getContext(): AudioContext | null {
   if (ctx) return ctx;
@@ -439,6 +570,7 @@ function applyTo(g: Graph, wanted: EffectSettings): void {
   // Explicit channelCount 1 makes the gain node down-mix L+R; 2 passes stereo.
   g.mono.channelCount = s.mono ? 1 : 2;
   g.panner.pan.value = clampBalance(s.balance);
+  applySpatial(g.spatial, s.spatial === true, true);
   if (s.normalize) {
     // Only a peak limiter: the level gain does the levelling, this catches
     // what a boost pushes past full scale.
@@ -532,6 +664,7 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
   mono.channelInterpretation = 'speakers';
   mono.channelCount = 2;
   const panner = c.createStereoPanner();
+  const spatial = buildSpatial(c);
   const level = c.createGain();
   const compressor = c.createDynamicsCompressor();
   const analyser = c.createAnalyser();
@@ -556,7 +689,8 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
   }
   node.connect(mono);
   mono.connect(panner);
-  panner.connect(level);
+  panner.connect(spatial.input);
+  spatial.output.connect(level);
   level.connect(compressor);
   compressor.connect(analyser);
   analyser.connect(c.destination);
@@ -572,6 +706,7 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
     eq,
     mono,
     panner,
+    spatial,
     level,
     compressor,
     analyser,
@@ -589,6 +724,7 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
     onBypass: opts.onBypass,
   };
   applyTo(graph, current);
+  applySpatial(spatial, processing && current.spatial === true, false); // no glide in from silence
   applyLevel(graph, LEVEL_SNAP_S); // a known level is in place from the first note
   applyVocals(vocalNodes, vocals, false);
   const sink = (el as HTMLAudioElement & { sinkId?: string }).sinkId;
@@ -668,6 +804,7 @@ export function detachEffects(): void {
     g.eq.forEach((f) => f.disconnect());
     g.mono.disconnect();
     g.panner.disconnect();
+    Object.values(g.spatial).forEach((n: AudioNode | null) => n?.disconnect());
     g.level.disconnect();
     g.compressor.disconnect();
     g.analyser.disconnect();

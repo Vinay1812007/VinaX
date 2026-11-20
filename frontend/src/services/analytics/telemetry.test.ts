@@ -43,7 +43,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { resetSessionIntent } from '@/services/personalization/sessionIntent';
 import { KEYS } from '@/constants/storage-keys';
-import { applyUsageSharingDefault, consented, disposeTelemetry, initTelemetry, META_MAX_BYTES, reportError, trackStructured } from './telemetry';
+import { applyUsageSharingDefault, consented, disposeTelemetry, initTelemetry, isResizeObserverNotice, META_MAX_BYTES, reportError, trackStructured } from './telemetry';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: id, subtitle: 'Artist', artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
 const tick = (t: number, d = 200) => engine.handlers?.onTime(t, d);
@@ -224,5 +224,14 @@ describe('schema 16 — time in the app and how VinaX runs', () => {
     const { displayMode } = await import('./telemetry');
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(display-mode: standalone)' }));
     expect(displayMode()).toBe('installed');
+  });
+});
+
+describe('1.19.2 browser notices that are not app errors', () => {
+  it('knows the ResizeObserver notice in both wordings, and nothing else', () => {
+    expect(isResizeObserverNotice('ResizeObserver loop limit exceeded')).toBe(true);
+    expect(isResizeObserverNotice('ResizeObserver loop completed with undelivered notifications.')).toBe(true);
+    expect(isResizeObserverNotice('TypeError: x is undefined')).toBe(false);
+    expect(isResizeObserverNotice(undefined)).toBe(false);
   });
 });

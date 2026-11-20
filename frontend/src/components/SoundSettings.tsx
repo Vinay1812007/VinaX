@@ -5,7 +5,7 @@
  * drop `<SoundSettings />` in without exporting its private helpers. Mounting
  * starts the settings → engine bridge; the graph itself is a lazy chunk.
  */
-import { useEffect, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { iosWeb } from '@/utils/platform';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Chip } from '@/components/Chip';
@@ -13,6 +13,8 @@ import { WaveIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import { EQ_BAND_LABELS, EQ_MAX_DB, EQ_PRESETS, EQ_PRESET_LABELS, useEffectsStatus } from '@/services/audio/effects';
 import { initSoundEffects } from '@/services/audio/effectsBridge';
+import { detectSoundCaps, NO_CAPS, openDolbySettings, type SoundCaps } from '@/services/audio/soundCaps';
+import { toast } from '@/store/toastStore';
 
 const PRESET_IDS = ['flat', 'bass', 'vocal', 'treble', 'loud', 'podcast'];
 
@@ -58,11 +60,25 @@ function statusText(on: boolean, active: boolean, bypassed: boolean): string {
   return active ? 'Active' : 'On';
 }
 
-export function SoundSettings() {
+/**
+ * 1.19.2 — `variant="sheet"`: the same rows inside the Now Playing Playback
+ * sheet (no section heading or card of its own; player.css lays them out).
+ * Spatial audio and Dolby Atmos appear only on a device that has them
+ * (services/audio/soundCaps).
+ */
+export function SoundSettings({ variant = 'card' }: { variant?: 'card' | 'sheet' } = {}) {
   const s = useSettingsStore();
   const status = useEffectsStatus();
+  const [caps, setCaps] = useState<SoundCaps>(NO_CAPS);
   useEffect(() => {
     initSoundEffects();
+    let live = true;
+    void detectSoundCaps().then((c) => {
+      if (live) setCaps(c);
+    });
+    return () => {
+      live = false;
+    };
   }, []);
   const on = s.soundEffects;
   const text = statusText(on, status.active, status.bypassed);
@@ -75,7 +91,7 @@ export function SoundSettings() {
   };
 
   return (
-    <section className="mb-6">
+    <section className={cn('mb-6', variant === 'sheet' && 'vx-sound-sheet')} aria-label={variant === 'sheet' ? 'Sound' : undefined}>
       <div className="flex items-center gap-2.5 px-1 mb-2.5">
         <span className="w-7 h-7 rounded-lg bg-ember-500/15 text-ember-500 flex items-center justify-center shrink-0">
           <WaveIcon className="w-4 h-4" />
@@ -155,6 +171,33 @@ export function SoundSettings() {
         <Row label="Loudness normalisation" note="Plays every song at about the same volume, without squashing it. A new song settles in its first few seconds.">
           <Toggle on={s.normalize} onChange={s.setNormalize} label="Loudness normalisation" disabled={!on} />
         </Row>
+
+        {/* 1.19.2 — only on a device with spatial audio (soundCaps). */}
+        {caps.spatial && (
+          <Row
+            label="Spatial audio"
+            note={on ? 'Places the song around you, like speakers in a room, instead of inside your head. Best with headphones. Processed on this device.' : 'Turn on sound effects to use spatial audio.'}
+          >
+            <Toggle on={s.spatialAudio && on && !iosWeb()} onChange={s.setSpatialAudio} label="Spatial audio" disabled={!on || iosWeb()} />
+          </Row>
+        )}
+
+        {/* 1.19.2 — only on a phone with Dolby Atmos. Android lets no app switch it, so this opens the phone's own Dolby switch. */}
+        {caps.dolby && (
+          <Row label="Dolby Atmos" note="This phone has Dolby Atmos. Turn it on or off in the phone's Dolby settings; it then works on everything VinaX plays.">
+            <button
+              type="button"
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-ember-500/15 text-ember-500 hover:bg-ember-500/25"
+              onClick={() => {
+                void openDolbySettings().then((ok) => {
+                  if (!ok) toast('Could not open the Dolby settings on this phone');
+                });
+              }}
+            >
+              Dolby settings
+            </button>
+          </Row>
+        )}
 
         <Row label="Status" note={status.bypassed && on ? 'This track is streamed in a way the effects chain can’t read; it plays untouched.' : undefined}>
           <span

@@ -98,6 +98,9 @@ class FakeAudioContext {
   createChannelMerger = () => node('merger');
   createBiquadFilter = () => node('biquad');
   createStereoPanner = () => node('panner');
+  createPanner = () => Object.assign(node('panner3d'), { positionX: param(), positionY: param(), positionZ: param() });
+  createConvolver = () => node('convolver');
+  createBuffer = (_ch: number, len: number) => ({ getChannelData: () => new Float32Array(len) });
   createDynamicsCompressor = () => node('compressor');
   createAnalyser = () => node('analyser');
   resume = () => Promise.resolve();
@@ -138,7 +141,8 @@ function play(blocks: number): void {
 }
 
 const live = (kind: string) => nodes.filter((n) => n.kind === kind && !n.disconnected);
-const levelGain = () => live('panner')[0].edges[0];
+// 1.19.2 — balance feeds the spatial stage, whose output gain feeds the level gain.
+const levelGain = () => live('compressor').length ? nodes.find((n) => !n.disconnected && n.kind === 'gain' && n.edges.includes(live('compressor')[0]))! : live('panner')[0].edges[0];
 const compressor = () => live('compressor')[0];
 const meter = () => live('analyser').find((n) => n.fftSize === METER_FFT_SIZE)!;
 
@@ -161,6 +165,48 @@ afterEach(() => {
   setVocals('full');
   applyEffects({ normalize: false });
   vi.useRealTimers();
+});
+
+describe('1.19.2 spatial audio wiring', () => {
+  afterEach(() => applyEffects({ spatial: false }));
+
+  it('sits between balance and loudness: two HRTF speakers and a room beside a dry path', () => {
+    attachEffects(el, { trackId: 'a' });
+    const input = live('panner')[0].edges[0];
+    const [dry, splitter, room] = input.edges;
+    expect(splitter.kind).toBe('splitter');
+    expect(room.kind).toBe('convolver');
+    const speakers = live('panner3d');
+    expect(speakers).toHaveLength(2);
+    for (const p of speakers) expect(p).toMatchObject({ panningModel: 'HRTF' });
+    const output = dry.edges[0];
+    expect(output.edges).toEqual([levelGain()]);
+    // Off: only the dry path is heard.
+    expect(dry.gain.value).toBe(1);
+    expect(speakers[0].edges[0].gain.value).toBe(0);
+  });
+
+  it('switching it on hands the song to the speakers and the room; Sound effects off flattens it', () => {
+    attachEffects(el, { trackId: 'a' });
+    const input = live('panner')[0].edges[0];
+    const [dry, , room] = input.edges;
+    const wet = live('panner3d')[0].edges[0];
+    applyEffects({ spatial: true });
+    expect(dry.gain.value).toBe(0);
+    expect(wet.gain.value).toBe(1);
+    expect(room.edges[0].gain.value).toBeGreaterThan(0);
+    setProcessing(false);
+    expect(dry.gain.value).toBe(1);
+    expect(wet.gain.value).toBe(0);
+    setProcessing(true);
+  });
+
+  it('detach disconnects the spatial nodes', () => {
+    attachEffects(el, { trackId: 'a' });
+    const parts = [...live('panner3d'), ...live('convolver')];
+    detachEffects();
+    for (const n of parts) expect(n.disconnected).toBe(true);
+  });
 });
 
 describe('loudness wiring', () => {

@@ -95,6 +95,9 @@ class FakeAudioContext {
   createChannelMerger = () => node('merger');
   createBiquadFilter = () => node('biquad');
   createStereoPanner = () => node('panner');
+  createPanner = () => Object.assign(node('panner3d'), { positionX: param(), positionY: param(), positionZ: param() });
+  createConvolver = () => node('convolver');
+  createBuffer = (_ch: number, len: number) => ({ getChannelData: () => new Float32Array(len) });
   createDynamicsCompressor = () => node('compressor');
   createAnalyser = () => node('analyser');
   resume = () => Promise.resolve();

@@ -99,6 +99,9 @@ public class MainActivity extends BridgeActivity {
         // Registering touches no Cast class: the framework loads only when the
         // page asks, and a phone without Google Play services just has no Cast.
         registerPlugin(VinaxCastPlugin.class);
+        // 1.19.2 — does this phone have spatial audio / Dolby Atmos
+        // (native-android/SoundCapsPlugin.java): Sound shows those rows only then.
+        registerPlugin(SoundCapsPlugin.class);
         super.onCreate(savedInstanceState);
         allowSignInCheck();
         maybeOpenPlayer(getIntent());
@@ -180,13 +183,31 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    /** A tap on a push VinaxPushService drew: open its link inside the app. */
+    /**
+     * A tap on a push VinaxPushService drew: open its link inside the app.
+     * 1.19.2 — an owner alert (Smart Alerts: /admin/#/app-errors and the
+     * rest) opens the console in the phone's browser instead. Loaded here it
+     * replaced the music app with the console inside the app's own window,
+     * with no way back but closing the app. The console's own host
+     * (admin.vinaxmusic.online) is not one of the app's links, so Android
+     * hands it to the browser rather than back to VinaX.
+     */
     private void maybeOpenPushLink(Intent intent) {
         try {
             if (intent == null) return;
             final String link = intent.getStringExtra("vinax_link");
             if (link == null || !link.startsWith("/") || link.startsWith("//")) return;
             intent.removeExtra("vinax_link");
+            if (link.equals("/admin") || link.startsWith("/admin/") || link.startsWith("/admin#") || link.startsWith("/admin?")) {
+                try {
+                    final Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse("https://admin.vinaxmusic.online" + link));
+                    browser.addCategory(Intent.CATEGORY_BROWSABLE);
+                    browser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(browser);
+                } catch (Exception ignored) {
+                }
+                return;
+            }
             final Bridge bridge = getBridge();
             if (bridge == null || bridge.getWebView() == null) return;
             bridge.getWebView().post(() -> bridge.getWebView().loadUrl("https://www.vinaxmusic.online" + link));
@@ -244,7 +265,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin, VinaxPushPlugin, DiscoPlugin and VinaxCastPlugin, with the sign-in check allowed');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin, VinaxPushPlugin, DiscoPlugin, VinaxCastPlugin and SoundCapsPlugin, with the sign-in check allowed');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }
@@ -473,6 +494,23 @@ ${linkData('vinaxmusic.online')}
       console.error('[manifest] Refusing to write an unpatched manifest — fix the regex above and retry.');
       process.exit(1);
     }
+  }
+
+  // 1.19.2 — Android 11+ hides other apps from an app unless the manifest
+  // names them: SoundCapsPlugin looks for Dolby's settings app (to show
+  // "Dolby Atmos" and open it). Must match SoundCapsPlugin.DOLBY_APPS.
+  const DOLBY_APPS = ['com.dolby.daxappui', 'com.dolby.ds1appUI', 'com.motorola.dolby.dolbyui', 'com.dolby.atmos'];
+  manifest = manifest.replace(/\n[ \t]*<!-- vinax-queries -->[\s\S]*?<!-- \/vinax-queries -->/g, '');
+  const queries = `
+    <!-- vinax-queries -->
+    <queries>
+${DOLBY_APPS.map((p) => `        <package android:name="${p}" />`).join('\n')}
+    </queries>
+    <!-- /vinax-queries -->`;
+  {
+    const before = manifest;
+    manifest = manifest.replace(/(<application\b)/, `${queries.trimStart()}\n\n    $1`);
+    if (manifest === before) console.warn('[manifest] <application> not found — Dolby Atmos will not be detected from its settings app');
   }
 
   fs.writeFileSync(manifestPath, manifest);

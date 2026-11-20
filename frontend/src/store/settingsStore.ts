@@ -127,6 +127,8 @@ export interface SettingsState {
   balance: number;
   /** v5.19.0 — loudness normalisation (a per-song level, then a peak limiter). */
   normalize: boolean;
+  /** 1.19.2 — spatial audio: virtual speakers for headphones (offered only where the device has spatial audio). */
+  spatialAudio: boolean;
 
   setDailyGoalMinutes(n: number): void;
   setUiScale(v: 'sm' | 'md' | 'lg'): void;
@@ -180,6 +182,7 @@ export interface SettingsState {
   setMono(v: boolean): void;
   setBalance(v: number): void;
   setNormalize(v: boolean): void;
+  setSpatialAudio(v: boolean): void;
   resetSettings(): void;
 }
 
@@ -245,6 +248,7 @@ const defaults = {
   mono: false,
   balance: 0,
   normalize: false,
+  spatialAudio: false,
 };
 
 /** The persisted preference fields (no actions). */
@@ -398,6 +402,7 @@ export const useSettingsStore = create<SettingsState>()(
       setMono: (mono) => set({ mono }),
       setBalance: (v) => set({ balance: Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0 }),
       setNormalize: (normalize) => set({ normalize }),
+      setSpatialAudio: (spatialAudio) => set({ spatialAudio: !!spatialAudio }),
       resetSettings: () => set({ ...defaults }),
     }),
     {

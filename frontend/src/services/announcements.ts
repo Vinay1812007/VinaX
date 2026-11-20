@@ -68,7 +68,7 @@ export async function checkAnnouncements(navigate: (to: string) => void): Promis
         // Reject protocol-relative "//attacker.com/x" — startsWith('/') alone
         // would accept it and navigate() would send the WebView off-origin.
         if (typeof link === 'string' && /^\/[^/]/.test(link)) navigate(link);
-      });
+      }).catch(() => undefined);
     }
     // Never asks: the "Allow access" sheet asks at start-up, after saying why.
     if ((await getNotificationPermission()) !== 'granted') return;

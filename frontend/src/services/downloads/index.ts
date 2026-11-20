@@ -387,6 +387,34 @@ async function cacheAudioFromDisk(
   }
 }
 
+/**
+ * 1.19.2 — the player could not read a saved song's /offline-audio/ copy
+ * (App Errors: "unsupported source (saved song (cache)): Format error", the
+ * same songs again and again). Drop that copy and leave the route out of
+ * this song's sources, so the next play goes straight to the file on disk
+ * (or the stream) instead of failing on the broken copy first. The saved
+ * song itself stays saved. Never throws.
+ */
+export async function dropBrokenCachedAudio(id: string): Promise<void> {
+  cacheState.set(id, false);
+  const blob = urlMap.get(id);
+  if (blob?.startsWith('blob:')) {
+    urlMap.delete(id);
+    try {
+      URL.revokeObjectURL(blob);
+    } catch {
+      /* already gone */
+    }
+  }
+  try {
+    if (typeof caches === 'undefined') return;
+    const cache = await caches.open(AUDIO_CACHE);
+    await cache.delete(audioUrlFor(id));
+  } catch {
+    /* storage blocked: the route stays skipped for this session */
+  }
+}
+
 /** True when the song's /offline-audio/ cache entry exists. */
 async function hasCachedAudio(id: string): Promise<boolean> {
   try {

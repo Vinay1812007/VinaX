@@ -105,10 +105,19 @@ function safeStorage(): Storage | null {
   }
 }
 
+/**
+ * 1.19.2 — the phone's own state, not the app's: Google Play services had no
+ * connection (offline, Play services updating) or no token came in time
+ * (usually the same). The Setup Check still gets every one; App Errors no
+ * longer does, where they were 43 reports of nothing to fix.
+ */
+const DEVICE_STATE_RE = /SERVICE_NOT_AVAILABLE|no FCM token within/;
+
 function report(message: string): void {
   lastReport = message;
   if (SETUP_ANSWER_RE.test(message)) {
     sendReport('setup', message);
+    if (DEVICE_STATE_RE.test(message)) return;
     if (setupAnswerReportedToday(message)) return;
   }
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
@@ -217,10 +226,13 @@ async function wire(PushNotifications: PushPlugin): Promise<void> {
 /** Where a tapped notification's link goes. Owner-console links (Smart
  *  Alerts) open the live console in the browser: the app has no /admin
  *  screen. Other same-site paths open inside the app; anything else
- *  (including protocol-relative "//host/x") is refused. */
+ *  (including protocol-relative "//host/x") is refused.
+ *  1.19.2 — on the console's own host, admin.vinaxmusic.online. The app's
+ *  window shares www's host, so Android kept www/admin inside the app and the
+ *  console replaced the music app; another host goes to the browser. */
 export function openPushLink(link: string, navigate: (to: string) => void = navigateTo, open: (url: string) => void = (u) => { window.open(u, '_blank', 'noopener,noreferrer'); }): void {
   if (!/^\/(?!\/)/.test(link)) return;
-  if (/^\/admin(\/|$|#|\?)/.test(link)) { open(`https://www.vinaxmusic.online${link}`); return; }
+  if (/^\/admin(\/|$|#|\?)/.test(link)) { open(`https://admin.vinaxmusic.online${link}`); return; }
   navigate(link);
 }
 
@@ -329,6 +341,14 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
   } else {
     sendReport('page', 'VinaxPush plugin not in this APK');
   }
+  // 1.19.2 — an app whose native part lacks the push plugin (App Errors:
+  // "PushNotifications" plugin is not implemented on android, from both
+  // createChannel and register) has no push to set up: tell the Setup Check
+  // and stop, rather than reporting each failing call as an app error.
+  if (!Capacitor.isPluginAvailable('PushNotifications')) {
+    sendReport('page', 'PushNotifications plugin not in this APK');
+    return;
+  }
   const loaded = await loadPlugin();
   if (!loaded) return;
   const { PushNotifications } = loaded;
@@ -348,7 +368,7 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
  * token), register again. Never asks.
  */
 export async function refreshNativePush(): Promise<void> {
-  if (!isNativePlatform() || uploaded) return;
+  if (!isNativePlatform() || uploaded || !Capacitor.isPluginAvailable('PushNotifications')) return;
   const loaded = await loadPlugin();
   if (!loaded) return;
   const { PushNotifications } = loaded;

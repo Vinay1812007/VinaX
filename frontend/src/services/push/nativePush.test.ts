@@ -45,6 +45,6 @@ describe('tapped notification links', () => {
     openPushLink('//evil.example/x', navigate, open);
     openPushLink('https://evil.example/x', navigate, open);
     expect(navigate.mock.calls).toEqual([['/album/1']]);
-    expect(open.mock.calls).toEqual([['https://www.vinaxmusic.online/admin/#/app-errors']]);
+    expect(open.mock.calls).toEqual([['https://admin.vinaxmusic.online/admin/#/app-errors']]);
   });
 });
