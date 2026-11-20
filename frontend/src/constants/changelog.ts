@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.20.1': {
+    title: 'Autoplay keeps playing, the player bar is plain black, every artist song and full credits',
+    changes: [
+      { type: 'fixed', text: 'Autoplay no longer stops when you have played every similar song lately: it looks further (the artist\'s songs, popular songs in your language) and never plays two versions of one song.' },
+      { type: 'improved', text: 'The player bar is plain black like Spotify\'s, and pages end above it instead of being cut off under it.' },
+      { type: 'improved', text: 'Artist pages show 5 popular songs, See more shows 10, and See all songs lists every song by the artist, sorted by Popular, Newest or A–Z.' },
+      { type: 'improved', text: 'Credits now list Singers, Music, Lyrics and Starring, then the film, label, year and copyright, each name opening the artist.' },
+    ],
+  },
   '1.20.0': {
     title: 'The queue is rebuilt to work like Spotify\'s: Next in queue, Next from, Autoplay',
     changes: [
