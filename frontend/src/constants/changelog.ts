@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.19.2': {
+    title: 'Spatial audio and Dolby Atmos in Sound, Sound in the Playback sheet, and owner alerts…',
+    changes: [
+      { type: 'improved', text: 'The Playback sheet on Now Playing now has the Sound settings: equalizer, balance, mono and loudness.' },
+      { type: 'new', text: 'New Spatial audio switch places songs around you on headphones, shown only on devices with spatial audio.' },
+      { type: 'improved', text: 'Phones with Dolby Atmos get a Dolby Atmos row that opens the phone\'s own Dolby settings.' },
+      { type: 'improved', text: 'Owner alerts in the Android app open the console in the browser instead of inside the app.' },
+    ],
+  },
   '1.19.1': {
     title: 'The Android app keeps clear of the status bar and the gesture bar',
     changes: [
