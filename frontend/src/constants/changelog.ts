@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.20.0': {
+    title: 'The queue is rebuilt to work like Spotify\'s: Next in queue, Next from, Autoplay',
+    changes: [
+      { type: 'improved', text: 'The Queue page now reads Now playing, Next in queue, Next from and Autoplay, with shuffle, repeat and an Autoplay switch, plus a Recently played tab.' },
+      { type: 'new', text: 'Songs you add with Add to queue play right after the current song, in the order you added them, and stay when you start another album or playlist.' },
+      { type: 'new', text: 'When your album, playlist or song ends, Autoplay plays similar songs; Clear queue empties only the songs you added.' },
+      { type: 'improved', text: 'Play next, Tune this queue, Build a queue, Smart Queue, Refresh up next and Keep this song are gone.' },
+    ],
+  },
   '1.19.2': {
     title: 'Spatial audio and Dolby Atmos in Sound, Sound in the Playback sheet, and owner alerts…',
     changes: [
