@@ -1,21 +1,20 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { albumPath, artistPath, songPath } from '@/utils/slug';
+import { artistPath, songPath } from '@/utils/slug';
 // 1.13 — the Together tab's panel (start, join, scan a QR): loaded when the tab is first opened.
 const TogetherPanel = lazy(() => import('@/features/together/TogetherPanel'));
 // 1.19.2 — the Sound settings inside the Playback sheet; loaded when the sheet opens.
 const SoundSettings = lazy(() => import('@/components/SoundSettings').then((m) => ({ default: m.SoundSettings })));
-import { isEpisode, podcastPath } from '@/features/podcasts/paths';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
 import { beginArtSwipe, endArtSwipe, moveArtSwipe, swipeFollow, type ArtSwipe } from '@/features/player/artSwipe';
+import { CreditsPanel } from '@/features/player/CreditsPanel';
 import { UpNextRows } from '@/features/player/UpNextRows';
 import { SleepTimerButton, SleepTimerOptions, SleepTimerSheet } from '@/features/player/SleepTimer';
 import { StageLyrics } from '@/features/lyrics/StageLyrics';
-import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { Seekbar } from '@/components/Seekbar';
 import { FavButton, toggleLike } from '@/components/FavButton';
@@ -69,49 +68,6 @@ import { Sheet, SheetHeader } from '@/components/Sheet';
 import { reducedMotion, scrollBehavior } from '@/utils/motion';
 import { useT } from '@/i18n';
 import '@/styles/pages/player.css';
-
-interface CreditChip {
-  role: string;
-  name: string;
-  to: string;
-}
-
-/**
- * v5.5.4 — who-made-this credits, every one clickable. Roles come from the
- * catalog when it provides them (music / singer / lyricist); catalogs that
- * send bare names still get clickable "Artist" credits, and the soundtrack
- * album becomes the "Film" credit.
- */
-function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
-  const chips: CreditChip[] = [];
-  const seen = new Set<string>();
-  const push = (role: string, name: string, to: string): void => {
-    const k = name.trim().toLowerCase();
-    if (!k || seen.has(k) || chips.length >= 5) return;
-    seen.add(k);
-    chips.push({ role, name, to });
-  };
-  const linkFor = (a: ArtistRef): string => (a.id ? artistPath(a) : `/search/${encodeURIComponent(a.name)}`);
-  const roleOf = (a: ArtistRef): string => (a.role ?? '').toLowerCase();
-  for (const a of song.artists) if (/music|compos/.test(roleOf(a))) push('Music', a.name, linkFor(a));
-  for (const a of song.artists) if (/sing|vocal/.test(roleOf(a))) push('Singer', a.name, linkFor(a));
-  for (const a of song.artists) if (/lyric/.test(roleOf(a))) push('Lyrics', a.name, linkFor(a));
-  // Role-less catalog rows: still credit and link every name we have.
-  for (const a of song.artists) if (!roleOf(a)) push('Artist', a.name, linkFor(a));
-  // v5.6.0 — the film credit no longer needs an album id: when the catalog
-  // sends only a name, it searches it, so the movie is ALWAYS tappable.
-  // 1.3 — an episode credits its podcast, not a film.
-  if (song.album?.name && isEpisode(song)) {
-    chips.push({ role: 'Podcast', name: song.album.name, to: song.album.id ? podcastPath(song.album) : `/search/${encodeURIComponent(song.album.name)}` });
-  } else if (song.album?.name) {
-    chips.push({
-      role: 'Film',
-      name: filmTitle ?? song.album.name,
-      to: song.album.id ? albumPath(song.album) : `/search/${encodeURIComponent(filmTitle ?? song.album.name)}`,
-    });
-  }
-  return chips;
-}
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
@@ -515,7 +471,6 @@ export default function NowPlayingPage() {
   // 1.15 — what the listener pressed play on (an album, a playlist, Liked songs, a search…).
   const playingFrom = queueContext?.label ?? song.album?.name ?? tx('Your queue');
   const filmTitle = song.album ? filmTitleFromAlbumName(song.album.name) : null;
-  const creditChips = buildCreditChips(song, filmTitle);
   const washStyle = (wash ? { '--np-wash': wash } : undefined) as React.CSSProperties | undefined;
   const leadArtist = song.artists[0];
 
@@ -894,21 +849,7 @@ export default function NowPlayingPage() {
                     </p>
                   </div>
                 )}
-                {creditChips.length > 0 && (
-                  <div className="vx-np-about-block">
-                    <h3 className="vx-np-about-label">{tx('Credits')}</h3>
-                    <ul className="vx-np-credits">
-                      {creditChips.map((c) => (
-                        <li key={`${c.role}-${c.name}`}>
-                          <Link to={c.to} className="vx-np-credit">
-                            <span className="vx-np-credit-role">{tx(c.role)}</span>
-                            <span className="vx-np-credit-name">{c.name}</span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <CreditsPanel song={song} filmTitle={filmTitle} tx={tx} />
                 {streamKbps != null && (
                   <div className="vx-np-about-block">
                     <h3 className="vx-np-about-label">{tx('Stream')}</h3>
@@ -917,9 +858,6 @@ export default function NowPlayingPage() {
                       {streamKbps} kbps
                     </span>
                   </div>
-                )}
-                {!reasons[song.id] && creditChips.length === 0 && streamKbps == null && (
-                  <p className="vx-np-empty">{tx('No credits for this song yet.')}</p>
                 )}
               </div>
             )}

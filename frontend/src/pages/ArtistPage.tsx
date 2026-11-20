@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import type { ArtistRef, Song } from '@/types';
 import { albumPath, artistPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
@@ -18,7 +18,6 @@ import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
-import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { CheckIcon, ShuffleIcon } from '@/components/Icons';
 import { Chip } from '@/components/Chip';
 import { ARTIST_SONG_SORTS, compactCount, sortArtistSongs, type ArtistSongSort } from '@/features/artists/sortSongs';
@@ -65,7 +64,7 @@ export default function ArtistPage() {
   });
   const art = bestImage(artist.images, 500);
   const sorted = sortArtistSongs(songs, sort);
-  const shown = showAll ? sorted : sorted.slice(0, POPULAR_PREVIEW);
+  const shown = sorted.slice(0, showAll ? POPULAR_MORE : POPULAR_PREVIEW);
   // Short releases (one to three tracks) read as singles; the rest as albums.
   const singles = artist.albums.filter((a) => a.songCount != null && a.songCount <= 3);
   const albums = artist.albums.filter((a) => !singles.includes(a));
@@ -149,18 +148,17 @@ export default function ArtistPage() {
           <div className="vx-tracklist">
             {shown.map((song, i) => <SongRow key={song.id} song={song} songs={sorted} index={i} />)}
           </div>
-          {showAll && (
-            <InfiniteSentinel
-              onVisible={() => topSongs.hasNextPage && !topSongs.isFetchingNextPage && topSongs.fetchNextPage()}
-              disabled={!topSongs.hasNextPage}
-              loading={topSongs.isFetchingNextPage}
-            />
-          )}
-          {songs.length > POPULAR_PREVIEW && (
-            <button type="button" className="vx-quiet-btn vx-show-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-              {showAll ? 'Show less' : 'Show more'}
-            </button>
-          )}
+          {/* Spotify's artist page: 5 songs, See more shows 10, and every song is one tap away. */}
+          <div className="vx-artist-more">
+            {songs.length > POPULAR_PREVIEW && (
+              <button type="button" className="vx-quiet-btn vx-show-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? 'Show less' : 'See more'}
+              </button>
+            )}
+            <Link to={`${artistPath(artist)}/songs`} className="vx-quiet-btn vx-show-more">
+              See all songs
+            </Link>
+          </div>
         </section>
       )}
       {topSongs.isLoading && songs.length === 0 && <ListSkeleton />}
@@ -200,6 +198,8 @@ export default function ArtistPage() {
 }
 
 const POPULAR_PREVIEW = 5;
+/** "See more" on the artist page: the top ten (the rest is on All songs). */
+const POPULAR_MORE = 10;
 
 /** Other lead artists credited on this artist's songs, most frequent first. */
 function relatedArtists(selfId: string, songs: Song[]): ArtistRef[] {

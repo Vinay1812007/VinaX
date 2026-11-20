@@ -106,6 +106,16 @@ function toArtistRefs(raw: any): ArtistRef[] {
   return [];
 }
 
+/** 1.20.1 — every credited person with a role (`artists.all`), for Credits; at most 16. */
+function toCredits(raw: any): ArtistRef[] {
+  const all = raw?.artists?.all ?? raw?.more_info?.artistMap?.artists;
+  if (!Array.isArray(all)) return [];
+  return all
+    .map((a: any) => ({ id: String(a?.id ?? ''), name: decodeHtml(str(a?.name, a?.title)), role: typeof a?.role === 'string' ? a.role : undefined }))
+    .filter((a: ArtistRef) => a.name && a.role)
+    .slice(0, 16);
+}
+
 function toAlbumRef(raw: any): AlbumRef | null {
   const a = raw?.album ?? raw?.more_info?.album;
   if (!a) return null;
@@ -121,6 +131,9 @@ export function normalizeSong(raw: any): Song | null {
   if (!id || !title) return null;
 
   const artists = toArtistRefs(raw);
+  const credits = toCredits(raw);
+  const label = decodeHtml(str(raw.label, raw.more_info?.label));
+  const copyright = decodeHtml(str(raw.copyright, raw.copyright_text, raw.more_info?.copyright_text));
   const subtitle = decodeHtml(
     str(raw.subtitle, artists.map((a) => a.name).join(', '), raw.primaryArtists, raw.singers),
   );
@@ -149,6 +162,10 @@ export function normalizeSong(raw: any): Song | null {
     mood: str(raw.mood, raw.more_info?.mood) || null,
     energy: num(raw.energy, raw.more_info?.energy),
     tempo: num(raw.tempo, raw.tempoBpm, raw.bpm, raw.more_info?.tempo, raw.more_info?.bpm),
+    // Only when the catalogue sends them, so a saved song stays as small as before.
+    ...(credits.length ? { credits } : {}),
+    ...(label ? { label } : {}),
+    ...(copyright ? { copyright } : {}),
   };
 }
 

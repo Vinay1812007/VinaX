@@ -80,7 +80,9 @@
   .vx-workspace { border-radius: var(--radius-md, 8px); }
 }
 @media (min-width: 1024px) {
-  .vx-panels { padding-bottom: 0; }
+  /* 1.20.1 — like Spotify: 8px of window between the panels and the player
+     bar, so a page ends on its rounded panel edge instead of under the bar. */
+  .vx-panels { padding-bottom: var(--vx-panel-gap); }
 }
 
 /* ------------------------------------------------------------ window bar */

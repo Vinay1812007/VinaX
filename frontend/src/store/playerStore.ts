@@ -421,7 +421,9 @@ export const usePlayerStore = create<PlayerState>()(
             // Read the state as it is NOW, after the await: a song hidden or
             // Kid mode switched on meanwhile never gets in.
             if (stale()) return false;
-            return commitAutoplay(pickAutoplay(found, get().queue), 'autoplay', started) > 0;
+            // findAutoplaySongs already chose how far to widen; here only what
+            // changed meanwhile (a song queued, hidden, muted) is checked again.
+            return commitAutoplay(pickAutoplay(found, get().queue, found.length, { recent: 0, avoid: get().queue.slice(get().index) }), 'autoplay', started) > 0;
           } catch {
             return false;
           } finally {

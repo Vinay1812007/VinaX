@@ -793,3 +793,14 @@ html.light .vx-ehead-wash {
     linear-gradient(180deg, rgb(var(--hero) / 0.7) 0%, rgb(var(--hero) / 0.45) calc(100% - 232px), rgb(var(--hero) / 0.16) calc(100% - 140px), rgb(var(--hero) / 0) 100%);
 }
 html.light .vx-ehead-meta, html.light .vx-ehead-dot, html.light .vx-ehead-desc { color: rgb(var(--ink-100) / 0.78); }
+
+/* 1.20.1 — an artist's All songs page: the artist's name (a link back), a
+   large title, then Play and Shuffle; "See more" and "See all songs" under
+   the artist page's Popular list. */
+.vx-artist-songs-head { display: flex; flex-direction: column; gap: 4px; padding: 24px 0 16px; }
+.vx-artist-songs-back { width: fit-content; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 700; }
+.vx-artist-songs-back:hover { color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 3px; }
+.vx-artist-songs-head h1 { font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; }
+.vx-artist-songs-actions { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+.vx-artist-songs-end { padding: 16px 0 32px; color: rgb(var(--ink-400)); font-size: 13px; text-align: center; }
+.vx-artist-more { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }

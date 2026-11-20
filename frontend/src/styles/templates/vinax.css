@@ -165,8 +165,10 @@ html[data-template='vinax'] :is(.vx-sidebar, .vx-playing-rail) { background: var
     box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
   }
 }
-/* The window bar and the player bar sit on the window itself. */
-html[data-template='vinax'] :is(.vx-winbar, .vx-deck-wrap, .vx-deck) { background: transparent; }
+/* The window bar sits on the window itself. 1.20.1 — the player bar is
+   plain black like Spotify's: no artwork colour behind it. */
+html[data-template='vinax'] .vx-winbar { background: transparent; }
+html[data-template='vinax'] :is(.vx-deck-wrap, .vx-deck) { background: rgb(var(--ink-950)); box-shadow: none; }
 
 /* ------------------------------------------------------- pages and cards */
 html[data-template='vinax'] .vx-section-link { color: rgb(var(--ink-300)); font-size: 14px; font-weight: 700; padding-inline: 0; }

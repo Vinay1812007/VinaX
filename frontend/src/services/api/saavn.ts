@@ -321,10 +321,13 @@ export function getArtist(id: string): Promise<Artist> {
  *  first-page fallback ONLY: on a later page it would serve page 1 again, and
  *  the list would repeat forever. Past page 0 a well-formed empty list is the
  *  end of the catalogue, not a shape miss. */
-export function getArtistTopSongs(id: string, page = 0): Promise<Song[]> {
-  const paged = `/artists/${enc(id)}/songs?page=${page}&sortBy=popularity&sortOrder=desc`;
+/** 1.20.1 — the catalogue's own artist-song orders (it sorts all of them, not one page). */
+export type ArtistSongOrder = 'popularity' | 'latest' | 'alphabetical';
+
+export function getArtistTopSongs(id: string, page = 0, order: ArtistSongOrder = 'popularity'): Promise<Song[]> {
+  const paged = `/artists/${enc(id)}/songs?page=${page}&sortBy=${order}&sortOrder=${order === 'alphabetical' ? 'asc' : 'desc'}`;
   return orchestratedRequest({
-    paths: page === 0 ? [paged, `/artists/${enc(id)}/songs`] : [paged],
+    paths: page === 0 && order === 'popularity' ? [paged, `/artists/${enc(id)}/songs`] : [paged],
     validate: (json) => {
       const d = unwrap(json);
       const list = listFrom(d) ?? (Array.isArray(d?.songs) ? d.songs : null);

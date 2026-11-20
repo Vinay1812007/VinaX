@@ -37,6 +37,11 @@ function NowPlayingRailBody() {
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
   const context = usePlayerStore((s) => s.context);
+  const nextRun = usePlayerStore((s) => s.runs[s.index + 1]);
+  const autoplay = useSettingsStore((s) => s.autoplay);
+  const repeat = usePlayerStore((s) => s.repeat);
+  // 1.20.1 — what happens at the end, in the queue's own words.
+  const endNote = autoplay && repeat === 'off' ? 'Autoplay plays similar songs when this one ends.' : 'You’re at the end of this queue. Add a song to keep listening.';
   const why = useReasonStore((s) => (song ? s.reasons[song.id] : undefined));
   const view = useUiStore((s) => s.railView);
   const setView = useUiStore((s) => s.setRailView);
@@ -64,9 +69,9 @@ function NowPlayingRailBody() {
             <span className="vx-upnext-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
           </span>
         </div>
-        <h3 className="vx-rail-sub">{context?.label ? `Next from: ${context.label}` : 'Next in queue'}</h3>
+        <h3 className="vx-rail-sub">{nextRun === 'queued' ? 'Next in queue' : nextRun === 'autoplay' ? 'Autoplay' : context?.label ? `Next from: ${context.label}` : 'Up next'}</h3>
         {upcoming.length === 0 ? (
-          <p className="vx-rail-empty">You’re at the end of this queue. Add a song or tune your next mix.</p>
+          <p className="vx-rail-empty">{endNote}</p>
         ) : (
           <UpNextRows songs={upcoming} start={index + 1} variant="rail" />
         )}
@@ -136,7 +141,7 @@ function NowPlayingRailBody() {
           <button type="button" className="vx-rail-link" onClick={() => setView('queue')}>Open queue</button>
         </div>
         {upNext.length === 0 ? (
-          <p className="vx-rail-empty">You’re at the end of this queue. Add a song or tune your next mix.</p>
+          <p className="vx-rail-empty">{endNote}</p>
         ) : (
           <UpNextRows songs={upNext} start={index + 1} variant="rail" />
         )}

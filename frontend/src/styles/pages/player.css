@@ -522,27 +522,13 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np-about-label { margin-bottom: 10px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 750; }
 .vx-np-why { display: flex; align-items: flex-start; gap: 8px; color: rgb(var(--ink-100)); font-size: 15px; line-height: 1.5; }
 .vx-np-why svg { color: rgb(var(--tide-400)); }
-.vx-np-credits { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; }
-.vx-np-credits > li { max-width: 100%; }
-.vx-np-credit {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: var(--radius-pill);
-  background: rgb(var(--ink-100) / 0.08);
-  color: rgb(var(--ink-100));
-  font-size: 13.5px;
-  font-weight: 650;
-  transition: background-color var(--dur-quick) var(--ease-standard);
-}
-.vx-np-credit::after { content: ''; position: absolute; inset: -2px 0; }
-.vx-np-credit:hover { background: rgb(var(--ink-100) / 0.14); }
-.vx-np-credit-role { flex: none; color: rgb(var(--ink-300)); font-weight: 600; }
-.vx-np-credit-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-credits { display: flex; flex-direction: column; gap: 14px; }
+.vx-credits-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vx-credits-row dt { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 600; }
+.vx-credits-row dd { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 600; line-height: 1.45; }
+.vx-credits-row dd a { color: inherit; text-decoration: none; }
+.vx-credits-row dd a:hover, .vx-credits-row dd a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.vx-credits-copy { margin-top: 16px; color: rgb(var(--ink-400)); font-size: 12px; line-height: 1.5; }
 .vx-np-badge {
   display: inline-flex;
   align-items: center;

@@ -45,6 +45,11 @@ export interface Song {
   mood?: string | null;
   energy?: number | null;
   tempo?: number | null;
+  /** 1.20.1 — everyone credited on the song, each with a role (singer, music, lyricist, starring…); Credits reads it. */
+  credits?: ArtistRef[];
+  /** 1.20.1 — the record label and the copyright line, for Credits. */
+  label?: string | null;
+  copyright?: string | null;
   /**
    * 1.4 — a NEW, ORIGINAL song the old music AI made (removed in 1.14; a saved
    * one can still play from the device). Its id
