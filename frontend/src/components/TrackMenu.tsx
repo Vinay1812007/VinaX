@@ -19,7 +19,7 @@ import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
 import { SNOOZE_DAYS, snoozeSong } from '@/services/recommendation/exposure';
 import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
 import { evidenceLine, useEvidenceStore } from '@/store/evidenceStore';
-import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
+import { muteArtist } from '@/services/personalization/softMutes';
 import { useSettingsStore } from '@/store/settingsStore';
 import { autoQuality, type StreamQualityPref } from '@/services/audio/quality';
 import { QUALITY_LEVELS } from '@/services/audio/qualityLevels';
@@ -146,7 +146,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   // Android back closes the menu instead of leaving the page (audit P0-2).
   useDismissOnBack(true, onClose);
   const navigate = useNavigate();
-  const { enqueue, enqueueNext, startRadio } = usePlayerStore.getState();
+  const { enqueue, startRadio } = usePlayerStore.getState();
   const { addToCollection, createCollection, toggleFavorite, toggleHidden, toggleLater, toggleHiddenArtist } = useLibraryStore.getState();
   const collections = useLibraryStore((s) => s.collections);
   const inLater = useLibraryStore((s) => s.later.some((x) => x.id === song.id));
@@ -314,18 +314,10 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
 
   const artist = song.artists[0]?.name ?? '';
 
-  const moreLike = (): void => {
-    const r = moreLikeThis(song);
-    if (!r.retuned) toast('Got it — more like this for the rest of this session');
-    else if (r.intent) toast(`More like this — new VinaX picks, ${tuneLabel(r.intent).toLowerCase()}`);
-    else toast(artist ? `More like this — new VinaX picks lean toward ${artist}` : 'More like this — new VinaX picks on the way');
-  };
-
   const lessLike = (days: number): void => {
-    const r = lessLikeThis(song, days);
-    if (!r) return;
-    const { receipt, refreshed } = r;
-    toast(`Less of ${receipt.mute.name} until ${fmtDate(receipt.mute.until)}${refreshed ? ' · VinaX picks refreshed' : ''}`, {
+    const receipt = muteArtist(song, days);
+    if (!receipt) return;
+    toast(`Less of ${receipt.mute.name} until ${fmtDate(receipt.mute.until)}`, {
       action: {
         label: 'Undo',
         onClick: () => {
@@ -384,7 +376,6 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       },
     },
     { id: 'playlist', label: 'Add to playlist…', icon: 'addTo', action: open('playlist'), submenu: true },
-    { label: 'Play next', icon: 'playNext', action: () => enqueueNext(song) },
     { label: 'Add to queue', icon: 'addQueue', action: () => enqueue(song) },
     {
       label: 'Share',
@@ -407,10 +398,6 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     'divider',
     // 8.2.0 — Radio: this song starts, and VinaX keeps adding songs that follow from it.
     { label: 'Start radio', icon: 'radio', action: () => { startRadio(song); toast(`Radio: ${song.title}`); } },
-    // 7.2 — steer what comes next. "More like this" is for this sitting and
-    // retunes the automatic picks now; "Less like this" plays the artist less for a
-    // while (a soft mute that ends on its own).
-    { label: 'More like this', icon: 'moreLike', action: moreLike },
     // 15.0 — songs like this one, from the catalogue-ranked route, straight
     // into the queue after what is playing (the reason travels with each).
     {

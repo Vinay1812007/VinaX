@@ -1,33 +1,21 @@
 import type { Song } from '@/types';
 import { usePlayerStore } from '@/store/playerStore';
-import { useReasonStore } from '@/store/reasonStore';
-import { originOf } from '@/features/queue/origin';
-import { OriginBadge } from '@/features/queue/OriginBadge';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { songLine } from '@/utils/songLine';
 import { cn } from '@/utils/cn';
 
 /**
  * 9.0 — the short "Up next" list shared by the full-screen player's panel and
- * the wide-screen Now Playing panel: artwork, Song, Movie/Album – Artist, and
- * who put it there ("VinaX pick" / "Added by you", in words). Tap to jump.
+ * the wide-screen Now Playing panel: artwork, Song, Movie/Album – Artist.
+ * Tap to jump (the Queue page's rules: store/queueRules.ts `jumpTo`).
  *
- * `songs` is a slice of the queue starting at absolute index `start`. The
- * parent subscribes to the queue, and every ownership change replaces the
- * queue, so the markers re-read here stay current.
+ * `songs` is a slice of the queue starting at absolute index `start`.
  */
 export function UpNextRows({ songs, start, variant }: { songs: Song[]; start: number; variant: 'stage' | 'rail' }) {
-  const reasons = useReasonStore((s) => s.reasons);
   return (
     <ol className={cn('vx-upnext', variant === 'rail' && 'is-rail')}>
       {songs.map((s, i) => {
         const line = songLine(s);
-        const origin = originOf(s.id);
-        // 15.0 — every pick explains itself: its reason on its own
-        // picks, and the catalogue's reason ("Because you played …", "Same
-        // artist as …") on songs the listener queued through "Songs like
-        // this". A song with no reason recorded shows none.
-        const why = reasons[s.id];
         return (
           <li key={`${s.id}-${start + i}`} style={{ ['--i' as string]: Math.min(i, 8) }}>
             <button type="button" onClick={() => usePlayerStore.getState().playAt(start + i)} className="vx-upnext-row">
@@ -42,12 +30,6 @@ export function UpNextRows({ songs, start, variant }: { songs: Song[]; start: nu
                 {/* Song – Movie/Album – Artist */}
                 <span className="vx-upnext-title">{line.title}</span>
                 <span className="vx-upnext-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
-                {origin !== 'list' && (
-                  <span className="vx-upnext-origin">
-                    <OriginBadge origin={origin} />
-                    {why && variant === 'stage' && <span className="vx-upnext-why">{why}</span>}
-                  </span>
-                )}
               </span>
             </button>
           </li>

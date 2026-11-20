@@ -90,7 +90,6 @@ const WRAPPED = [
   'pages/SearchPage.tsx',
   'features/search/RecentSearches.tsx',
   'features/search/resultCount.ts',
-  'features/queue/TuneChips.tsx',
   'services/auth/email.ts',
   'store/playerStore.ts',
 ];

@@ -3,8 +3,7 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
  * 8.2 from the built bundle with a mocked catalogue: Radio is one tap from
- * Home and starts endless radio from a mood; the Queue's Smart Queue switch is
- * the existing "Build every queue" setting, and "Refresh up next" is there.
+ * Home and starts endless radio from a mood.
  */
 interface Song {
   kind: 'song'; id: string; title: string; subtitle: string; artists: { id: string; name: string }[];
@@ -24,7 +23,7 @@ async function seed(page: Page, baseURL: string, opts: { queue: Song[] } = { que
   const entries = pool.slice(0, 4).map((song, i) => ({ song, ts: now - i * 3_600_000, completed: true }));
   await page.addInitScript(
     ({ pool, entries, fp, queue }) => {
-      // Seed once: a later navigation must see what the page itself saved (the Smart Queue test reloads into Settings).
+      // Seed once: a later navigation must see what the page itself saved.
       if (!localStorage.getItem('vinax.settings.v1')) localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], autoplay: true, djTakeover: true }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: pool.slice(0, 2), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
@@ -67,19 +66,4 @@ test('Radio is one tap from Home and a mood starts endless radio', async ({ page
   const q = await queueIds(page);
   expect(pool.some((s) => s.id === q[0])).toBe(true);
   await page.screenshot({ path: 'test-results/v82-radio-390.png' });
-});
-
-test('Smart Queue is the existing Build every queue setting, explained, and Refresh up next is on the queue', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const listed = Array.from({ length: 3 }, (_, i) => mk(baseURL!, i));
-  await seed(page, baseURL!, { queue: listed });
-  await page.goto('/queue');
-  const sw = page.getByRole('switch', { name: 'Smart Queue' });
-  await expect(sw).toHaveAttribute('aria-checked', 'true', { timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Refresh up next' })).toBeVisible();
-  await sw.click();
-  await expect(sw).toHaveAttribute('aria-checked', 'false');
-  await page.goto('/settings');
-  const setting = page.getByRole('switch', { name: 'Build every queue' });
-  await expect(setting.first()).toHaveAttribute('aria-checked', 'false');
 });

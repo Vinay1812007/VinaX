@@ -28,12 +28,10 @@ vi.mock('@/services/media-session', () => ({ setMediaHandlers: vi.fn(), updateMe
 vi.mock('@/services/personalization/updater', () => ({ recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn() }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web', appVersionNow: () => 'test', resolveAppVersion: async () => 'test' }));
 vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => ({ connected: false }) }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn() }));
-vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 vi.mock('@/services/recommendation/transitions', () => ({ recordTransition: vi.fn(), transitionScore: () => 0 }));
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async () => ({ songs: [], picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+vi.mock('@/services/autoplay', () => ({
+  findAutoplaySongs: async () => [],
+  pickAutoplay: (songs: unknown[]) => songs,
 }));
 vi.mock('@/services/api', () => ({ getSong: vi.fn() }));
 vi.mock('web-vitals', () => ({ onLCP: vi.fn(), onINP: vi.fn(), onCLS: vi.fn() }));
@@ -62,9 +60,9 @@ beforeEach(() => {
   localStorage.clear();
   resetSessionIntent();
   useHistoryStore.setState({ entries: [] });
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, djTakeover: false, autoplay: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, autoplay: false, mutedLanguages: [] });
   usePlayerStore.getState().clearQueue();
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
   usePlayerStore.getState().initEngine();
 });
 afterEach(() => {

@@ -2,13 +2,8 @@ import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
- * v7.1 from the built bundle, in a real browser:
- *  - Tune this queue in Now Playing's Up next (where Pin a mood used to be)
- *    rebuilds Up Next at once, from songs fetched FOR that mood in the queue's
- *    language;
- *  - a continuation is five songs, all in the playing song's language;
- *  - Up Next rows read Song – Movie/Album – Artist;
- *  - Home greets by first name, never by a whole device name.
+ * v7.1 from the built bundle, in a real browser: Home greets by first name,
+ * never by a whole device name.
  */
 interface ApiSong { kind: 'song'; id: string; title: string; subtitle: string; artists: { primary: { id: string; name: string }[] }; album: { id: string; name: string }; images: { quality: string; url: string }[]; audio: { quality: string; url: string }[]; duration: number; language: string; year: string; explicit: boolean; hasLyrics: boolean; playCount: number }
 const song = (base: string, id: string, title: string, artist: string, album: string, language = 'telugu'): ApiSong => ({
@@ -48,28 +43,6 @@ async function seed(page: Page, baseURL: string): Promise<{ queries: string[] }>
   return seen;
 }
 
-const queue = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []) as Array<{ id: string; language: string }>);
-
-test('Tune this queue in Up next rebuilds it with songs for that mood, five at a time, in the song’s language', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const seen = await seed(page, baseURL!);
-  await page.goto('/now-playing');
-  const moods = page.getByRole('tabpanel', { name: 'Up next' }).getByRole('group', { name: 'Tune this queue' });
-  await expect(moods).toBeVisible();
-  await moods.getByRole('button', { name: 'Tune queue: Devotional' }).click();
-  await expect(moods.getByRole('button', { name: 'Tune queue: Devotional' })).toHaveAttribute('aria-pressed', 'true');
-  // The list is rebuilt NOW — not eight songs from now.
-  await expect.poll(() => queue(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(1);
-  const built = await queue(page);
-  expect(built[0].id).toBe('now'); // the playing song is untouched
-  expect(built.length - 1).toBeLessThanOrEqual(5); // the next five
-  expect(built.slice(1).every((s) => s.language === 'telugu')).toBe(true); // never the Hindi hits, though they are pinned and popular
-  expect(built.slice(1).filter((s) => s.id.startsWith('d')).length).toBeGreaterThanOrEqual(3); // songs fetched FOR the mood lead the rebuild
-  expect(seen.queries.some((q) => q.includes('telugu devotional'))).toBe(true);
-  // Rows read Song – Movie/Album – Artist.
-  await expect(page.getByText(/Bhakti Album \d – Devotee \d/).first()).toBeVisible();
-  await page.screenshot({ path: 'test-results/v71-tune-up-next-1280.png' });
-});
 
 test('Home greets by first name, not by a device name', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 412, height: 915 });

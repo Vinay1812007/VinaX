@@ -62,7 +62,6 @@ import { songsLikeThis } from '@/services/recs/similar';
 import { FocusSheet } from '@/features/focus/FocusSheet';
 import { useFocusStore } from '@/features/focus/focusSounds';
 import { toast } from '@/store/toastStore';
-import { TuneChips } from '@/features/queue/TuneChips';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -248,19 +247,8 @@ export default function NowPlayingPage() {
   const panelRef = useRef<HTMLElement>(null);
   // The artwork's own colour for the stage wash (an "R G B" triplet).
   const [wash, setWash] = useState<string | null>(null);
-  // True from a Tune tap until the rebuilt list arrives (or the attempt gives up).
-  const [rebuilding, setRebuilding] = useState(false);
-  const upcomingCount = usePlayerStore((st) => Math.max(0, st.queue.length - st.index - 1));
-  // The rebuilt list arrived — or, after a generous wait, it is not coming (offline, empty catalogue).
-  useEffect(() => {
-    if (!rebuilding) return;
-    if (upcomingCount > 0) {
-      setRebuilding(false);
-      return;
-    }
-    const t = window.setTimeout(() => setRebuilding(false), 35_000);
-    return () => window.clearTimeout(t);
-  }, [rebuilding, upcomingCount]);
+  // 1.20 — Autoplay is looking for what follows the last song.
+  const autoplayLoading = usePlayerStore((st) => st.autoplayLoading);
   const [immersive, setImmersive] = useState(false);
   // Android back exits immersive lyrics before it leaves the player (P0-2).
   useDismissOnBack(immersive, () => setImmersive(false));
@@ -522,8 +510,7 @@ export default function NowPlayingPage() {
     </>
   );
 
-  // Up next preview: the next six (Tune this queue still fits under them on a
-  // desktop); the whole queue is one tap away (Open queue).
+  // Up next preview: the next six; the whole queue is one tap away (Open queue).
   const upNext = queue.slice(index + 1, index + 7);
   // 1.15 — what the listener pressed play on (an album, a playlist, Liked songs, a search…).
   const playingFrom = queueContext?.label ?? song.album?.name ?? tx('Your queue');
@@ -878,24 +865,13 @@ export default function NowPlayingPage() {
                 <h2 className="sr-only">{tx('Up next')}</h2>
                 {upNext.length === 0 ? (
                   <p className="vx-np-empty" role="status">
-                    <SparkleIcon className={cn('w-4 h-4 shrink-0', rebuilding && 'animate-pulse')} />
-                    {tx(rebuilding ? 'Finding what follows this song…' : 'Add songs with Play next or Add to queue.')}
+                    <SparkleIcon className={cn('w-4 h-4 shrink-0', autoplayLoading && 'animate-pulse')} />
+                    {tx(autoplayLoading ? 'Autoplay is finding songs like this one…' : 'Add songs with Add to queue.')}
                   </p>
                 ) : (
                   <UpNextRows songs={upNext} start={index + 1} variant="stage" />
                 )}
 
-                {/* Round 5 — Tune this queue sits where Pin a mood used to (the pin is gone: it
-                    rebuilt Up Next with the same tune search, plus a 45-minute hold). A chip
-                    rebuilds Up Next at once with songs fetched for it, in this queue's language;
-                    songs you queued by hand stay. The tune lasts until a fresh song starts. */}
-                <div className="vx-np-tune">
-                  <div className="vx-np-subhead">
-                    <h3>{tx('Tune this queue')}</h3>
-                    <span className="vx-np-meta">{tx('Rebuilds Up next · until a fresh song')}</span>
-                  </div>
-                  <TuneChips onTune={() => setRebuilding(true)} />
-                </div>
               </div>
             )}
 
@@ -959,7 +935,7 @@ export default function NowPlayingPage() {
         </div>
       </div>
 
-      {/* More options: volume, speed, sleep, A-B loop, marks, Tune this queue, Sound. */}
+      {/* More options: volume, speed, sleep, A-B loop, marks, Sound. */}
       <Sheet open={showMore} onClose={() => setShowMore(false)} labelledBy="vx-np-opts-title" size="lg" className="vx-np-opts">
         <SheetHeader id="vx-np-opts-title" title={tx('Playback')} onClose={() => setShowMore(false)} />
         <div className="vx-np-opt">
@@ -1031,11 +1007,6 @@ export default function NowPlayingPage() {
               </span>
             ))}
           </div>
-        </div>
-        {/* v6.5.0 — tune this queue */}
-        <div className="vx-np-opt is-block">
-          <span className="vx-np-opt-label">{tx('Tune this queue')}</span>
-          <TuneChips compact />
         </div>
         {/* v5.17.0 — share this exact moment, ambient mode */}
         <div className="vx-np-opt">

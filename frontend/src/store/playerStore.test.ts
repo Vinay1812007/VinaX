@@ -17,11 +17,10 @@ vi.mock('@/services/cast', () => ({
   useCastStore: { getState: () => ({ connected: false }) },
   castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(),
 }));
-const recommendMock = vi.fn(async (_seed: Song, _ctx: unknown, _opts?: { tune?: string | null }): Promise<Song[]> => []);
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async (seed: Song, ctx: unknown, opts?: { tune?: string | null }) => ({ songs: await recommendMock(seed, ctx, opts), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+const autoplayMock = vi.fn(async (_queue: readonly Song[], _index: number): Promise<Song[]> => []);
+vi.mock('@/services/autoplay', () => ({
+  findAutoplaySongs: (queue: readonly Song[], index: number) => autoplayMock(queue, index),
+  pickAutoplay: (songs: readonly Song[], queue: readonly Song[]) => songs.filter((s) => !queue.some((q) => q.id === s.id)),
 }));
 
 import { audioEngine } from '@/services/audio/engine';
@@ -33,155 +32,234 @@ const song = (id: string, explicit = false): Song => ({
   images: [], audio: [], duration: 200, language: 'telugu', year: '2024',
   explicit, hasLyrics: false, playCount: null,
 });
+const st = () => usePlayerStore.getState();
+const ids = () => st().queue.map((s) => s.id);
+const now = () => st().queue[st().index]?.id;
+/** What comes next, as "run:id". */
+const next = () => st().queue.slice(st().index + 1).map((s, i) => `${st().runs[st().index + 1 + i]}:${s.id}`);
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  // The list-playback contract below is exercised with the DJ takeover off; its own tests follow.
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, djTakeover: false, autoplay: true });
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null });
-  recommendMock.mockReset();
-  recommendMock.mockResolvedValue([]);
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, autoplay: false });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, followMode: false, autoplayLoading: false });
+  autoplayMock.mockReset();
+  autoplayMock.mockResolvedValue([]);
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
-describe('selected queue playback', () => {
-  it('keeps the full album and begins at the selected song', () => {
+describe('playing a list', () => {
+  it('keeps the full album and begins at the selected song; with Autoplay off it stops at the end', () => {
     const album = [song('a'), song('b'), song('c')];
-    usePlayerStore.getState().playQueue(album, 1);
-    expect(usePlayerStore.getState().queue).toEqual(album);
-    expect(usePlayerStore.getState().index).toBe(1);
+    st().playQueue(album, 1);
+    expect(st().queue).toEqual(album);
+    expect(st().index).toBe(1);
     expect(audioEngine.load).toHaveBeenLastCalledWith(album[1], expect.any(String), true);
-    usePlayerStore.getState().next();
-    expect(usePlayerStore.getState().index).toBe(2);
-    usePlayerStore.getState().next();
+    st().next();
+    expect(st().index).toBe(2);
+    st().next();
     expect(audioEngine.pause).toHaveBeenCalledOnce();
-    expect(usePlayerStore.getState().queue).toEqual(album);
+    expect(st().queue).toEqual(album);
+    expect(autoplayMock).not.toHaveBeenCalled();
   });
 
-  it('stops after a single song without appending suggestions', async () => {
-    usePlayerStore.getState().playSong(song('solo'));
-    usePlayerStore.setState({ isPlaying: true });
-    usePlayerStore.getState().next();
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(usePlayerStore.getState().queue.map(s => s.id)).toEqual(['solo']);
-    expect(usePlayerStore.getState().isPlaying).toBe(false);
-    expect(audioEngine.load).toHaveBeenCalledOnce();
-  });
-
-  it('keeps manually queued tracks next and supports repeat all', () => {
-    usePlayerStore.getState().playQueue([song('a'), song('b')]);
-    usePlayerStore.getState().enqueueNext(song('manual'));
-    usePlayerStore.getState().next();
-    expect(usePlayerStore.getState().queue[usePlayerStore.getState().index].id).toBe('manual');
-    usePlayerStore.getState().next();
-    usePlayerStore.setState({ repeat: 'all' });
-    usePlayerStore.getState().next();
-    expect(usePlayerStore.getState().index).toBe(0);
+  it('Back restarts a song past 3 seconds, else steps to the song before in the list', () => {
+    st().playQueue([song('a'), song('b'), song('c')], 1);
+    st().prev();
+    expect(now()).toBe('a');
+    st().next();
+    usePlayerStore.setState({ currentTime: 10 });
+    st().prev();
+    expect(now()).toBe('b');
+    expect(audioEngine.seek).toHaveBeenCalledWith(0);
   });
 
   it('filters explicit album tracks without shifting the selected song', () => {
     useSettingsStore.setState({ kidMode: true });
     const album = [song('explicit', true), song('selected'), song('last')];
-    usePlayerStore.getState().playQueue(album, 1);
-    expect(usePlayerStore.getState().queue.map(s => s.id)).toEqual(['selected', 'last']);
-    expect(usePlayerStore.getState().index).toBe(0);
-    usePlayerStore.getState().playQueue(album, 0);
+    st().playQueue(album, 1);
+    expect(ids()).toEqual(['selected', 'last']);
+    expect(st().index).toBe(0);
+    st().playQueue(album, 0);
     expect(audioEngine.load).toHaveBeenCalledOnce();
   });
 
-  it('exhausts a shuffled queue and starts a fresh session when replayed', () => {
-    const album = [song('a'), song('b'), song('c')];
-    usePlayerStore.setState({ shuffle: true });
-    usePlayerStore.getState().playQueue(album);
-    usePlayerStore.getState().next();
-    usePlayerStore.getState().next();
-    expect(new Set(vi.mocked(audioEngine.load).mock.calls.map(call => call[0].id)).size).toBe(3);
-    usePlayerStore.getState().next();
-    expect(audioEngine.pause).toHaveBeenCalledOnce();
-    usePlayerStore.getState().playQueue(album);
-    usePlayerStore.getState().next();
-    expect(audioEngine.load).toHaveBeenCalledTimes(5);
+  it('a search hit (asSeed) plays alone', () => {
+    st().playQueue([song('hit'), song('other')], 0, { asSeed: true });
+    expect(ids()).toEqual(['hit']);
   });
 });
 
-describe('v6.5.0 — DJ takeover and Tune this queue', () => {
-  it('V2 — with the takeover on, a tapped list still plays in full; Up Next continues after its last song', async () => {
-    useSettingsStore.setState({ djTakeover: true });
-    recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
-    const album = [song('a'), song('b'), song('c'), song('d'), song('e'), song('f')];
-    usePlayerStore.getState().playQueue(album, 1);
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
-    expect(usePlayerStore.getState().index).toBe(1);
-    await vi.advanceTimersByTimeAsync(10);
-    // Four songs of the list are still to come: nothing automatic yet.
-    expect(recommendMock).not.toHaveBeenCalled();
-    usePlayerStore.getState().playAt(4);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(recommendMock).toHaveBeenCalledOnce();
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'dj1', 'dj2']);
-    expect(usePlayerStore.getState().isAutoQueued('dj1')).toBe(true);
-    expect(usePlayerStore.getState().isAutoQueued('f')).toBe(false);
+describe('Next in queue (Add to queue)', () => {
+  it('plays your adds right after the current song, in the order added, ahead of the rest of the list', () => {
+    st().playQueue([song('a'), song('b'), song('c')], 0);
+    st().enqueue(song('q1'));
+    st().enqueue(song('q2'));
+    expect(next()).toEqual(['queued:q1', 'queued:q2', 'context:b', 'context:c']);
+    st().next();
+    expect(now()).toBe('q1');
+    // An add while a queued song plays still goes after the other adds.
+    st().enqueue(song('q3'));
+    expect(next()).toEqual(['queued:q2', 'queued:q3', 'context:b', 'context:c']);
   });
 
-  it('V2 — a single tapped song is still a seed the DJ continues from', async () => {
-    useSettingsStore.setState({ djTakeover: true });
-    recommendMock.mockResolvedValue([song('dj1')]);
-    usePlayerStore.getState().playQueue([song('solo')], 0);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['solo', 'dj1']);
+  it('survives starting another album, and plays right after its first song', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().enqueue(song('mine'));
+    st().playQueue([song('x'), song('y'), song('z')], 0);
+    expect(now()).toBe('x');
+    expect(next()).toEqual(['queued:mine', 'context:y', 'context:z']);
   });
 
-  it('V2 — under shuffle the whole list plays before any automatic song', async () => {
-    recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
-    usePlayerStore.setState({ shuffle: true });
-    usePlayerStore.getState().playQueue([song('a'), song('b'), song('c'), song('d')], 0);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(recommendMock).not.toHaveBeenCalled();
-    const heard = new Set([usePlayerStore.getState().queue[usePlayerStore.getState().index].id]);
-    for (let i = 0; i < 3; i += 1) {
-      usePlayerStore.getState().next(true);
-      await vi.advanceTimersByTimeAsync(10);
-      heard.add(usePlayerStore.getState().queue[usePlayerStore.getState().index].id);
-    }
-    expect([...heard].sort()).toEqual(['a', 'b', 'c', 'd']);
-    usePlayerStore.getState().next(true);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(usePlayerStore.getState().queue[usePlayerStore.getState().index].id).toMatch(/^dj/);
-    usePlayerStore.setState({ shuffle: false });
+  it('a song already waiting in Next in queue is not added twice; a list song can be added (it plays twice)', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().enqueue(song('q'));
+    st().enqueue(song('q'));
+    st().enqueue(song('b'));
+    expect(next()).toEqual(['queued:q', 'queued:b', 'context:b']);
   });
 
-  it('keeps the list when the caller insists (Queue Builder plans) or when autoplay is off', async () => {
-    useSettingsStore.setState({ djTakeover: true });
-    const album = [song('a'), song('b'), song('c')];
-    usePlayerStore.getState().playQueue(album, 0, { keepList: true });
-    expect(usePlayerStore.getState().queue).toEqual(album);
+  it('Clear queue empties only Next in queue', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().enqueueAll([song('q1'), song('q2')]);
+    st().clearUserQueue();
+    expect(next()).toEqual(['context:b']);
+    expect(now()).toBe('a');
+  });
+
+  it('adding to an empty queue plays the song', () => {
+    st().enqueue(song('first'));
+    expect(now()).toBe('first');
+  });
+});
+
+describe('tapping a row', () => {
+  it('a list row further down skips the list songs above it, keeps your adds, and Back reaches the skipped ones', () => {
+    st().playQueue([song('a'), song('b'), song('c'), song('d')], 0);
+    st().enqueue(song('q'));
+    // a | q b c d → tap d
+    st().playAt(4);
+    expect(now()).toBe('d');
+    expect(next()).toEqual(['queued:q']);
+    st().prev();
+    expect(now()).toBe('c');
+  });
+
+  it('a row in Next in queue drops the adds above it', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().enqueueAll([song('q1'), song('q2')]);
+    st().playAt(2);
+    expect(now()).toBe('q2');
+    expect(next()).toEqual(['context:b']);
+  });
+
+  it('dragging a list song among your adds makes it one of them', () => {
+    st().playQueue([song('a'), song('b'), song('c')], 0);
+    st().enqueue(song('q'));
+    // a | q b c → drag c onto q
+    st().moveInQueue(3, 1);
+    expect(next()).toEqual(['queued:c', 'queued:q', 'context:b']);
+  });
+
+  it('removing the playing song plays the one that takes its place', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().removeAt(0);
+    expect(now()).toBe('b');
+    expect(audioEngine.load).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b' }), expect.any(String), false);
+  });
+});
+
+describe('Autoplay', () => {
+  it('when the list ends, similar songs follow — and the queue shows them as Autoplay', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    autoplayMock.mockResolvedValue([song('sim1'), song('sim2')]);
+    st().playQueue([song('a'), song('b'), song('c')], 0);
+    // Nothing is asked for while plenty of the list is left…
+    expect(autoplayMock).not.toHaveBeenCalled();
+    st().next();
+    // …and the songs are fetched ahead once two or fewer are left.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(autoplayMock).toHaveBeenCalledOnce();
+    expect(next()).toEqual(['context:c', 'autoplay:sim1', 'autoplay:sim2']);
+    st().next();
+    st().next();
+    expect(now()).toBe('sim1');
+  });
+
+  it('waits at the end of the list, then carries on; says so when nothing comes back', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    st().playSong(song('solo'));
+    await vi.advanceTimersByTimeAsync(0);
+    autoplayMock.mockClear();
+    autoplayMock.mockResolvedValueOnce([song('more')]);
+    st().next();
+    expect(st().autoplayLoading).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(now()).toBe('more');
+    expect(st().autoplayLoading).toBe(false);
+  });
+
+  it('your adds play before Autoplay', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    autoplayMock.mockResolvedValue([song('sim')]);
+    st().playSong(song('solo'));
+    await vi.advanceTimersByTimeAsync(0);
+    st().enqueue(song('mine'));
+    expect(next()).toEqual(['queued:mine', 'autoplay:sim']);
+  });
+
+  it('is off with repeat on, and switching Autoplay off takes its songs out', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    autoplayMock.mockResolvedValue([song('sim')]);
+    st().playSong(song('solo'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(next()).toEqual(['autoplay:sim']);
     useSettingsStore.setState({ autoplay: false });
-    usePlayerStore.getState().playQueue(album, 2);
-    expect(usePlayerStore.getState().queue).toEqual(album);
-    expect(usePlayerStore.getState().index).toBe(2);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(recommendMock).not.toHaveBeenCalled();
+    expect(next()).toEqual([]);
+    useSettingsStore.setState({ autoplay: true });
+    st().cycleRepeat(); // all
+    autoplayMock.mockClear();
+    st().next();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(autoplayMock).not.toHaveBeenCalled();
+    expect(now()).toBe('solo'); // repeat all plays the list again
   });
 
-  it('tuneQueue keeps what played, the current song and the list the listener started, and rebuilds the automatic picks', async () => {
-    usePlayerStore.getState().playQueue([song('a'), song('b'), song('c'), song('d')], 1);
-    recommendMock.mockResolvedValue([song('t1'), song('t2')]);
-    usePlayerStore.getState().tuneQueue('chill');
-    expect(usePlayerStore.getState().tuneIntent).toBe('chill');
-    // 7.2.0 — c and d came from the list the listener started, not from the
-    // recommender: a rebuild replaces the DJ's picks only.
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd']);
-    await vi.advanceTimersByTimeAsync(10);
-    expect(recommendMock).toHaveBeenCalledOnce();
-    expect(recommendMock.mock.calls[0][2]).toMatchObject({ tune: 'chill' });
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 't1', 't2']);
-    // "Surprise me" resolves to a concrete intent.
-    usePlayerStore.getState().tuneQueue('surprise');
-    expect(usePlayerStore.getState().tuneIntent).not.toBe('surprise');
-    expect(usePlayerStore.getState().tuneIntent).not.toBeNull();
-    usePlayerStore.getState().playQueue([song('z')], 0);
-    expect(usePlayerStore.getState().tuneIntent).toBeNull();
+  it('ignores songs that arrive after the listener started something else', async () => {
+    useSettingsStore.setState({ autoplay: true });
+    let resolve!: (s: Song[]) => void;
+    autoplayMock.mockReturnValueOnce(new Promise<Song[]>((r) => (resolve = r)));
+    st().playSong(song('solo'));
+    st().playQueue([song('x'), song('y'), song('z'), song('w')], 0);
+    resolve([song('late')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).not.toContain('late');
+  });
+});
+
+describe('repeat', () => {
+  it('repeat all plays the list again from its top; your adds play once', () => {
+    st().playQueue([song('a'), song('b')], 0);
+    st().enqueue(song('q'));
+    st().cycleRepeat();
+    expect(st().repeat).toBe('all');
+    st().next(); // q
+    st().next(); // b
+    st().next(); // a again
+    expect(now()).toBe('a');
+    expect(next()).toEqual(['context:b']);
+  });
+
+  it('repeat all with shuffle gives the list a fresh order, never the song that just ended first', () => {
+    st().playQueue([song('a'), song('b'), song('c')], 0);
+    usePlayerStore.setState({ repeat: 'all' });
+    st().toggleShuffle();
+    st().next();
+    st().next();
+    const ended = now();
+    st().next();
+    expect(now()).not.toBe(ended);
+    expect(new Set(ids().slice(-3))).toEqual(new Set(['a', 'b', 'c']));
   });
 });
 

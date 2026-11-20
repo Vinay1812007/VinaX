@@ -56,7 +56,7 @@ export function useBlend(profile: PublicProfile | undefined, enabled: boolean): 
       const saved = saveBlend(profile, result, favs);
       if (mode === 'create') {
         const list = saved ? useLibraryStore.getState().collections.find((c) => c.id === saved.collectionId) : undefined;
-        usePlayerStore.getState().playQueue(list?.songs.length ? list.songs : result.songs, 0, { keepList: true, ...(list ? { from: blendContext(list) } : {}) });
+        usePlayerStore.getState().playQueue(list?.songs.length ? list.songs : result.songs, 0, list ? { from: blendContext(list) } : {});
         toast(saved ? `Saved Blend with ${who}: ${result.songs.length} songs` : `Blend with ${who}: ${result.songs.length} songs`, saved ? { action: { label: 'Open', onClick: () => toastNavigate(`/collection/${saved.collectionId}`) } } : undefined);
       } else if (mode === 'refresh') {
         toast(`Blend with ${who} refreshed`);
@@ -87,7 +87,7 @@ export function BlendButton({ blend }: { blend: BlendState }) {
   const songs = blend.playlist?.songs ?? [];
   if (blend.rec && songs.length) {
     return (
-      <button type="button" onClick={() => usePlayerStore.getState().playQueue(songs, 0, { keepList: true, from: blendContext(blend.playlist) })} className="vx-tap px-5 min-h-[44px] rounded-full btn-secondary font-semibold">
+      <button type="button" onClick={() => usePlayerStore.getState().playQueue(songs, 0, { from: blendContext(blend.playlist) })} className="vx-tap px-5 min-h-[44px] rounded-full btn-secondary font-semibold">
         Play blend
       </button>
     );

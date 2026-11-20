@@ -2,8 +2,8 @@
 /**
  * 9.0 "Encore" — the full-screen player's contracts: toggles say their state
  * (aria-pressed, the repeat-one marker), the panel tabs are a real tablist
- * driven by arrow keys, Up next says who queued each song in words and
- * carries the Tune this queue chips, the sleep timer's button names how long
+ * driven by arrow keys, Up next lists what plays next (no Tune chips since
+ * 1.20), the sleep timer's button names how long
  * is left, lyrics have an empty state,
  * and the two "More options" buttons keep their order (the song menu first,
  * the playback options last — tutorials and e2e specs rely on it).
@@ -107,40 +107,13 @@ describe('NowPlayingPage', { timeout: 20_000 }, () => {
     expect(screen.getByRole('tab', { name: 'Together' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('Up next says who queued each song, in words', () => {
-    const pick = makeSong('p1', { title: 'Pick one' });
-    const mine = makeSong('hand', { title: 'Mine' });
-    act(() => {
-      usePlayerStore.getState().replaceAutoTail([pick]);
-      usePlayerStore.getState().enqueue(mine);
-    });
+  it('Up next lists what plays next, a song you added first; there is no Tune this queue', () => {
+    act(() => usePlayerStore.getState().enqueue(makeSong('hand', { title: 'Mine' })));
     mount();
     const panel = screen.getByRole('tabpanel', { name: 'Up next' });
-    const rowFor = (title: string) => within(panel).getAllByRole('listitem').find((li) => li.textContent?.includes(title))!;
-    expect(within(rowFor('Pick one')).getByText('VinaX pick')).toBeTruthy();
-    expect(within(rowFor('Mine')).getByText('Added by you')).toBeTruthy();
-    // The listener's own list carries no marker.
-    expect(within(rowFor('Alpha')).queryByText('VinaX pick')).toBeNull();
-    expect(within(rowFor('Alpha')).queryByText('Added by you')).toBeNull();
-  });
-
-  it('Up next carries Tune this queue (Pin a mood is gone), and a tap tunes the queue', () => {
-    const real = usePlayerStore.getState().tuneQueue;
-    const tuneQueue = vi.fn(async () => undefined);
-    usePlayerStore.setState({ tuneQueue });
-    try {
-      mount();
-      const panel = screen.getByRole('tabpanel', { name: 'Up next' });
-      expect(within(panel).queryByRole('group', { name: 'Pin a mood' })).toBeNull();
-      const tune = within(panel).getByRole('group', { name: 'Tune this queue' });
-      for (const label of ['More romantic', 'More chill', 'Devotional', 'Heartbreak', 'More energetic']) {
-        expect(within(tune).getByRole('button', { name: `Tune queue: ${label}` })).toBeTruthy();
-      }
-      fireEvent.click(within(tune).getByRole('button', { name: 'Tune queue: Devotional' }));
-      expect(tuneQueue).toHaveBeenCalledWith('devotional');
-    } finally {
-      usePlayerStore.setState({ tuneQueue: real });
-    }
+    const rows = within(panel).getAllByRole('listitem').map((li) => li.textContent ?? '');
+    expect(rows[0]).toContain('Mine');
+    expect(within(panel).queryByRole('group', { name: 'Tune this queue' })).toBeNull();
   });
 
   it('the sleep timer button names how long is left, and opens its own sheet', () => {

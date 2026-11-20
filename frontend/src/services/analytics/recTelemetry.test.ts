@@ -30,17 +30,15 @@ vi.mock('@/services/media-session', () => ({ setMediaHandlers: vi.fn(), updateMe
 vi.mock('@/services/personalization/updater', () => ({ recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn() }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web', appVersionNow: () => 'test', resolveAppVersion: async () => 'test' }));
 vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => ({ connected: false }) }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn() }));
-vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 vi.mock('@/services/recommendation/transitions', () => ({ recordTransition: vi.fn(), transitionScore: () => 0 }));
-const planner = vi.hoisted(() => ({ next: null as null | (() => Promise<unknown>) }));
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async () => {
+const planner = vi.hoisted(() => ({ next: null as null | (() => Promise<unknown[]>) }));
+vi.mock('@/services/autoplay', () => ({
+  findAutoplaySongs: async () => {
     const next = planner.next;
-    planner.next = null; // one plan per test; later requests get nothing
-    return next ? next() : { songs: [], picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [] };
+    planner.next = null; // one batch per test; later requests get nothing
+    return next ? next() : [];
   },
+  pickAutoplay: (songs: unknown[]) => songs,
 }));
 vi.mock('@/services/api', () => ({ getSong: vi.fn() }));
 
@@ -94,9 +92,9 @@ beforeEach(() => {
   resetSessionIntent();
   useLibraryStore.getState().clearFavorites();
   useHistoryStore.setState({ entries: [] });
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, djTakeover: false, autoplay: true, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, autoplay: true, mutedLanguages: [] });
   usePlayerStore.getState().clearQueue();
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
   usePlayerStore.getState().initEngine();
 });
 afterEach(() => {
@@ -241,17 +239,16 @@ describe('volume', () => {
 });
 
 describe('with the real player', () => {
-  it('a continuation is reported once, as local; its songs report outcomes by heard time', async () => {
+  it('an Autoplay batch is reported once, as local; its songs report outcomes by heard time', async () => {
     consent(true);
     stop = initRecTelemetry();
     const picks = ['n1', 'n2', 'n3', 'n4', 'n5'].map(song);
-    const plan = { songs: picks, picker: 'local', fallback: null, latencyMs: 640, alg: ALG, relaxed: [], discoveryIds: new Set(['n5']), language: 'telugu', commit: () => undefined, topUp: () => [] };
-    planner.next = async () => plan;
+    planner.next = async () => picks;
     usePlayerStore.getState().playSong(song('seed'));
     await settle();
     await settle();
     expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['seed', 'n1', 'n2', 'n3', 'n4', 'n5']);
-    expect(ofType('rec_served')).toEqual([{ alg: ALG, picker: 'local', fallback: null, latencyMs: 640, n: 5, discovery: 1, languageViolations: 0, distinctArtists: 5, relaxed: [], exp: {} }]);
+    expect(ofType('rec_served')).toEqual([{ alg: 'autoplay', picker: 'local', fallback: null, latencyMs: expect.any(Number), n: 5, discovery: 0, languageViolations: 0, distinctArtists: 5, relaxed: [], exp: {} }]);
 
     // The seed is the listener's own: its end reports nothing. The first automatic song is flipped past at 2 s.
     listen(0.25, 20);

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   searchSongs: vi.fn(),
-  player: { isPlaying: false, queue: [] as unknown[], togglePlay: vi.fn(), next: vi.fn(), prev: vi.fn(), enqueueNext: vi.fn(), playQueue: vi.fn() },
+  player: { isPlaying: false, queue: [] as unknown[], togglePlay: vi.fn(), next: vi.fn(), prev: vi.fn(), enqueue: vi.fn(), playQueue: vi.fn() },
 }));
 vi.mock('@/services/api', () => ({ searchSongs: h.searchSongs }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: { getState: () => h.player } }));
@@ -14,7 +14,7 @@ const song = (title: string, subtitle: string, language: string) => ({ id: `${ti
 beforeEach(() => {
   h.searchSongs.mockReset();
   h.player.playQueue.mockReset();
-  h.player.enqueueNext.mockReset();
+  h.player.enqueue.mockReset();
 });
 
 describe('tryMusicCommand', () => {
@@ -42,7 +42,7 @@ describe('tryMusicCommand', () => {
     expect(h.searchSongs).toHaveBeenLastCalledWith('Kesariya', 8);
     expect(await tryMusicCommand('Queue Kesariya please.', () => {})).toBe(true);
     expect(h.searchSongs).toHaveBeenLastCalledWith('Kesariya', 8);
-    expect(h.player.enqueueNext).toHaveBeenCalledTimes(1);
+    expect(h.player.enqueue).toHaveBeenCalledTimes(1);
   });
 
   it('leaves ordinary questions to the assistant', async () => {

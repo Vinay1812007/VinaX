@@ -113,7 +113,7 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'first-song',
     title: 'Play your first song',
-    blurb: 'Start a song, see how the next five are chosen, and steer what plays after it.',
+    blurb: 'Start a song, see what plays next, and add your own songs to the queue.',
     minutes: 2,
     emoji: '▶️',
     playsMusic: true,
@@ -123,9 +123,9 @@ export const TUTORIALS: Tutorial[] = [
       { route: '/', target: '[data-tour="hero-play"]', title: 'Your mix', body: 'This button plays a mix built from your languages and listening. Press Next and the tour starts a song.', placement: 'bottom' },
       { target: PLAYER, title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: `${PLAYER} [aria-label="Add to favorites"], ${PLAYER} [aria-label="Remove from favorites"]`, title: 'Like a song', body: 'The heart adds the song to Liked songs. Your likes shape Home, on this device only.', placement: 'top' },
-      { route: '/queue', target: 'section[aria-label="Tune this queue"]', title: 'The next five', body: 'After any song, VinaX lines up five more, led by its language. A chip here rebuilds them.', action: () => wait(400), placement: 'bottom' },
-      { route: '/now-playing', target: 'button.vx-np-tool[aria-label="Player tools"]', title: 'Player tools', body: 'This button holds the sleep timer, speed, bookmarks and Tune this queue. Swipe the artwork to skip.', action: () => wait(600), placement: 'top' },
-      { title: 'Your picks play first', body: 'Songs you add with Play next or Add to queue play before the ones VinaX chose.', tip: 'Space plays and pauses, N skips, F likes.' },
+      { route: '/queue', target: 'section[aria-labelledby="vx-queue-next-title"]', title: 'Up next', body: 'The Queue shows what plays next: your Next in queue, the rest of what you played, then Autoplay.', action: () => wait(400), placement: 'bottom' },
+      { route: '/now-playing', target: 'button.vx-np-tool[aria-label="Player tools"]', title: 'Player tools', body: 'This button holds the sleep timer, speed and bookmarks. Swipe the artwork to skip.', action: () => wait(600), placement: 'top' },
+      { title: 'Your picks play first', body: 'Songs you add with Add to queue play right after the current song.', tip: 'Space plays and pauses, N skips, F likes.' },
     ],
   },
   {

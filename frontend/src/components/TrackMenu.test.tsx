@@ -174,7 +174,7 @@ describe('<TrackMenu />', () => {
     mount();
     openMore();
     const labels = items().map((i) => i.textContent);
-    expect(labels).toContain('More like this');
+    expect(labels).not.toContain('More like this');
     expect(labels).toContain('Not interested');
     // Never play carries the whole name (CSS truncates it; slicing broke Indic clusters).
     expect(labels).toContain('Never play సిద్ శ్రీరామ్');
@@ -217,7 +217,8 @@ describe('1.11 — the short menu', () => {
     mount();
     fireEvent.click(trigger());
     const labels = items().map((i) => i.textContent);
-    expect(labels.slice(0, 4)).toEqual(['Like', 'Add to playlist…', 'Play next', 'Add to queue']);
+    expect(labels.slice(0, 3)).toEqual(['Like', 'Add to playlist…', 'Add to queue']);
+    expect(labels).not.toContain('Play next');
     expect(labels).toContain('Share');
     expect(labels).toContain('View lyrics');
     expect(labels[labels.length - 1]).toBe('More…');

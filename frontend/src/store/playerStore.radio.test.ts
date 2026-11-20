@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * 8.2.0 — Radio entry point: startRadio(song, { seeds, tune }). The seeds
- * play first, the DJ continues forever after them (radio mode, whatever the
- * autoplay setting), and the tune steers every continuation.
+ * 8.2.0 — Radio entry point: startRadio(song, { seeds, feed }). The seeds
+ * play first, then a catalogue station's own next songs (`feed`) or Autoplay
+ * keep it going forever (whatever the Autoplay setting).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 
 vi.mock('@/services/audio/engine', () => ({
@@ -22,11 +22,11 @@ vi.mock('@/services/cast', () => ({
   useCastStore: { getState: () => ({ connected: false }) },
   castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(),
 }));
-const recommendMock = vi.fn(async (_seed: Song, _ctx: unknown, _opts?: { tune?: string | null; previous?: Song | null }): Promise<Song[]> => []);
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async (seed: Song, ctx: unknown, opts?: { tune?: string | null }) => ({ songs: await recommendMock(seed, ctx, opts), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+const recommendMock = vi.fn(async (_queue: readonly Song[], _index: number): Promise<Song[]> => []);
+// The real Autoplay filter; only the network fetch is stubbed.
+vi.mock('@/services/autoplay', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/autoplay')>()),
+  findAutoplaySongs: (queue: readonly Song[], index: number) => recommendMock(queue, index),
 }));
 
 import { audioEngine } from '@/services/audio/engine';
@@ -39,41 +39,48 @@ const song = (id: string, explicit = false): Song => ({
   explicit, hasLyrics: false, playCount: null,
 });
 
+// The store loads Autoplay on demand; load it once up front so a top-up is not waiting on a module import.
+beforeAll(async () => {
+  await import('@/services/autoplay');
+});
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, djTakeover: true, autoplay: true });
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null });
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, autoplay: true, mutedLanguages: [] });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false });
   recommendMock.mockReset();
   recommendMock.mockResolvedValue([]);
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
+const runOf = (id: string) => {
+  const s = usePlayerStore.getState();
+  return s.runs[s.queue.findIndex((x) => x.id === id)];
+};
+
 describe('startRadio — Radio', () => {
-  it('one song: the song plays and the DJ plans the continuation at once (unchanged behaviour)', async () => {
+  it('one song: the song plays and Autoplay fills in what follows at once', async () => {
     recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
     usePlayerStore.getState().startRadio(song('seed'));
     expect(audioEngine.load).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'seed' }), expect.any(String), true);
     await vi.advanceTimersByTimeAsync(10);
     expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['seed', 'dj1', 'dj2']);
-    expect(usePlayerStore.getState().isAutoQueued('dj1')).toBe(true);
-    expect(usePlayerStore.getState().tuneIntent).toBeNull();
+    expect(runOf('dj1')).toBe('autoplay');
   });
 
-  it('seeds play first (distinct, capped), then the DJ continues after the last seed with the tune applied', async () => {
+  it('seeds play first (distinct, capped) as the radio’s list, then Autoplay continues after the last seed', async () => {
     recommendMock.mockResolvedValue([song('dj1')]);
     const seeds = [song('a'), song('b'), song('a'), song('c'), song('d'), song('e'), song('f')];
-    usePlayerStore.getState().startRadio(song('seed'), { seeds, tune: 'melody' });
+    usePlayerStore.getState().startRadio(song('seed'), { seeds });
     const s = usePlayerStore.getState();
     expect(s.queue.map((x) => x.id)).toEqual(['seed', 'a', 'b', 'c', 'd'].slice(0, RADIO_SEED_MAX));
     expect(s.index).toBe(0);
-    expect(s.tuneIntent).toBe('melody');
-    // Seeds are the radio's own list, not DJ picks: a refresh keeps them.
-    expect(s.isAutoQueued('a')).toBe(false);
+    expect(runOf('a')).toBe('context');
     await vi.advanceTimersByTimeAsync(10);
     expect(recommendMock).toHaveBeenCalledOnce();
-    expect(recommendMock.mock.calls[0][0].id).toBe('d');
-    expect(recommendMock.mock.calls[0][2]?.tune).toBe('melody');
+    const [queue, index] = recommendMock.mock.calls[0];
+    expect(queue[index].id).toBe('d');
     expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'a', 'b', 'c', 'd', 'dj1']);
   });
 
@@ -85,19 +92,10 @@ describe('startRadio — Radio', () => {
     expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'dj1']);
   });
 
-  it('Kid mode drops explicit seeds; malformed seeds are ignored; an unknown tune is dropped', () => {
+  it('Kid mode drops explicit seeds; malformed seeds are ignored', () => {
     useSettingsStore.setState({ kidMode: true });
-    usePlayerStore.getState().startRadio(song('bad', true), { seeds: [song('ok'), { id: 'broken' } as unknown as Song], tune: 'nonsense' as never });
-    const s = usePlayerStore.getState();
-    expect(s.queue.map((x) => x.id)).toEqual(['ok']);
-    expect(s.tuneIntent).toBeNull();
-  });
-
-  it('"surprise" resolves to a concrete tune', () => {
-    usePlayerStore.getState().startRadio(song('seed'), { tune: 'surprise' });
-    const t = usePlayerStore.getState().tuneIntent;
-    expect(t).not.toBeNull();
-    expect(t).not.toBe('surprise');
+    usePlayerStore.getState().startRadio(song('bad', true), { seeds: [song('ok'), { id: 'broken' } as unknown as Song] });
+    expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['ok']);
   });
 
   it('does nothing without a song', () => {
@@ -117,7 +115,7 @@ describe('startRadio — 1.3 catalogue station feed', () => {
     return fn;
   };
 
-  it('tops the radio up from the station, not the DJ; its songs count as automatic', async () => {
+  it('tops the radio up from the station, not Autoplay; its songs show as Autoplay', async () => {
     recommendMock.mockResolvedValue([song('dj1')]);
     const feed = feedOf([song('st1'), song('st2')]);
     usePlayerStore.getState().startRadio(song('seed'), { seeds: [song('a')], feed });
@@ -127,10 +125,10 @@ describe('startRadio — 1.3 catalogue station feed', () => {
     expect(recommendMock).not.toHaveBeenCalled();
     const s = usePlayerStore.getState();
     expect(s.queue.map((x) => x.id)).toEqual(['seed', 'a', 'st1', 'st2']);
-    expect(s.isAutoQueued('st1')).toBe(true);
+    expect(runOf('st1')).toBe('autoplay');
   });
 
-  it('a station that answers nothing (or fails) is covered by the DJ; two misses in a row end it', async () => {
+  it('a station that answers nothing (or fails) is covered by Autoplay; two misses in a row end it', async () => {
     recommendMock.mockResolvedValue([song('dj1')]);
     const feed = feedOf(new Error('down'), [], [song('late')]);
     usePlayerStore.getState().startRadio(song('seed'), { feed });
@@ -142,14 +140,14 @@ describe('startRadio — 1.3 catalogue station feed', () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(feed).toHaveBeenCalledTimes(2);
     expect(usePlayerStore.getState().queue.map((x) => x.id)).toContain('dj2');
-    // After two misses the DJ alone keeps the radio going.
+    // After two misses Autoplay alone keeps the radio going.
     recommendMock.mockResolvedValue([song('dj3')]);
     usePlayerStore.getState().next();
     await vi.advanceTimersByTimeAsync(10);
     expect(feed).toHaveBeenCalledTimes(2);
   });
 
-  it('a slow station gives way to the DJ at the deadline', async () => {
+  it('a slow station gives way to Autoplay at the deadline', async () => {
     recommendMock.mockResolvedValue([song('dj-slow')]);
     const feed = vi.fn(() => new Promise<Song[]>(() => undefined));
     usePlayerStore.getState().startRadio(song('seed'), { feed });
@@ -167,16 +165,11 @@ describe('startRadio — 1.3 catalogue station feed', () => {
     expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'fine']);
   });
 
-  it('a new list, a new radio without a feed, or a tune ends the station', async () => {
+  it('a new list or a new radio without a feed ends the station', async () => {
     const feed = feedOf([song('st1')], [song('st2')], [song('st3')]);
     usePlayerStore.getState().startRadio(song('seed'), { feed });
     await vi.advanceTimersByTimeAsync(10);
     expect(feed).toHaveBeenCalledTimes(1);
-
-    usePlayerStore.getState().tuneQueue('melody');
-    await vi.advanceTimersByTimeAsync(10);
-    expect(feed).toHaveBeenCalledTimes(1);
-    expect(recommendMock).toHaveBeenCalled();
 
     usePlayerStore.getState().startRadio(song('seed2'), { feed });
     await vi.advanceTimersByTimeAsync(10);

@@ -40,7 +40,7 @@ import {
   type SettingsView,
 } from '@/features/settings/SettingsControls';
 import { useSearchStore } from '@/store/searchStore';
-import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
+import { DISCOVERY_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { HomeSettings } from '@/features/home/HomeSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
@@ -601,7 +601,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Playback" id="playback" lede="How songs start, flow into each other and end.">
-            <Row label="Autoplay" note="As your list runs out, similar songs keep the music going. Smart Queue on the Queue page turns this and “Build every queue” on together.">
+            <Row label="Autoplay" note="When your album, playlist or song ends, similar songs keep the music going. Off when repeat is on.">
               <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
             </Row>
             <Row label="Crossfade" note="Fade between songs and fade new songs in." keywords="smooth transition">
@@ -697,28 +697,28 @@ export default function SettingsPage() {
             <Group title="How far to roam">
               <Block
                 label="Discovery"
-                note="How many artists you have never played can join a queue. Every queue still opens with songs you know."
+                note="How many artists you have never played VinaX suggests on Home and in mixes."
                 keywords="familiar balanced discover explore new artists mode"
               >
                 <ChoiceCards label="Discovery mode" idPrefix="vx-discovery" value={s.discoveryMode} onChange={s.setDiscoveryMode} options={DISCOVERY_OPTIONS} />
               </Block>
               <Row
                 label="Never repeat"
-                note="Every song VinaX adds to a queue is one you have never heard, in any version. Songs you queue yourself, and Play again, always play."
+                note="Mixes VinaX makes for you only use songs you have never heard, in any version. Songs you pick yourself always play."
                 keywords="never repeat unheard new songs heard before no repeats"
               >
                 <Toggle on={!!s.neverRepeat} onChange={s.setNeverRepeat} label="Never repeat" />
               </Row>
               <Row
                 label="Time and day awareness"
-                note="VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device, and leans Up Next and a Home shelf towards it."
+                note="VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device, and leans a Home shelf towards it."
                 keywords="moment time of day weekday weekend morning evening habit personalised"
               >
                 <Toggle on={s.momentAware !== false} onChange={s.setMomentAware} label="Time and day awareness" />
               </Row>
               <Block
                 label="Trending vs. your taste"
-                note="How much Home and Up Next lean on what is popular right now."
+                note="How much Home leans on what is popular right now."
                 keywords="intensity personalization trending against what you actually play"
               >
                 <RangeRow from="Trending" to="Your taste">
@@ -738,13 +738,6 @@ export default function SettingsPage() {
             </Group>
 
             <Group title="Languages">
-              <Block
-                label="Queue languages"
-                note="Whether what plays next may move between the languages you listen in."
-                keywords="language mix telugu hindi tamil english queue switch"
-              >
-                <ChoiceCards label="Queue languages" idPrefix="vx-queue-languages" value={s.queueLanguages ?? 'mix'} onChange={s.setQueueLanguages} options={QUEUE_LANGUAGE_OPTIONS} />
-              </Block>
               <Block
                 label="Pinned languages"
                 note="Boosted everywhere. Pinning a language takes it off the muted list."
@@ -778,16 +771,6 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </Block>
-            </Group>
-
-            <Group title="Smart Queue">
-              <Row
-                label="Build every queue"
-                note="Tap any song and VinaX builds what follows from it, on this device. Off plays the list you tapped. Songs you queue by hand are never replaced. Needs Autoplay; Smart Queue on the Queue page turns both on."
-                keywords="album playlist shelf queue builder takeover dj"
-              >
-                <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="Build every queue" />
-              </Row>
             </Group>
 
             <Group title="Hearing less">

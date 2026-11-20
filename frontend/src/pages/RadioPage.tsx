@@ -87,13 +87,13 @@ export default function RadioPage() {
     setError(null);
     return ctrl.signal;
   };
-  const play = (label: string, seeds: Song[], tune: TuneIntent | null = null): void => {
+  const play = (label: string, seeds: Song[]): void => {
     setBusy(null);
     if (!seeds.length) {
       setError(`Couldn’t find songs for “${label}”. Try another mood or artist.`);
       return;
     }
-    startRadio(seeds[0], { seeds: seeds.slice(1), tune });
+    startRadio(seeds[0], { seeds: seeds.slice(1) });
     setPlaying(label);
     setOnStation(false);
     toast(`Radio: ${label}`);
@@ -139,7 +139,7 @@ export default function RadioPage() {
     try {
       const songs = query ? await searchSongs(query, 25, { signal }) : [];
       // 8.3.0 — a DJ remix / Folk / Devotional tile opens on songs in that style.
-      if (!signal.aborted) play(label, pickRadioSeeds([songs], { language, blocked, rotate: rotation(), style: tuneStyle(intent) ?? null }), intent);
+      if (!signal.aborted) play(label, pickRadioSeeds([songs], { language, blocked, rotate: rotation(), style: tuneStyle(intent) ?? null }));
     } catch {
       failed(label, signal);
     }

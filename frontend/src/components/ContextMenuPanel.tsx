@@ -12,7 +12,6 @@ import {
   ChevronRightIcon,
   HeartIcon,
   HomeIcon,
-  NextIcon,
   PlayIcon,
   QueueIcon,
   RepeatIcon,
@@ -61,13 +60,6 @@ export default function ContextMenuPanel({ menu, onClose }: { menu: ContextMenuS
       const isFav = useLibraryStore.getState().favorites.some((f) => f.id === song.id);
       return [
         { label: 'Play', icon: PlayIcon, action: () => usePlayerStore.getState().playQueue([song], 0) },
-        {
-          label: 'Play next',
-          icon: NextIcon,
-          action: () => {
-            usePlayerStore.getState().enqueueNext(song); // the store confirms with a snackbar
-          },
-        },
         {
           label: 'Add to queue',
           icon: QueueIcon,

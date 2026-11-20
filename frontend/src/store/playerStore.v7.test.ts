@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 
 /**
- * v7.0.0 — player lifecycle contracts added in 7.0: hand-queued songs outrank
- * automation, a play only counts toward taste once it was really heard,
- * skips are flagged in history, and a replaced sleep timer cannot fire.
+ * v7.0.0 — player lifecycle contracts: a play only counts toward taste once it
+ * was really heard, skips are flagged in history, a replaced sleep timer
+ * cannot fire, and the queue (with who added what) survives a reload.
  */
 interface EngineHandlers { onTime(currentTime: number, duration: number): void; onEnded(): void }
 const engine = vi.hoisted(() => ({ handlers: null as EngineHandlers | null }));
@@ -23,12 +23,10 @@ vi.mock('@/services/personalization/updater', () => ({ recordComplete: vi.fn(), 
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false }));
 vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => ({ connected: false }) }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComplete: vi.fn() }));
-vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 const recommendMock = vi.fn(async (): Promise<Song[]> => []);
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async () => ({ songs: await recommendMock(), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+vi.mock('@/services/autoplay', () => ({
+  findAutoplaySongs: () => recommendMock(),
+  pickAutoplay: (songs: Song[]) => songs,
 }));
 
 import { audioEngine } from '@/services/audio/engine';
@@ -39,8 +37,6 @@ import { useHistoryStore } from './historyStore';
 import { getSessionIntent, resetSessionIntent } from '@/services/personalization/sessionIntent';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: id, subtitle: 'Artist', artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
-const ids = () => usePlayerStore.getState().queue.map((s) => s.id);
-const flush = async () => { await vi.advanceTimersByTimeAsync(0); };
 /** 7.2.0 — listening is a run of quarter-second ticks; one jump of the playhead is a seek, not listening. */
 const listen = (from: number, to: number, d = 200) => { for (let t = from; t <= to + 1e-9; t += 0.25) engine.handlers?.onTime(Math.round(t * 100) / 100, d); };
 
@@ -49,98 +45,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetSessionIntent();
   useHistoryStore.setState({ entries: [] });
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, djTakeover: true, autoplay: true, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, autoplay: false, mutedLanguages: [] });
   usePlayerStore.getState().clearQueue();
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, volume: 0.8, muted: false });
   usePlayerStore.getState().initEngine();
   recommendMock.mockReset();
   recommendMock.mockResolvedValue([]);
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
-describe('manual actions outrank automation', () => {
-  it('queues a hand-added song ahead of the recommender tail, after earlier hand-added songs', async () => {
-    recommendMock.mockResolvedValueOnce([song('auto1'), song('auto2'), song('auto3')]);
-    usePlayerStore.getState().playSong(song('seed'));
-    await flush();
-    expect(ids()).toEqual(['seed', 'auto1', 'auto2', 'auto3']);
-    usePlayerStore.getState().enqueue(song('mine1'));
-    usePlayerStore.getState().enqueue(song('mine2'));
-    expect(ids()).toEqual(['seed', 'mine1', 'mine2', 'auto1', 'auto2', 'auto3']);
-    usePlayerStore.getState().enqueueAll([song('mine3'), song('mine4')]);
-    expect(ids()).toEqual(['seed', 'mine1', 'mine2', 'mine3', 'mine4', 'auto1', 'auto2', 'auto3']);
-    expect(usePlayerStore.getState().autoTail().map((s) => s.id)).toEqual(['auto1', 'auto2', 'auto3']);
-  });
-
-  it('10.1 — "Added to queue" / "Playing next" snackbars carry the cover and a View action', async () => {
-    const { useToastStore } = await import('./toastStore');
-    const withArt = { ...song('art'), images: [{ quality: '50x50', url: 'https://img.example/art.jpg' }] };
-    usePlayerStore.getState().playQueue([song('a')], 0);
-    usePlayerStore.getState().enqueue(withArt);
-    let last = useToastStore.getState().toasts.slice(-1)[0];
-    expect(last?.message).toBe('Added to queue');
-    expect(last?.image).toBe('https://img.example/art.jpg');
-    expect(last?.action?.label).toBe('View');
-    usePlayerStore.getState().enqueueNext({ ...withArt, id: 'art2' });
-    last = useToastStore.getState().toasts.slice(-1)[0];
-    expect(last?.message).toBe('Playing next');
-    expect(last?.action?.label).toBe('View');
-  });
-
-  it('1.15 — plays hand-added songs right after the current one, in the order added, ahead of the rest of the album', () => {
-    useSettingsStore.setState({ djTakeover: false });
-    usePlayerStore.getState().playQueue([song('a'), song('b'), song('c')], 0);
-    usePlayerStore.getState().enqueue(song('mine'));
-    usePlayerStore.getState().enqueue(song('mine2'));
-    expect(ids()).toEqual(['a', 'mine', 'mine2', 'b', 'c']);
-    // "Play next" goes to the very top; the album keeps its order after the adds.
-    usePlayerStore.getState().enqueueNext(song('now'));
-    expect(ids()).toEqual(['a', 'now', 'mine', 'mine2', 'b', 'c']);
-    usePlayerStore.getState().next();
-    usePlayerStore.getState().enqueue(song('mine3'));
-    expect(ids()).toEqual(['a', 'now', 'mine', 'mine2', 'mine3', 'b', 'c']);
-  });
-
-  it('"Tune this queue" rebuilds the automatic tail but never drops what the listener queued by hand', async () => {
-    recommendMock.mockResolvedValueOnce([song('auto1'), song('auto2')]);
-    usePlayerStore.getState().playSong(song('seed'));
-    await flush();
-    usePlayerStore.getState().enqueue(song('mine'));
-    usePlayerStore.getState().enqueueNext(song('next-up'));
-    recommendMock.mockResolvedValueOnce([song('tuned1'), song('tuned2')]);
-    usePlayerStore.getState().tuneQueue('energetic');
-    await flush();
-    expect(ids()).toEqual(['seed', 'next-up', 'mine', 'tuned1', 'tuned2']);
-  });
-
-  it('an adaptive re-plan replaces only the recommender tail', async () => {
-    recommendMock.mockResolvedValueOnce([song('auto1'), song('auto2')]);
-    usePlayerStore.getState().playSong(song('seed'));
-    await flush();
-    usePlayerStore.getState().enqueue(song('mine'));
-    usePlayerStore.getState().replaceAutoTail([song('sure1'), song('auto2')]);
-    expect(ids()).toEqual(['seed', 'mine', 'sure1', 'auto2']);
-  });
-
-  it('ignores a continuation that arrives after the listener started something else', async () => {
-    let release: (songs: Song[]) => void = () => undefined;
-    recommendMock.mockReturnValueOnce(new Promise<Song[]>((resolve) => { release = resolve; }));
-    usePlayerStore.getState().playSong(song('first'));
-    // The plan for "first" is in flight (its catalogue answer still pending)...
-    await flush();
-    expect(recommendMock).toHaveBeenCalledTimes(1);
-    // ...when the listener starts something else; then the old answer lands.
-    usePlayerStore.getState().playSong(song('second'));
-    release([song('stale1'), song('stale2')]);
-    await flush();
-    expect(ids()).not.toContain('stale1');
-    expect(ids()[0]).toBe('second');
-  });
-});
-
 describe('what counts as a play, and what counts as a skip', () => {
   it('flipping through songs teaches taste nothing, but reads as a restless sitting', () => {
-    useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b'), song('c'), song('d')], 0);
     usePlayerStore.getState().next(true);
     usePlayerStore.getState().next(true);
@@ -161,7 +76,6 @@ describe('what counts as a play, and what counts as a skip', () => {
   });
 
   it('records a real skip (heard, then left inside the first third) and flags it in history', () => {
-    useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b')], 0);
     listen(0, 20);
     usePlayerStore.getState().next(true);
@@ -170,7 +84,6 @@ describe('what counts as a play, and what counts as a skip', () => {
   });
 
   it('does not call leaving a song after the first third a skip', () => {
-    useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b')], 0);
     listen(0, 120);
     usePlayerStore.getState().next(true);
@@ -224,7 +137,6 @@ describe('sleep timer', () => {
 
 describe('persistence', () => {
   it('does not rewrite the queue on progress ticks — only when a persisted field changes', () => {
-    useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b')], 0);
     const spy = vi.spyOn(Storage.prototype, 'setItem');
     const playerWrites = () => spy.mock.calls.filter(([key]) => key === 'vinax.player.v1').length;
@@ -243,37 +155,26 @@ describe('persistence', () => {
   });
 });
 
-describe('v7.1.0 — un-tuning and the batch of five', () => {
-  it('tuneQueue(null) clears the intent and rebuilds the automatic tail, keeping hand-queued songs', async () => {
-    recommendMock.mockResolvedValueOnce([song('auto1'), song('auto2')]);
-    usePlayerStore.getState().playSong(song('seed'));
-    await flush();
-    usePlayerStore.getState().enqueue(song('mine'));
-    recommendMock.mockResolvedValueOnce([song('dev1')]);
-    usePlayerStore.getState().tuneQueue('devotional');
-    await flush();
-    expect(usePlayerStore.getState().tuneIntent).toBe('devotional');
-    recommendMock.mockResolvedValueOnce([song('usual1'), song('usual2')]);
-    usePlayerStore.getState().tuneQueue(null);
-    await flush();
-    expect(usePlayerStore.getState().tuneIntent).toBeNull();
-    expect(ids()).toEqual(['seed', 'mine', 'usual1', 'usual2']);
-  });
-});
-
-describe('7.2.0 — who queued what survives a reload', () => {
-  it('restores the recommender\u2019s picks and the listener\u2019s own songs, dropping ids no longer in the queue', async () => {
-    const stored = [song('seed'), song('auto1'), song('mine')];
-    localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: stored, index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
-    localStorage.setItem('vinax.queue.ownership.v1', JSON.stringify({ v: 1, auto: ['auto1', 'left-the-queue'], manual: ['mine'] }));
-    // A reload is a fresh module: the queue comes back from storage, the
-    // in-memory ownership sets do not.
+describe('1.20 — the queue and who added what survive a reload', () => {
+  it('restores the runs saved with the queue', async () => {
+    const stored = [song('seed'), song('mine'), song('next'), song('auto1')];
+    localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: stored, runs: ['context', 'queued', 'context', 'autoplay'], index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
     vi.resetModules();
     const { usePlayerStore: reloaded } = await import('./playerStore');
     reloaded.getState().initEngine();
-    expect(reloaded.getState().queue.map((s) => s.id)).toEqual(['seed', 'auto1', 'mine']);
-    expect(reloaded.getState().isAutoQueued('auto1')).toBe(true);
-    expect(reloaded.getState().isManualQueued('mine')).toBe(true);
-    expect(reloaded.getState().isAutoQueued('left-the-queue')).toBe(false);
+    expect(reloaded.getState().queue.map((s) => s.id)).toEqual(['seed', 'mine', 'next', 'auto1']);
+    expect(reloaded.getState().runs).toEqual(['context', 'queued', 'context', 'autoplay']);
+  });
+
+  it('turns a 1.19 queue’s saved owners into runs, once', async () => {
+    const stored = [song('seed'), song('auto1'), song('mine')];
+    localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: stored, index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
+    localStorage.setItem('vinax.queue.ownership.v1', JSON.stringify({ v: 1, auto: ['auto1', 'left-the-queue'], manual: ['mine'], order: ['seed'] }));
+    vi.resetModules();
+    const { usePlayerStore: reloaded } = await import('./playerStore');
+    reloaded.getState().initEngine();
+    // Next in queue first, Autoplay last.
+    expect(reloaded.getState().queue.map((s) => s.id)).toEqual(['seed', 'mine', 'auto1']);
+    expect(reloaded.getState().runs).toEqual(['context', 'queued', 'autoplay']);
   });
 });

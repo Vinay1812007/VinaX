@@ -25,12 +25,9 @@ vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), hap
 const cast = vi.hoisted(() => ({ connected: false }));
 vi.mock('@/services/cast', () => ({ useCastStore: { getState: () => cast }, castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(), castLoadSong: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComplete: vi.fn() }));
-vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
-vi.mock('@/services/nextup/engine', () => ({
-  warmNextUp: () => undefined,
-  notePlayed: () => undefined,
-  NEXT_URGENT_DEADLINE_MS: 3500,
-  planNextSongs: async () => ({ songs: [], picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+vi.mock('@/services/autoplay', () => ({
+  findAutoplaySongs: async () => [],
+  pickAutoplay: (songs: unknown[]) => songs,
 }));
 
 import { audioEngine } from '@/services/audio/engine';
@@ -50,9 +47,9 @@ beforeEach(() => {
   cast.connected = false;
   useTogether.getState().reset();
   useHistoryStore.setState({ entries: [] });
-  useSettingsStore.setState({ kidMode: false, crossfade: true, crossfadeSeconds: 5, resumePlayback: false, djTakeover: false, autoplay: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, crossfade: true, crossfadeSeconds: 5, resumePlayback: false, autoplay: false, mutedLanguages: [] });
   usePlayerStore.getState().clearQueue();
-  usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, tuneIntent: null, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, loopA: null, loopB: null, volume: 0.8, muted: false, rate: 1 });
+  usePlayerStore.setState({ queue: [], runs: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false, sleepAt: null, sleepSongsLeft: 0, sleepAfterTrack: false, loopA: null, loopB: null, volume: 0.8, muted: false, rate: 1 });
   usePlayerStore.getState().initEngine();
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });

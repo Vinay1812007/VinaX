@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The VinaX AI playlist card: Play starts on the first song found, in order,
- * and queues the rest as they are found; the answers are kept, so Save or
+ * and the rest join the list that is playing ("Next from") as they are found; the answers are kept, so Save or
  * Add to queue after Play searches nothing again; a row with no match says so.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +23,9 @@ const player = {
     player.index = 0;
   }),
   enqueueAll: vi.fn((songs: Song[]) => {
+    player.queue = [...player.queue, ...songs];
+  }),
+  extendList: vi.fn((songs: Song[]) => {
     player.queue = [...player.queue, ...songs];
   }),
 };
@@ -48,6 +51,7 @@ beforeEach(() => {
   player.shuffle = false;
   player.playQueue.mockClear();
   player.enqueueAll.mockClear();
+  player.extendList.mockClear();
   lib.createCollection.mockClear();
   lib.addManyToCollection.mockClear();
   searchSongs.mockReset();
@@ -55,7 +59,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('PlaylistCard', () => {
-  it('plays the first song as soon as it is found, then queues the rest in order', async () => {
+  it('plays the first song as soon as it is found, then adds the rest to the list in order', async () => {
     const one = makeSong('p1', { title: 'Alpha', artist: 'Ann' });
     const two = makeSong('p2', { title: 'Bravo', artist: 'Ben' });
     const four = makeSong('p4', { title: 'Delta', artist: 'Dee' });
@@ -66,13 +70,13 @@ describe('PlaylistCard', () => {
     await act(async () => waiting.get('Bravo')!([two]));
     expect(player.playQueue).not.toHaveBeenCalled();
     await act(async () => waiting.get('Alpha')!([one]));
-    expect(player.playQueue).toHaveBeenCalledWith([one], 0, { keepList: true, from: { kind: 'playlist', label: 'Mix' } });
-    expect(player.enqueueAll).toHaveBeenLastCalledWith([two], { quiet: true });
+    expect(player.playQueue).toHaveBeenCalledWith([one], 0, { from: { kind: 'playlist', label: 'Mix' } });
+    expect(player.extendList).toHaveBeenLastCalledWith([two]);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy());
     await act(async () => waiting.get('Delta')!([four]));
-    expect(player.enqueueAll).toHaveBeenCalledTimes(1); // Charlie has not answered yet
+    expect(player.extendList).toHaveBeenCalledTimes(1); // Charlie has not answered yet
     await act(async () => waiting.get('Charlie')!([]));
-    expect(player.enqueueAll).toHaveBeenLastCalledWith([four], { quiet: true });
+    expect(player.extendList).toHaveBeenLastCalledWith([four]);
     expect(screen.getByText('Not in the catalogue')).toBeTruthy();
 
     // Save after Play: nothing is searched again.
@@ -92,7 +96,7 @@ describe('PlaylistCard', () => {
     expect(player.playQueue).toHaveBeenCalledTimes(1);
     player.queue = [makeSong('elsewhere')];
     await act(async () => waiting.get('Foxtrot')!([two]));
-    expect(player.enqueueAll).not.toHaveBeenCalled();
+    expect(player.extendList).not.toHaveBeenCalled();
   });
 
   it('with shuffle on, adds the rest once, after every answer is in', async () => {
@@ -106,13 +110,12 @@ describe('PlaylistCard', () => {
     await waitFor(() => expect(waiting.size).toBe(3));
     await act(async () => waiting.get('Juliet')!([one]));
     await act(async () => waiting.get('Kilo')!([two]));
-    expect(player.playQueue).toHaveBeenCalledWith([one], 0, expect.objectContaining({ keepList: true }));
-    expect(player.enqueueAll).not.toHaveBeenCalled();
+    expect(player.playQueue).toHaveBeenCalledWith([one], 0, expect.objectContaining({ from: expect.anything() }));
+    expect(player.extendList).not.toHaveBeenCalled();
     await act(async () => waiting.get('Lima')!([three]));
-    await waitFor(() => expect(player.enqueueAll).toHaveBeenCalledTimes(1));
-    const [added, opts] = player.enqueueAll.mock.calls[0] as unknown as [Song[], unknown];
+    await waitFor(() => expect(player.extendList).toHaveBeenCalledTimes(1));
+    const [added] = player.extendList.mock.calls[0] as unknown as [Song[]];
     expect(added.map((s) => s.id).sort()).toEqual(['s2', 's3']);
-    expect(opts).toEqual({ quiet: true });
   });
 
   it('Add to queue adds every song found, in order', async () => {

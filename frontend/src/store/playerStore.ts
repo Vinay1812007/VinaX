@@ -19,19 +19,35 @@ import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castLoadSong } from '@/services/cast';
 import { bestImage } from '@/utils/images';
-import { crossfadePlan, isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
+import { crossfadePlan, isValidSong, noteUnavailable, resetSkipGuard } from './playerGuards';
 import { useTogether } from '@/services/together/session';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
-import { getRecommendationContext } from '@/services/recommendation/context';
-import type { NextSongsPlan } from '@/services/recommendation/engine';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from '@/services/recommendation/deadlines';
-import { songKey } from '@/services/recommendation/songIdentity';
-import { admitSongs } from '@/services/recommendation/admission';
-import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
-import { setNowPlayingProbe } from '@/store/libraryStore';
 import { EPISODE_PROGRESS_KEY, isEpisode, resumeEvictee } from '@/features/podcasts/episode';
-import { contextFromPage, isQueueContext, queueInsertAt, shuffledStart, shuffleSongs, shuffleUpcoming, unshuffleUpcoming, type QueueContext, type QueueRun } from './queueOrder';
+import {
+  addToQueue,
+  alignRuns,
+  appendAutoplay,
+  clearQueued,
+  contextFromPage,
+  dropAutoplay,
+  isQueueContext,
+  isQueued,
+  jumpTo,
+  moveEntry,
+  normalize,
+  removeEntry,
+  repeatList,
+  shuffleOff,
+  shuffleOn,
+  startList,
+  trimPlayed,
+  upcoming,
+  type QueueContext,
+  type QueueRun,
+  type QueueSnapshot,
+} from './queueRules';
 import {
   creditTick,
   emitPlaybackEvent,
@@ -53,10 +69,12 @@ export type RepeatMode = 'off' | 'one' | 'all';
  * first; a miss falls back to the on-device plan, and two misses in a row end it.
  */
 export type RadioFeed = (limit: number, signal: AbortSignal) => Promise<Song[]>;
-export type { QueueContext } from './queueOrder';
+export type { QueueContext, QueueRun } from './queueRules';
 
 export interface PlayerState {
   queue: Song[];
+  /** 1.20 — where each queue entry came from (same length as `queue`): see store/queueRules.ts. */
+  runs: QueueRun[];
   index: number;
   isPlaying: boolean;
   isBuffering: boolean;
@@ -77,75 +95,51 @@ export interface PlayerState {
   streamKbps: number | null;
   /** True while following a Listen Together host. */
   followMode: boolean;
-  /** v6.5.0 — the active "Tune this queue" intent (cleared by a fresh play). */
-  tuneIntent: TuneIntent | null;
   /** 1.15 — what the listener pressed play on ("Playing from", "Next from"); null when unknown. */
   context: QueueContext | null;
+  /** 1.20 — true while Autoplay is looking for the next songs at the end of the list. */
+  autoplayLoading: boolean;
 
   initEngine(): void;
   setSleepSongs(n: number): void;
   setLoopPoint(which: 'A' | 'B'): void;
   clearLoop(): void;
   /**
-   * Start playback. V2: a list (playlist, album, chart, mix) plays in full
-   * from the tapped song, and Up Next continues after it. With the smart queue
-   * setting on (default), a single song — or a tap in SEARCH
-   * results (`asSeed`), which are hits, not a list anyone made — is a seed:
-   * the song starts alone and Up Next builds what follows. `keepList` forces
-   * the list to become the queue whatever the setting (Queue Builder plans).
+   * Play a list (an album, a playlist, a page of songs) from `startIndex`,
+   * Spotify's way: the list becomes "Next from", the listener's own Next in
+   * queue stays and plays right after the chosen song, and Autoplay follows
+   * once the list ends. `asSeed` (a search hit) plays only that song.
+   * `from` names what is playing ("Playing from"); left out, it is read from
+   * the page the listener is on. `shuffle: true` turns shuffle on and starts
+   * on a random song (the "Shuffle play" buttons).
    */
-  /**
-   * 1.15 — `from` names what is playing ("Playing from"); left out, it is read
-   * from the page the listener is on. `shuffle: true` turns shuffle on and
-   * starts on a random song (the "Shuffle play" buttons).
-   */
-  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number; room?: boolean; from?: QueueContext | null; shuffle?: boolean }): void;
+  playQueue(songs: Song[], startIndex?: number, opts?: { asSeed?: boolean; startAt?: number; room?: boolean; from?: QueueContext | null; shuffle?: boolean }): void;
   /** `startAt` (seconds): start part-way in. Listen Together starts a guest where the host is. */
   playSong(song: Song, opts?: { startAt?: number; room?: boolean }): void;
-  /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
-  /** `null` (v7.1.0) drops the active intent and rebuilds what follows without one. */
-  tuneQueue(intent: TuneIntent | null): void;
+  /** Tap a queue row: see `jumpTo` in store/queueRules.ts. */
   playAt(index: number): void;
-  /** `quiet` (1.14): no "Added to queue" snackbar; Listen Together says who added it instead. */
+  /** Add to queue (the end of Next in queue). `quiet` (1.14): no snackbar; Listen Together says who added it instead. */
   enqueue(song: Song, opts?: { quiet?: boolean }): void;
-  enqueueNext(song: Song): void;
-  /** `quiet`: no snackbar; a caller that adds a list in parts (the VinaX AI playlist card) says it once. */
+  /** Add several to queue. `quiet`: no snackbar. */
   enqueueAll(songs: Song[], opts?: { quiet?: boolean }): void;
+  /** 1.20 — more songs of the list that is playing (a playlist that loads in parts): they join "Next from", before Autoplay. */
+  extendList(songs: Song[]): void;
   removeAt(index: number): void;
   moveInQueue(from: number, to: number): void;
-  /** Package D5 — drop this row and everything after it (future rows only). */
-  clearFrom(index: number): void;
-  /** Package D5 — reorder everything after the playing song. */
-  sortUpcoming(kind: QueueSortKind): void;
-  clearPlayed(): void;
+  /** 1.20 — Spotify's "Clear queue": only Next in queue goes. */
+  clearUserQueue(): void;
+  /** Stop and empty everything (sign out, Settings → Clear queue). */
   clearQueue(): void;
   togglePlay(): void;
   next(manual?: boolean): void;
   /**
-   * Endless radio from a song (default: the one playing). 8.2.0 — Radio:
-   * `seeds` play first after the song (a mood's or a request's picks, up to
-   * RADIO_SEED_MAX in all) and `tune` steers every continuation that follows.
+   * Radio from a song (default: the one playing): it and `seeds` (up to
+   * RADIO_SEED_MAX in all) play first, then the station's `feed` (a catalogue
+   * station) or Autoplay keeps it going.
    */
-  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null; feed?: RadioFeed | null; from?: QueueContext | null }): void;
-  /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
-  autoTail(): Song[];
-  isAutoQueued(id: string): boolean;
-  /** v6.3.0 — swap the recommender's tail for a new order, keeping hand-queued songs in place. */
-  replaceAutoTail(songs: Song[]): void;
-  /** 7.2.0 — was this entry queued by the listener ("Add to queue", "Play next", "Keep this song")? */
-  isManualQueued(id: string): boolean;
-  /** 7.2.0 — keep an automatic entry: it becomes the listener's own and survives a rebuild. */
-  keepSong(id: string): void;
-  /** 7.2.0 — the listener asked for new automatic picks: rebuild everything automatic after the current song. */
-  regenerateAutoTail(): void;
-  /** 7.2.0 — put back the upcoming entry the last `removeAt` took out (while the same song is playing). */
-  undoRemove(): boolean;
+  startRadio(song?: Song, opts?: { seeds?: Song[]; feed?: RadioFeed | null; from?: QueueContext | null }): void;
   /** 7.2.0 — the playback instance measuring the current track (see services/playback/session.ts). */
   playbackInstance(): Readonly<PlaybackInstance> | null;
-  /** 7.2.0 — how an automatic entry got into the queue (null for the listener's own songs). */
-  autoMeta(id: string): AutoEntryMeta | null;
-  /** v6.3.0 — Queue Builder: install a planned queue, replacing everything or appending after the current song. */
-  applyPlan(songs: Song[], mode: 'replace' | 'append'): void;
   prev(): void;
   seek(seconds: number): void;
   setVolume(v: number): void;
@@ -197,17 +191,21 @@ const toRoom = (cmd: RoomCmd): boolean => {
   return true;
 };
 
-/** V2 — the Up Next engine, loaded once on demand (every caller shares the one import). */
-let nextUpModule: Promise<typeof import('@/services/nextup/engine')> | null = null;
-function loadNextUp(): Promise<typeof import('@/services/nextup/engine')> {
-  nextUpModule ??= import('@/services/nextup/engine');
-  return nextUpModule;
+/** 1.20 — Autoplay (services/autoplay), loaded once on demand: it is not part of the first load. */
+let autoplayModule: Promise<typeof import('@/services/autoplay')> | null = null;
+function loadAutoplay(): Promise<typeof import('@/services/autoplay')> {
+  autoplayModule ??= import('@/services/autoplay');
+  return autoplayModule;
 }
 
 /** 8.2.0 — Radio: the most songs a radio starts with before the continuation takes over. */
 export const RADIO_SEED_MAX = 5;
-/** How many songs one continuation adds. */
-const NEXT_BATCH = 5;
+/** How many songs one station top-up asks for. */
+const STATION_BATCH = 5;
+/** Autoplay is asked for more songs once this few are left. */
+const AUTOPLAY_WHEN_LEFT = 2;
+/** At most this many played entries stay behind the playing song. */
+const PLAYED_KEEP = 200;
 let autoplayNoticeShown = false;
 
 let engineInitialized = false;
@@ -261,37 +259,31 @@ let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
 
 /** Exactly what persist() writes to localStorage (see partialize). */
-type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate' | 'context'>;
+type PersistedPlayerState = Pick<PlayerState, 'queue' | 'runs' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate' | 'context'>;
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => {
       let queueVersion = 0;
       let transition = 0;
+      /** A radio keeps going even with the Autoplay setting off. */
       let radio = false;
       /** 1.3 — the station keeping this radio going (startRadio's `feed`), and its misses in a row. */
       let feed: RadioFeed | null = null;
       let feedMisses = 0;
-      let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
-      /** 7.2.0 — cancels the in-flight plan when the queue moves on. */
-      let planAbort: AbortController | null = null;
-      /** 7.2.0 — the latest accepted plan. Its validated reserve tops up a queue about to run
-       *  dry, and — for a queue in the same language — is the last-good fallback. */
-      let lastPlan: NextSongsPlan | null = null;
-      /** 1.4 — what the latest plan wants said if the queue runs dry (Never repeat found nothing unheard). */
-      let planNotice: NextSongsPlan['notice'] = undefined;
+      /** The Autoplay request in flight for this queue version. */
+      let autoplayJob: { version: number; promise: Promise<boolean> } | null = null;
+      /** Cancels the in-flight Autoplay request when the queue moves on. */
+      let autoplayAbort: AbortController | null = null;
       let batchSeq = 0;
+      /** How each Autoplay entry got in (for the opt-in telemetry's outcome events). */
       const autoMetaById = new Map<string, AutoEntryMeta>();
-      /** Ids the recommender appended. Persisted with the queue (7.2.0) so a
-       *  reload does not turn every entry into "the list you started". */
-      const autoIds = new Set<string>();
-      /** v7.0.0 — ids the listener queued by hand ("Add to queue" / "Play next"). They
-       *  outrank everything automatic: they sit ahead of the recommender's tail,
-       *  survive a re-plan and a "Tune this queue", and are never reordered. */
-      const manualIds = new Set<string>();
-      /** 1.15 — the list's songs in the order the listener started it: turning shuffle off restores it. */
-      let listOrder: string[] = [];
-      const runOf = (id: string): QueueRun => (manualIds.has(id) ? 'manual' : autoIds.has(id) ? 'auto' : 'list');
+      /**
+       * 1.20 — the list the listener pressed play on, in its own order: Repeat
+       * all plays it again and turning shuffle off restores it. Its ids are
+       * saved next to the queue; after a reload the songs are found in the queue.
+       */
+      let contextList: Song[] = [];
       /** 7.2.0 — the playback instance measuring the current track (heard time, verdicts). */
       let playback: PlaybackInstance | null = null;
       /** Whether the current instance already has its history entry. */
@@ -300,21 +292,29 @@ export const usePlayerStore = create<PlayerState>()(
       const refetchTried = new WeakSet<PlaybackInstance>();
       /** Cancels an in-flight song-detail refetch when the track changes. */
       let refetchAbort: AbortController | null = null;
-      /** The last upcoming entry `removeAt` took out, for Undo. */
-      let lastRemoval: { song: Song; at: number; manual: boolean; auto: AutoEntryMeta | null; anchorId: string | null } | null = null;
       /** Put the engine back at the listener's volume after a sleep fade was cancelled or finished. */
       // While casting the local element is only a silent clock: it must never become audible over the receiver.
       const restoreVolume = (): void => audioEngine.setVolume(useCastStore.getState().connected ? 0 : get().volume);
       function clearSleepTimeout(): void {
         if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
       }
-      const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
+      /** Spotify's Autoplay rule: the music goes on after the list only with Autoplay on (or a radio), repeat off, and not while following a host. */
+      const canAutoplay = (): boolean => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
       function invalidateQueue(): void {
         queueVersion += 1;
         transition += 1;
-        // Obsolete work is cancelled, not just ignored: the plan's reads stop.
-        planAbort?.abort();
-        planAbort = null;
+        // Obsolete work is cancelled, not just ignored.
+        autoplayAbort?.abort();
+        autoplayAbort = null;
+        if (get().autoplayLoading) set({ autoplayLoading: false });
+      }
+      const snap = (): QueueSnapshot => {
+        const { queue, runs, index } = get();
+        return { queue, runs: runs.length === queue.length ? runs : alignRuns(queue, runs), index };
+      };
+      /** Install a new queue snapshot. */
+      function apply(next: QueueSnapshot, extra: Partial<PlayerState> = {}): void {
+        set({ queue: next.queue, runs: next.runs, index: next.index, ...extra });
       }
 
       /** End the current playback instance once (idempotent) and tell the listeners how it went. */
@@ -333,159 +333,101 @@ export const usePlayerStore = create<PlayerState>()(
         skipUnavailable();
       }
 
-      function markAuto(songs: Song[], meta: Omit<AutoEntryMeta, 'pos'>): void {
-        songs.forEach((song, pos) => {
-          autoIds.add(song.id);
-          manualIds.delete(song.id);
-          autoMetaById.set(song.id, { ...meta, pos });
-        });
-        saveOwnership();
+      /** The list's order, saved next to the queue (not inside the de-duplicated player record). */
+      function saveListOrder(): void {
+        setLocal(KEYS.queueOwnership, { v: 2, order: contextList.map((s) => s.id) });
       }
 
-      /** 7.2.0 — who queued what, written next to the queue (not inside the
-       *  de-duplicated player record, which must not change on a progress tick). */
-      function saveOwnership(): void {
-        setLocal(KEYS.queueOwnership, { v: 1, auto: [...autoIds], manual: [...manualIds], order: listOrder });
+      /**
+       * After a reload: find the list's songs in the restored queue. A queue
+       * saved by 1.19 or older has no runs; its saved "who added what" turns
+       * into them here, once.
+       */
+      function loadListOrder(): void {
+        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown; order?: unknown }>(KEYS.queueOwnership, { v: 2 });
+        const { queue } = get();
+        const byId = new Map(queue.map((s) => [s.id, s] as const));
+        const order = Array.isArray(stored?.order) ? stored.order.filter((id): id is string => typeof id === 'string') : [];
+        contextList = [...new Set(order)].map((id) => byId.get(id)).filter((s): s is Song => !!s);
+        if (stored?.v === 1 && queue.length && get().runs.every((r) => r === 'context')) {
+          const ids = (raw: unknown): Set<string> => new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
+          const manual = ids(stored.manual);
+          const auto = ids(stored.auto);
+          const { index } = get();
+          const runs = queue.map((s, i): QueueRun => (i <= index ? 'context' : manual.has(s.id) ? 'queued' : auto.has(s.id) ? 'autoplay' : 'context'));
+          apply(normalize({ queue, runs, index }));
+          saveListOrder();
+        }
       }
 
-      /** Restore ownership for the rehydrated queue; ids no longer in it are dropped. */
-      function loadOwnership(): void {
-        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown; order?: unknown }>(KEYS.queueOwnership, { v: 1 });
-        const ids = new Set(get().queue.map((s) => s.id));
-        const take = (raw: unknown, into: Set<string>): void => {
-          if (!Array.isArray(raw)) return;
-          for (const id of raw) if (typeof id === 'string' && ids.has(id)) into.add(id);
-        };
-        take(stored?.auto, autoIds);
-        take(stored?.manual, manualIds);
-        const order = new Set<string>();
-        take(stored?.order, order);
-        listOrder = [...order];
-      }
-
-      /** Distinct lead artists in a continuation (diversity, for opt-in quality telemetry). */
+      /** Distinct lead artists in a top-up (diversity, for opt-in quality telemetry). */
       function distinctLeads(songs: Song[]): number {
         return new Set(songs.map((s) => (s.artists[0]?.name ?? s.subtitle ?? '').trim().toLowerCase()).filter(Boolean)).size;
       }
 
-      function languageViolations(songs: Song[], lock: string | null): number {
-        return lock ? songs.filter((s) => s.language && s.language !== 'unknown' && s.language !== lock).length : 0;
-      }
-
-      /** Append an accepted plan through the current-state gate; commit its side effects for what went in. */
-      function acceptPlan(plan: NextSongsPlan): number {
-        const queue = get().queue;
-        if (!queue.length) return 0;
-        const { admitted } = admitSongs(plan.songs, { queue, index: get().index });
-        if (!admitted.length) return 0;
+      /** Put Autoplay (or station) songs at the end of the queue and say so to the telemetry. */
+      function commitAutoplay(songs: Song[], alg: 'autoplay' | 'station', started: number): number {
+        if (!songs.length || !get().queue.length) return 0;
         const batch = (batchSeq += 1);
-        markAuto(admitted, { alg: plan.alg, picker: plan.picker, batch });
-        set({ queue: [...queue, ...admitted] });
-        plan.commit(admitted);
-        lastPlan = plan;
+        songs.forEach((song, pos) => autoMetaById.set(song.id, { alg, picker: 'local', batch, pos }));
+        apply(appendAutoplay(snap(), songs));
         preloadUpcoming();
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: plan.relaxed });
-        return admitted.length;
+        emitPlaybackEvent({ kind: 'served', batch, alg, picker: 'local', fallback: null, latencyMs: Date.now() - started, n: songs.length, discovery: 0, languageViolations: 0, distinctArtists: distinctLeads(songs), relaxed: [] });
+        return songs.length;
       }
 
-      /**
-       * 7.2.0 — top the queue up at once from the latest plan's validated
-       * reserve when it is about to run dry and no fresh plan is ready. The
-       * reserve is re-validated against the song now at the end (same final
-       * policy) and passes the current-state gate; a reserve in another
-       * language is never used.
-       */
-      function topUpFromReserve(seedNow: Song): number {
-        const plan = lastPlan;
-        if (!plan) return 0;
-        // V2 — the plan keeps the session's languages itself (services/nextup/anchor).
-        const { queue, index } = get();
-        const picks = plan.topUp(seedNow, NEXT_BATCH, { ids: new Set(queue.map((s) => s.id)), keys: new Set(queue.map(songKey)) });
-        const { admitted } = admitSongs(picks, { queue, index });
-        if (!admitted.length) return 0;
-        const batch = (batchSeq += 1);
-        markAuto(admitted, { alg: plan.alg, picker: 'reserve', batch });
-        set({ queue: [...queue, ...admitted] });
-        plan.commit(admitted);
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [] });
-        return admitted.length;
-      }
-      /**
-       * 1.3 — the station's next songs, through the same gate as the plan's.
-       * True when some went in; false sends the caller on to the on-device plan.
-       */
-      async function appendFromFeed(source: RadioFeed, version: number, signal: AbortSignal, urgent: boolean): Promise<boolean> {
-        const started = Date.now();
+      /** A promise that gives up (with `fallback`) after `ms`. */
+      function within<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
         let timer: ReturnType<typeof setTimeout> | undefined;
-        const songs = await Promise.race([
-          source(NEXT_BATCH, signal),
-          new Promise<Song[]>((resolve) => { timer = setTimeout(() => resolve([]), urgent ? NEXT_URGENT_DEADLINE_MS : NEXT_DEADLINE_MS); }),
-        ]).catch(() => [] as Song[]).finally(() => clearTimeout(timer));
-        if (feed !== source || version !== queueVersion || signal.aborted || !canExtend()) return false;
-        const queue = get().queue;
-        const { admitted } = queue.length ? admitSongs(songs.filter(isValidSong), { queue, index: get().index }) : { admitted: [] as Song[] };
-        if (!admitted.length) {
-          feedMisses += 1;
-          if (feedMisses >= 2) feed = null;
-          return false;
-        }
-        feedMisses = 0;
-        const batch = (batchSeq += 1);
-        markAuto(admitted, { alg: 'station', picker: 'local', batch });
-        set({ queue: [...queue, ...admitted] });
-        preloadUpcoming();
-        emitPlaybackEvent({ kind: 'served', batch, alg: 'station', picker: 'local', fallback: null, latencyMs: Date.now() - started, n: admitted.length, discovery: 0, languageViolations: 0, distinctArtists: distinctLeads(admitted), relaxed: [] });
-        return true;
+        return Promise.race([work, new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), ms); })])
+          .catch(() => fallback)
+          .finally(() => clearTimeout(timer));
       }
 
-      async function appendRecommendations(seed: Song, opts: { urgent?: boolean } = {}): Promise<boolean> {
-        if (recommendationJob?.version === queueVersion) return recommendationJob.promise;
+      /**
+       * 1.20 — Autoplay: songs like the ones just played go on the end of the
+       * queue (a station's own next songs first, for a catalogue radio). One
+       * request per queue version; true when songs went in.
+       */
+      function topUpAutoplay(opts: { urgent?: boolean } = {}): Promise<boolean> {
+        if (autoplayJob?.version === queueVersion) return autoplayJob.promise;
         const version = queueVersion;
-        planAbort?.abort();
+        autoplayAbort?.abort();
         const abort = new AbortController();
-        planAbort = abort;
+        autoplayAbort = abort;
+        const deadline = opts.urgent ? NEXT_URGENT_DEADLINE_MS : NEXT_DEADLINE_MS;
+        const stale = (): boolean => version !== queueVersion || abort.signal.aborted || !canAutoplay() || !get().queue.length;
         const promise = (async () => {
+          const started = Date.now();
           try {
-            // 1.3 — a catalogue station plays its own next songs; the plan only covers a miss.
-            if (feed && (await appendFromFeed(feed, version, abort.signal, !!opts.urgent))) return true;
-            if (version !== queueVersion || abort.signal.aborted) return false;
-            // 7.2.0 — the engine is loaded on demand: it no longer rides the
-            // first load with the player store (the service worker precaches it).
-            // V2 — Up Next is the rewritten engine (services/nextup): planned from the
-            // session's anchor, likes first, no repeats, served from a warm pool.
-            const { planNextSongs } = await loadNextUp();
-            if (version !== queueVersion || abort.signal.aborted) return false;
+            const { findAutoplaySongs, pickAutoplay } = await loadAutoplay();
+            if (stale()) return false;
+            // 1.3 — a catalogue station plays its own next songs; Autoplay covers a miss.
+            const source = feed;
+            if (source) {
+              const songs = await within(source(STATION_BATCH, abort.signal), deadline, [] as Song[]);
+              if (stale() || feed !== source) return false;
+              const fresh = pickAutoplay(songs, get().queue, STATION_BATCH);
+              if (fresh.length) {
+                feedMisses = 0;
+                return commitAutoplay(fresh, 'station', started) > 0;
+              }
+              feedMisses += 1;
+              if (feedMisses >= 2) feed = null;
+            }
             const { queue } = get();
-            // 7.2.0 — a plan: the on-device order inside one end-to-end deadline
-            // (shorter when the listener is waiting at the end of the queue).
-            const plan = await planNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
-              // v7.1.0 — the next FIVE: a short, tight stretch re-planned more often follows the
-              // listener better than eight songs decided at once.
-              limit: NEXT_BATCH,
-              excludeIds: queue.map((song) => song.id),
-              excludeKeys: queue.map(songKey),
-              tune: get().tuneIntent,
-              // The stretch is appended after the last queued song: that is the
-              // hand-off the no-repeat-artist rule must judge.
-              previous: queue[queue.length - 1] ?? null,
-              // V2 — the whole run-up to the append point, so artist spacing holds across
-              // batches. 1.15 — the queue order is the play order, shuffle or not.
-              before: queue.slice(-12),
-              signal: abort.signal,
-              deadlineMs: opts.urgent ? NEXT_URGENT_DEADLINE_MS : undefined,
-            });
-            // The gate reads the state as it is NOW, after the await: a song hidden
-            // or a Kid mode switched on meanwhile never gets in.
-            if (version !== queueVersion || !canExtend() || abort.signal.aborted) return false;
-            planNotice = plan.notice;
-            return acceptPlan(plan) > 0;
+            const found = await within(findAutoplaySongs(queue, queue.length - 1, abort.signal), deadline, [] as Song[]);
+            // Read the state as it is NOW, after the await: a song hidden or
+            // Kid mode switched on meanwhile never gets in.
+            if (stale()) return false;
+            return commitAutoplay(pickAutoplay(found, get().queue), 'autoplay', started) > 0;
           } catch {
             return false;
           } finally {
-            if (recommendationJob?.version === version) recommendationJob = null;
+            if (autoplayJob?.version === version) autoplayJob = null;
           }
         })();
-        recommendationJob = { version, promise };
+        autoplayJob = { version, promise };
         return promise;
       }
 
@@ -539,8 +481,6 @@ export const usePlayerStore = create<PlayerState>()(
         }
 
         if (autoplay) {
-          // V2 — the no-repeat ledger outlives the 150-entry history.
-          void loadNextUp().then((m) => m.notePlayed(song)).catch(() => undefined);
           // v7.0.0 — history gets the play at once (the listen clock needs the
           // entry); taste learns from it only once the playback instance has
           // really been heard (services/playback/session.ts).
@@ -560,35 +500,15 @@ export const usePlayerStore = create<PlayerState>()(
           }, 1200);
         }
         preloadUpcoming();
-        // Keep a small tail ready for autoplay and playlist continuation. The
-        // async fetch never blocks starting the current song.
-        if (autoplay && canExtend()) {
-          const left = songsLeft();
-          if (left <= 2) void appendRecommendations(song);
-          else if (left <= 4) warmUpNext(song);
-        }
+        // 1.20 — Autoplay gets its songs ready while the list's last ones
+        // play; the request never blocks starting the current song.
+        if (autoplay && canAutoplay() && songsLeft() <= AUTOPLAY_WHEN_LEFT) void topUpAutoplay();
       }
 
       /** Songs still to come in this queue (1.15: under shuffle too, the queue order is the play order). */
       function songsLeft(): number {
         const { queue, index } = get();
         return queue.length - index - 1;
-      }
-
-      /** V2 — what the listener chose starts the session's anchor (services/nextup/anchor). */
-      function setAnchor(songs: Song[]): void {
-        void loadNextUp().then((m) => m.startAnchor(songs)).catch(() => undefined);
-      }
-      /** V2 — a hand-queued song says "more like this": it joins the anchor. */
-      function noteAnchor(song: Song): void {
-        void loadNextUp().then((m) => m.addAnchorSeed(song, 'queued')).catch(() => undefined);
-      }
-
-      /** V2 — get the first automatic songs ready while the listener's list still plays. */
-      function warmUpNext(song: Song): void {
-        void loadNextUp()
-          .then((m) => m.warmNextUp(song, getRecommendationContext(song, radio ? 'radio' : 'playlist')))
-          .catch(() => undefined);
       }
 
       function maybeRecordSkip(manual: boolean): void {
@@ -613,8 +533,6 @@ export const usePlayerStore = create<PlayerState>()(
           recordSkip(song, Math.round(inst.heardSec * 10) / 10);
           useHistoryStore.getState().markSkipped(song.id);
           void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song)).catch(() => undefined);
-          // v6.3.0 — two skips inside the recommender's tail re-plan the rest of it.
-          void import('@/services/recommendation/adaptive').then((m) => m.noteSkipAndMaybeReplan(song)).catch(() => undefined);
         }
       }
 
@@ -650,7 +568,6 @@ export const usePlayerStore = create<PlayerState>()(
             inst.run.completed = true;
             recordComplete(song, Math.round(inst.heardSec * 10) / 10);
             useHistoryStore.getState().markCompleted(song.id);
-            void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted()).catch(() => undefined);
           }
           finalizePlayback(repeat === 'one' ? 'repeat' : 'ended');
         }
@@ -712,8 +629,17 @@ export const usePlayerStore = create<PlayerState>()(
         audioEngine.pause();
       }
 
+      // Spotify: Autoplay switched off takes its songs out of what comes next.
+      useSettingsStore.subscribe((now, before) => {
+        if (before.autoplay && !now.autoplay && !radio) {
+          invalidateQueue();
+          apply(dropAutoplay(snap()));
+        }
+      });
+
       return {
         queue: [],
+        runs: [],
         index: 0,
         isPlaying: false,
         isBuffering: false,
@@ -731,13 +657,13 @@ export const usePlayerStore = create<PlayerState>()(
         loopB: null,
         streamKbps: null,
         followMode: false,
-        tuneIntent: null,
         context: null,
+        autoplayLoading: false,
 
         initEngine: () => {
           if (engineInitialized) return;
           engineInitialized = true;
-          loadOwnership();
+          loadListOrder();
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
@@ -909,67 +835,27 @@ export const usePlayerStore = create<PlayerState>()(
           resetSkipGuard(); // manual play — the user vouches for the sources
           finalizePlayback('replaced');
           invalidateQueue();
-          // V2 — a new list is a new session: the last plan's reserve belongs to the old one.
-          lastPlan = null;
+          radio = false;
           feed = null;
-          autoIds.clear();
           autoMetaById.clear();
-          manualIds.clear();
-          lastRemoval = null;
-          // V2 — a list (a playlist, an album, a chart) plays IN FULL, in its
-          // order or shuffled; Up Next continues only after its last song, in
-          // the list's direction. Takeover is for a single tapped song: the
-          // song is the seed and VinaX builds the continuation.
-          const settings = useSettingsStore.getState();
-          const list = stripExplicit(songs);
-          const takeover = (list.length < 2 || !!opts.asSeed) && settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
-          radio = takeover;
-          setAnchor(takeover ? [seed] : list);
+          // A search hit plays alone (Autoplay follows it); anything else plays as the list it is.
+          const list = opts.asSeed ? [seed] : stripExplicit(songs);
           // 1.15 — what this is playing from: the caller's words, else the page the listener is on.
           const context = opts.from !== undefined ? opts.from : contextFromPage();
           if (randomStart && !get().shuffle) set({ shuffle: true });
-          listOrder = (takeover ? [seed] : list).map((s) => s.id);
-          saveOwnership();
+          contextList = list;
+          saveListOrder();
           const startAt = opts.startAt && Number.isFinite(opts.startAt) && opts.startAt > 0 ? opts.startAt : 0;
-          if (takeover) {
-            set({ queue: [seed], index: 0, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null, context });
-            startTrack(seed, true, { startAt });
-            return;
-          }
-          // 1.15 — with shuffle on, the chosen song plays first and the rest
-          // follow in a shuffled order that the queue shows (a Queue Builder
-          // plan keeps the order it was built in).
-          const queue = get().shuffle && !opts.keepList ? shuffledStart(list, seed) : list;
-          const index = queue.indexOf(seed);
-          set({ queue: [...queue], index, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null, context });
+          // Spotify: the listener's Next in queue stays through a new list (a
+          // Listen Together room's plays are the host's, not this listener's).
+          const keepQueued = !opts.room && !get().followMode;
+          const next = startList(snap(), list, list.indexOf(seed), { shuffle: get().shuffle, keepQueued });
+          apply(trimPlayed(next, PLAYED_KEEP), { currentTime: startAt, duration: 0, loopA: null, loopB: null, context });
           startTrack(seed, true, { startAt });
         },
 
         playSong: (song, opts) => get().playQueue([song], 0, { startAt: opts?.startAt || undefined, room: opts?.room }),
 
-        tuneQueue: (intent) => {
-          if (intent !== null && !isTuneIntent(intent)) return;
-          const { queue, index } = get();
-          const current = queue[index];
-          if (!current) return;
-          const resolved: TuneIntent | null = intent === 'surprise' ? randomTune() : intent;
-          // Keep what played, the current song and anything the listener queued
-          // by hand; the rest of what follows is rebuilt.
-          invalidateQueue();
-          lastPlan = null; // the reserve was planned for the old tune
-          radio = true; // a tuned continuation is endless, like radio
-          if (resolved) feed = null; // 1.3 — a station cannot follow a tune: the plan takes over
-          // 7.2.0 — a rebuild replaces the recommender's picks only. Songs the
-          // listener queued by hand AND the list they started (an album, a
-          // playlist, a Queue Builder plan) stay: "songs you added stay" has to
-          // mean every song the plan did not choose.
-          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => !autoIds.has(s.id))];
-          for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
-          set({ queue: kept, tuneIntent: resolved });
-          void appendRecommendations(current).then((added) => {
-            if (!added && get().queue.length === kept.length) toast('Could not retune right now — try again in a moment');
-          });
-        },
         setSleepSongs: (n) => {
           // v7.0.0 — a minutes timer replaced by "after N songs" used to keep its
           // timeout armed and stop playback at the old deadline anyway.
@@ -986,13 +872,14 @@ export const usePlayerStore = create<PlayerState>()(
         clearLoop: () => set({ loopA: null, loopB: null }),
         playAt: (index) => {
           const { queue } = get();
-          if (index < 0 || index >= queue.length) return;
+          if (index < 0 || index >= queue.length || index === get().index) return;
           if (!requireAccount('listen', () => get().playAt(index))) return;
           resetSkipGuard(); // manual play
           maybeRecordSkip(true);
           const from = index === get().index + 1 ? queue[get().index] : null;
-          set({ index, currentTime: 0, duration: 0, loopA: null, loopB: null });
-          startTrack(queue[index], true, { from });
+          const next = jumpTo(snap(), index);
+          apply(next, { currentTime: 0, duration: 0, loopA: null, loopB: null });
+          startTrack(next.queue[next.index], true, { from });
         },
 
         enqueue: (song, opts) => {
@@ -1001,134 +888,89 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           if (roomAsk) return roomAsk(song);
-          const { queue } = get();
-          // A song already played can go in again; only the playing song and Up next count.
-          if (queue.slice(get().index).some((s) => s.id === song.id)) {
-            toast('Already in queue');
+          if (!get().queue.length) {
+            get().playQueue([song]);
+            return;
+          }
+          if (isQueued(snap(), song.id)) {
+            if (!opts?.quiet) toast('Already in queue');
             return;
           }
           recordQueueAdd(song);
-          noteAnchor(song);
-          // 1.15 — like Spotify: a hand-queued song plays right after the current
-          // one and after every song already added by hand, ahead of the rest of
-          // the album or playlist and of anything VinaX picked.
-          const { index } = get();
-          const at = queueInsertAt(queue, index, (id) => manualIds.has(id));
-          manualIds.add(song.id);
-          saveOwnership();
-          set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
-          if (at === index + 1) preloadUpcoming();
+          // Spotify: Add to queue puts the song at the end of Next in queue,
+          // after the playing song and every song added before it.
+          const before = get().index;
+          apply(addToQueue(snap(), [song]));
+          if (get().runs[before + 1] === 'queued' && get().queue[before + 1] === song) preloadUpcoming();
           // 10.1 — the snackbar shows which song went in, and opens the queue.
           if (!opts?.quiet) toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
-          if (queue.length === 0) get().playQueue([song]);
         },
 
         enqueueAll: (songs, opts) => {
-          const existing = new Set(get().queue.slice(get().index).map((s) => s.id));
-          const fresh = stripExplicit(songs).filter((s) => !existing.has(s.id));
+          const s = snap();
+          const fresh = stripExplicit(songs).filter((song, i, all) => isValidSong(song) && !isQueued(s, song.id) && all.findIndex((x) => x.id === song.id) === i);
           if (!fresh.length) {
             if (!opts?.quiet) toast('Already in queue');
             return;
           }
-          const current = get().queue;
-          const at = queueInsertAt(current, get().index, (id) => manualIds.has(id));
-          for (const s of fresh) manualIds.add(s.id);
-          saveOwnership();
-          set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
-          if (current.length && at === get().index + 1) preloadUpcoming();
+          if (roomAsk) {
+            for (const song of fresh) roomAsk(song);
+            return;
+          }
+          if (!s.queue.length) {
+            get().playQueue(fresh, 0, { from: null });
+            return;
+          }
+          for (const song of fresh) recordQueueAdd(song);
+          apply(addToQueue(s, fresh));
+          preloadUpcoming();
           if (!opts?.quiet) toast(fresh.length === 1 ? 'Added 1 song to queue' : tr('Added {n} songs to queue', { n: fresh.length }));
-          if (get().queue.length === fresh.length) startTrack(fresh[0], true);
         },
 
-        enqueueNext: (song) => {
-          if (song.explicit && kidModeOn()) {
-            toast('Kid mode is on — that song is marked explicit');
-            return;
-          }
-          if (roomAsk) return roomAsk(song);
-          const { queue, index } = get();
-          recordQueueAdd(song);
-          noteAnchor(song);
-          // If the song "play next" is invoked on already IS the currently
-          // playing track, do nothing — filtering it out and reinserting would
-          // corrupt the index (audit finding H2).
-          const currentSong = queue[index];
-          if (currentSong && currentSong.id === song.id) {
-            toast('Already playing');
-            return;
-          }
-          const filtered = queue.filter((s) => s.id !== song.id);
-          // The current song's position in the queue can shift when the
-          // enqueued song was already earlier in the queue. Realign `index`
-          // to the same song's new position before choosing the insert slot,
-          // otherwise the store points to a different track than the audio
-          // element is playing (audit finding H2).
-          const newIndex = currentSong ? filtered.indexOf(currentSong) : index;
-          const insertAt = Math.min(newIndex + 1, filtered.length);
-          autoIds.delete(song.id);
-          manualIds.add(song.id);
-          saveOwnership();
-          set({
-            queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
-            index: newIndex,
+        extendList: (songs) => {
+          const fresh = stripExplicit(songs).filter(isValidSong);
+          if (!fresh.length || !get().queue.length) return;
+          contextList = [...contextList, ...fresh];
+          saveListOrder();
+          const s = snap();
+          const next = upcoming(s);
+          const lastList = [s.index, ...next.filter((e) => e.run !== 'autoplay').map((e) => e.at)].pop() ?? s.index;
+          const at = lastList + 1;
+          apply({
+            queue: [...s.queue.slice(0, at), ...fresh, ...s.queue.slice(at)],
+            runs: [...s.runs.slice(0, at), ...fresh.map((): QueueRun => 'context'), ...s.runs.slice(at)],
+            index: s.index,
           });
-          toast('Playing next', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
+          preloadUpcoming();
         },
 
         removeAt: (i) => {
           const { queue, index, isPlaying } = get();
           if (i < 0 || i >= queue.length) return;
-          invalidateQueue();
           const removingCurrent = i === index;
-          lastRemoval = i > index ? { song: queue[i], at: i, manual: manualIds.has(queue[i].id), auto: autoMetaById.get(queue[i].id) ?? null, anchorId: queue[index]?.id ?? null } : null;
-          const next = queue.filter((_, idx) => idx !== i);
-          if (next.length === 0) {
-            audioEngine.pause();
-            set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
+          if (queue.length === 1) {
+            get().clearQueue();
             return;
           }
-          const newIndex = i < index ? index - 1 : Math.min(index, next.length - 1);
-          set({ queue: next, index: newIndex });
+          const next = removeEntry(snap(), i);
+          apply(next);
           if (removingCurrent) {
             // The playing track was removed — load whatever now occupies the
             // slot (keeping play/pause state) so audio and UI stay in sync.
             set({ currentTime: 0 });
-            startTrack(next[newIndex], isPlaying);
-          }
+            startTrack(next.queue[next.index], isPlaying);
+          } else if (i === index + 1) preloadUpcoming();
         },
 
         moveInQueue: (from, to) => {
-          const { queue, index } = get();
-          const moved = reorderQueue(queue, index, from, to);
-          if (moved) set(moved);
+          const before = get().queue[get().index + 1];
+          apply(moveEntry(snap(), from, to));
+          if (get().queue[get().index + 1] !== before) preloadUpcoming();
         },
 
-        sortUpcoming: (kind) => {
-          const { queue, index } = get();
-          if (queue.length - index < 3) return; // nothing worth sorting
-          const head = queue.slice(0, index + 1);
-          set({ queue: [...head, ...sortQueueTail(queue.slice(index + 1), kind)] });
-        },
-
-        clearFrom: (i) => {
-          const { queue, index } = get();
-          // Only the future can be swept — the playing song and history stay.
-          const next = queueAfterClearFrom(queue, index, i);
-          if (!next) return;
-          invalidateQueue();
-          const dropped = queue.length - next.length;
-          set({ queue: next });
-          toast(dropped === 1 ? 'Cleared 1 upcoming song' : tr('Cleared {n} upcoming songs', { n: dropped }));
-        },
-
-        clearPlayed: () => {
-          const { queue, index } = get();
-          if (index <= 0) return;
-          // The playing song becomes the first row, so it stays the current one.
-          // Only the past goes: Up next, its planning and the playhead are untouched.
-          if (lastRemoval) lastRemoval = { ...lastRemoval, at: Math.max(1, lastRemoval.at - index) };
-          set({ queue: queue.slice(index), index: 0 });
-          toast(index === 1 ? 'Cleared 1 played song' : tr('Cleared {n} played songs', { n: index }));
+        clearUserQueue: () => {
+          apply(clearQueued(snap()));
+          preloadUpcoming();
         },
 
         clearQueue: () => {
@@ -1137,18 +979,14 @@ export const usePlayerStore = create<PlayerState>()(
           refetchAbort?.abort();
           refetchAbort = null;
           invalidateQueue();
-          lastPlan = null;
           radio = false;
           feed = null;
           clearSleepTimeout();
-          autoIds.clear();
           autoMetaById.clear();
-          manualIds.clear();
-          lastRemoval = null;
-          listOrder = [];
-          saveOwnership();
+          contextList = [];
+          saveListOrder();
           audioEngine.pause();
-          set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0, context: null });
+          set({ queue: [], runs: [], index: 0, isPlaying: false, currentTime: 0, duration: 0, context: null, autoplayLoading: false });
           // 8.1.0 — an empty queue ends the media session: notification, lock-screen controls and the widget clear.
           updateMediaMetadata(null);
         },
@@ -1183,146 +1021,48 @@ export const usePlayerStore = create<PlayerState>()(
           if (!queue.length) return;
           if (manual) haptic('light');
           maybeRecordSkip(manual);
-          // 1.15 — shuffle already ordered the queue: the next song is the next row.
-          let nextIndex = index + 1;
-          if (nextIndex >= queue.length) {
-            if (repeat === 'all') {
-              nextIndex = 0;
-              // Spotify-style: a shuffled list gets a fresh order for its next time round.
-              if (shuffle && queue.length > 2) {
-                const order = shuffleSongs(queue);
-                // Never the song that just ended twice in a row.
-                if (order[0] === queue[index]) [order[0], order[order.length - 1]] = [order[order.length - 1], order[0]];
-                set({ queue: order, index: 0, currentTime: 0, duration: 0 });
-                startTrack(order[0], true);
-                return;
-              }
-            } else {
-              const playing = queue[index];
-              if (playing && canExtend()) {
-                // 7.2.0 — the validated reserve first: the next song starts at
-                // once while a fresh plan is built in the background.
-                const end = queue.length;
-                if (topUpFromReserve(playing) > 0) {
-                  // The first appended song.
-                  set({ index: end, currentTime: 0, duration: 0 });
-                  startTrack(get().queue[end], true, { from: playing });
-                  return;
-                }
-                const version = queueVersion;
-                const ticket = ++transition;
-                // Pause immediately so the existing player contract remains
-                // synchronous; resume automatically once the async tail is
-                // available — within the urgent deadline.
-                set({ isPlaying: false });
-                audioEngine.pause();
-                void appendRecommendations(playing, { urgent: true }).then((added) => {
-                  if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== playing.id || !canExtend()) return;
-                  if (added || get().index < get().queue.length - 1) {
-                    // The row after the playing song, read now: clearing the
-                    // played songs meanwhile moves it from `end`.
-                    const after = get().index + 1;
-                    if (get().queue.length > after) {
-                      set({ index: after, currentTime: 0, duration: 0 });
-                      startTrack(get().queue[after], true, { from: playing });
-                    } else get().next(false);
-                    return;
-                  }
-                  // V2 — never a silent stop: say why, so the listener can act.
-                  // 1.4 — or the plan's own words (Never repeat stops rather than play something heard).
-                  toast(planNotice?.text ?? 'Up next ran out of songs for this session — pick something or start a radio', planNotice?.opts);
-                });
-              } else {
-                set({ isPlaying: false });
-                audioEngine.pause();
-              }
-              return;
-            }
-          }
-          const from = nextIndex === index + 1 ? queue[index] : null;
-          set({ index: nextIndex, currentTime: 0, duration: 0 });
-          startTrack(queue[nextIndex], true, { from });
-        },
-
-        autoTail: () => {
-          const { queue, index } = get();
-          return queue.slice(index + 1).filter((s) => autoIds.has(s.id));
-        },
-        isAutoQueued: (id) => autoIds.has(id),
-        replaceAutoTail: (songs) => {
-          const { queue, index } = get();
-          const head = queue.slice(0, index + 1);
-          // Everything that is not the recommender's — the listener's list and
-          // hand-queued songs — keeps its place and its order.
-          const manualTail = queue.slice(index + 1).filter((s) => !autoIds.has(s.id));
-          const replacing = new Set(queue.slice(index + 1).filter((s) => autoIds.has(s.id)).map((s) => s.id));
-          // 7.2.0 — the same current-state gate as every automatic mutation:
-          // Kid mode, hidden songs and artists, muted languages, soft mutes,
-          // identity, recent plays and this sitting's skips all hold here too.
-          const { admitted: fresh } = admitSongs(songs, { queue, index, replacing });
-          for (const id of replacing) {
-            autoIds.delete(id);
-            autoMetaById.delete(id);
-          }
-          markAuto(fresh, { alg: lastPlan?.alg ?? 'replan', picker: 'local', batch: (batchSeq += 1) });
-          invalidateQueue();
-          set({ queue: [...head, ...manualTail, ...fresh] });
-          preloadUpcoming();
-          // V2 — invalidating cancelled any plan in flight: a tail left short asks again.
-          const cur = get().queue[get().index];
-          if (cur && get().isPlaying && canExtend() && songsLeft() <= 2) void appendRecommendations(get().queue[get().queue.length - 1] ?? cur);
-        },
-        isManualQueued: (id) => manualIds.has(id),
-        keepSong: (id) => {
-          const { queue, index } = get();
-          if (!autoIds.has(id) || !queue.some((s, i) => i > index && s.id === id)) return;
-          // It stays where it is, but it is the listener's now: a rebuild leaves it alone.
-          autoIds.delete(id);
-          autoMetaById.delete(id);
-          manualIds.add(id);
-          saveOwnership();
-          set({ queue: [...queue] });
-        },
-        regenerateAutoTail: () => get().tuneQueue(get().tuneIntent),
-        undoRemove: () => {
-          const r = lastRemoval;
-          lastRemoval = null;
-          if (!r) return false;
-          const { queue, index } = get();
-          // Only while the same song is playing, and only if the song is not back already.
-          if (!r.anchorId || queue[index]?.id !== r.anchorId || queue.slice(index).some((s) => s.id === r.song.id)) return false;
-          const at = Math.min(Math.max(index + 1, r.at), queue.length);
-          invalidateQueue();
-          if (r.manual) manualIds.add(r.song.id);
-          else if (r.auto) {
-            autoIds.add(r.song.id);
-            autoMetaById.set(r.song.id, r.auto);
-          }
-          set({ queue: [...queue.slice(0, at), r.song, ...queue.slice(at)] });
-          preloadUpcoming();
-          return true;
-        },
-        playbackInstance: () => playback,
-        autoMeta: (id) => autoMetaById.get(id) ?? null,
-        applyPlan: (songs, mode) => {
-          // 7.2.0 — a plan the listener installs keeps its order; the explicit
-          // restrictions (Kid mode, hidden, muted languages, invalid entries) still hold.
-          const clean = admitSongs(songs, { queue: get().queue, index: get().index, mode: 'plan' }).admitted;
-          if (!clean.length) return;
-          if (mode === 'replace') {
-            autoIds.clear();
-            get().playQueue(clean, 0, { keepList: true });
+          const playing = queue[index];
+          const go = (at: number): void => {
+            const from = get().queue[at - 1] ?? null;
+            apply(trimPlayed({ ...snap(), index: at }, PLAYED_KEEP), { currentTime: 0, duration: 0 });
+            startTrack(get().queue[get().index], true, { from });
+          };
+          if (index + 1 < queue.length) {
+            go(index + 1);
             return;
           }
-          const { queue, index } = get();
-          const head = queue.slice(0, index + 1);
-          const seen = new Set(head.map((s) => s.id));
-          const fresh = clean.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
-          for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
-          invalidateQueue();
-          set({ queue: [...head, ...fresh] });
-          preloadUpcoming();
+          // The end of the queue. Repeat all: the list again from its top.
+          const list = contextList.length ? contextList : queue.filter((_, i) => get().runs[i] === 'context');
+          if (repeat === 'all' && list.length) {
+            apply(repeatList(snap(), list, { shuffle }));
+            if (get().queue.length > index + 1) go(index + 1);
+            return;
+          }
+          // Autoplay: wait (paused) for songs like these, then carry on.
+          if (playing && canAutoplay() && !isEpisode(playing)) {
+            const version = queueVersion;
+            const ticket = ++transition;
+            set({ isPlaying: false, autoplayLoading: true });
+            audioEngine.pause();
+            void topUpAutoplay({ urgent: true }).then((added) => {
+              if (version !== queueVersion || ticket !== transition || get().queue[get().index] !== playing) return;
+              set({ autoplayLoading: false });
+              if (!canAutoplay()) return;
+              if (added || get().index < get().queue.length - 1) {
+                if (get().queue.length > get().index + 1) go(get().index + 1);
+                return;
+              }
+              // Never a silent stop: say why, so the listener can act.
+              toast('Autoplay couldn’t find more songs right now — pick something or start a radio');
+            });
+            return;
+          }
+          // Nothing more to play: stop at the end of the last song.
+          set({ isPlaying: false });
+          audioEngine.pause();
         },
+
+        playbackInstance: () => playback,
 
         startRadio: (song, opts = {}) => {
           const seed = song ?? get().queue[get().index];
@@ -1330,29 +1070,25 @@ export const usePlayerStore = create<PlayerState>()(
           if (!requireAccount('listen', () => get().startRadio(song, opts))) return;
           // 8.2.0 — Radio seeds: distinct, valid, Kid-mode safe, at most RADIO_SEED_MAX.
           const seen = new Set<string>();
-          const queue = stripExplicit([seed, ...(opts.seeds ?? []).filter(isValidSong)])
+          const list = stripExplicit([seed, ...(opts.seeds ?? []).filter(isValidSong)])
             .filter((s) => !seen.has(s.id) && !!seen.add(s.id))
             .slice(0, RADIO_SEED_MAX);
-          if (!queue.length) return;
-          const tune = opts.tune === 'surprise' ? randomTune() : opts.tune && isTuneIntent(opts.tune) ? opts.tune : null;
+          if (!list.length) return;
+          if (roomAsk) return roomAsk(list[0]);
           finalizePlayback('replaced');
           invalidateQueue();
-          lastPlan = null;
           radio = true;
           feed = opts.feed ?? null;
           feedMisses = 0;
-          autoIds.clear();
           autoMetaById.clear();
-          manualIds.clear();
-          lastRemoval = null;
-          listOrder = queue.map((s) => s.id);
-          saveOwnership();
-          setAnchor(queue);
-          const context: QueueContext | null = opts.from !== undefined ? opts.from : { kind: 'radio', label: `${queue[0].title} radio`, path: '/radio' };
-          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: tune, context });
-          startTrack(queue[0], true);
-          // Plan the first continuation at once, after the last seed, so Up next shows where the radio goes.
-          void appendRecommendations(queue[queue.length - 1]);
+          contextList = list;
+          saveListOrder();
+          const context: QueueContext | null = opts.from !== undefined ? opts.from : { kind: 'radio', label: `${list[0].title} radio`, path: '/radio' };
+          const next = startList(snap(), list, 0, { keepQueued: !get().followMode });
+          apply(trimPlayed(next, PLAYED_KEEP), { currentTime: 0, duration: 0, isPlaying: true, loopA: null, loopB: null, context });
+          startTrack(list[0], true);
+          // Ask for the first continuation at once, so the queue shows where the radio goes.
+          void topUpAutoplay();
         },
 
         prev: () => {
@@ -1366,8 +1102,9 @@ export const usePlayerStore = create<PlayerState>()(
             audioEngine.seek(0);
             return;
           }
-          set({ index: index - 1, currentTime: 0, duration: 0 });
-          startTrack(queue[index - 1], true);
+          const back = normalize({ ...snap(), index: index - 1 });
+          apply(back, { currentTime: 0, duration: 0 });
+          startTrack(back.queue[back.index], true);
         },
 
         seek: (seconds) => {
@@ -1416,20 +1153,24 @@ export const usePlayerStore = create<PlayerState>()(
           const order: RepeatMode[] = ['off', 'all', 'one'];
           const next = order[(order.indexOf(get().repeat) + 1) % order.length];
           set({ repeat: next });
+          // Spotify: with repeat on there is no Autoplay; off again, it comes back near the end.
+          if (next !== 'off') {
+            invalidateQueue();
+            apply(dropAutoplay(snap()));
+          } else if (get().isPlaying && canAutoplay() && songsLeft() <= AUTOPLAY_WHEN_LEFT) void topUpAutoplay();
         },
 
         toggleShuffle: () => {
           const on = !get().shuffle;
-          const { queue, index, followMode } = get();
           // A followed host's queue is not the listener's to reorder.
-          if (followMode || queue.length - index < 3) {
+          if (get().followMode) {
             set({ shuffle: on });
             return;
           }
           // 1.15 — the queue itself is reordered, so it shows what will really
           // play and Back returns to the song before; off puts the list back.
-          const reordered = on ? shuffleUpcoming(queue, index, runOf) : unshuffleUpcoming(queue, index, listOrder, runOf);
-          set({ shuffle: on, queue: reordered });
+          const next = on ? shuffleOn(snap()) : shuffleOff(snap(), contextList.map((s) => s.id));
+          apply(next, { shuffle: on });
           preloadUpcoming();
         },
 
@@ -1473,6 +1214,7 @@ export const usePlayerStore = create<PlayerState>()(
       storage: createDedupedStorage<PersistedPlayerState>(),
       partialize: (s): PersistedPlayerState => ({
         queue: s.queue,
+        runs: s.runs,
         index: s.index,
         repeat: s.repeat,
         shuffle: s.shuffle,
@@ -1490,6 +1232,8 @@ export const usePlayerStore = create<PlayerState>()(
         // 7.2.0 — a queue stored by an older build can carry energy/tempo an AI
         // classifier once guessed. They were never measured, so they are dropped
         // rather than passed on as catalogue metadata.
+        const storedRuns = alignRuns(Array.isArray(p.queue) ? p.queue : [], p.runs);
+        const runs = Array.isArray(p.queue) ? storedRuns.filter((_, i) => isValidSong((p.queue as unknown[])[i])) : [];
         const queue = (Array.isArray(p.queue) ? p.queue.filter(isValidSong) : []).map((song) => {
           if (song.energy === undefined && song.tempo === undefined) return song;
           const rest: Song = { ...song };
@@ -1507,8 +1251,7 @@ export const usePlayerStore = create<PlayerState>()(
           volume: num(p.volume, 0, 1, 1),
           muted: p.muted === true,
           rate: num(p.rate, 0.5, 2, 1),
-          queue,
-          index: queue.length ? Math.min(Math.max(0, rawIndex), queue.length - 1) : 0,
+          ...normalize({ queue, runs, index: queue.length ? Math.min(Math.max(0, rawIndex), queue.length - 1) : 0 }),
           context: queue.length && isQueueContext(p.context) ? p.context : null,
         };
       },
@@ -1519,9 +1262,3 @@ export const usePlayerStore = create<PlayerState>()(
 export function useCurrentSong(): Song | null {
   return usePlayerStore((s) => s.queue[s.index] ?? null);
 }
-
-// 8.5.1 — lets a like on the playing song re-plan the queue (libraryStore.toggleFavorite).
-setNowPlayingProbe(() => {
-  const { queue, index } = usePlayerStore.getState();
-  return queue[index]?.id ?? null;
-});

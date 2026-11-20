@@ -37,10 +37,10 @@ This README is the only document in the repository. Version source of truth: `fr
 ## What a listener gets
 
 - **Account.** Google or email and password sign-in. Library, history, taste and settings live on the device and sync to the account. Discover, Charts, Search and entity pages work signed out.
-- **Self-building queue.** Up Next fills five songs at a time. Radio, Tune this queue, Discovery (Familiar / Balanced / Discover leans the ranking toward the listener's own music or toward new music) and Never repeat control the picks; each stretch follows a smooth energy curve, and Shuffle keeps one artist's songs apart.
+- **Spotify-style queue.** Now playing, then Next in queue (songs you added, each plays once and stays through a new album), then Next from: <the list you played>, then Autoplay (similar songs once the list ends; off with repeat on or the Autoplay switch off). Rules in `store/queueRules.ts`, Autoplay in `services/autoplay/`. Shuffle reorders only the list and keeps one artist's songs apart; Repeat all plays the list again.
 - **Player.** Synced lyrics, sleep timer, crossfade (off by default since 1.19: on, it handed every song over five seconds early), loudness normalisation, casting, drive mode, disco lights, karaoke, video clips, and **Flow** (music videos one per screen, in the listener's languages, with a quality picker: Auto or any rendition the clip CDN has, 4K down to 360p).
 - **Library.** Favourites, playlists, Listen Later, smart collections, Your VinaX stats, and one-file backup with merge, replace and Undo.
-- **VinaX AI** at `/vinaxai`: an opt-in chat assistant, and the only place with AI ([VinaX AI](#vinax-ai)). Up Next, Radio, Home, playlists and lyrics run on the device or through plain catalogue lookups; no listening data goes to an AI service.
+- **VinaX AI** at `/vinaxai`: an opt-in chat assistant, and the only place with AI ([VinaX AI](#vinax-ai)). Autoplay, Radio, Home, playlists and lyrics run on the device or through plain catalogue lookups; no listening data goes to an AI service.
 - **Friends.** Public profiles `/u/<handle>`, follows, Blend, shared playlists, and **Listen Together** jam rooms (a shared queue; mutual followers can **Join**).
 - **Discovery.** Discover 5, Your Week, the weekly VinaX chart, podcasts, release alerts, focus sounds, playlist import.
 - **Removed.** Badges, streaks, quiz, recap and song reactions. Old routes redirect, and old API calls answer empty or 410.
@@ -685,7 +685,7 @@ Everything runs on the device, so listening history never goes to a server. Path
 
 ### The pipeline
 
-`planNextSongs(seed, ctx)` in `services/recommendation/engine.ts` (lazy chunk) plans the queue; `buildRecommendations(ctx)` runs it without a seed for Home. The live queue uses the V2 planner in `services/nextup/` (ranked by `rules.ts`: source, likes, pull, mood, era, exposure, listening moment, and since 1.19 the Discovery lean and a lift for a release from this year or last; `pickSequence` then orders each stretch by score minus the energy step from the song before, under the artist-spacing rules) with the same context and admission gate. Hard rules never relax.
+`planNextSongs(seed, ctx)` in `services/recommendation/engine.ts` (lazy chunk) plans mixes; `buildRecommendations(ctx)` runs it without a seed for Home. Since 1.20 the live queue does not use it: the queue follows Spotify's rules (`store/queueRules.ts`) and its Autoplay (`services/autoplay/`) asks `/api/recommendations?seeds=` for songs like the last five played (falling back to the catalogue's suggestions), dropping anything queued, played in the last 50 plays, hidden, in a muted language, or explicit under Kid mode. Hard rules never relax.
 
 | # | Stage | Module | What |
 | --- | --- | --- | --- |
@@ -715,7 +715,7 @@ Candidate gathering keeps at most six catalogue requests in flight, reuses answe
 | Sequencer costs, arcs `steady`/`build`/`wind-down`/`wave`/`lift`, transition memory | `sequencer.ts`, `transitions.ts` |
 | Relaxation order: discovery allocation, familiar opening, artist cap, style quota, sitting-avoid, language mix, back-to-back last | `validation.ts` (do not reorder without the evaluation) |
 | Familiar / Balanced / Discover: lean -1/0/+1, `DISCOVERY_SHARE` 5/20/45% | `discoveryMode` setting |
-| Queue languages `'mix'` (seed + listener's languages, spacing rules) or `'one'` (lock) | `queueLanguages` setting |
+| Mix languages `'mix'` (seed + listener's languages, spacing rules) or `'one'` (lock); no longer in Settings since 1.20 | `queueLanguages` setting |
 | Tunes and styles (`dj`, `folk`, devotional; `STYLE_MIN_SHARE` 0.8) | `tune.ts`, `style.ts` |
 | `NEXT_BATCH` 5 (asked at <= 2 left), adaptive re-plan after two auto skips (`REPLAN_COOLDOWN_MS` 90 s), radio <= 5 seeds | `store/playerStore.ts`, `adaptive.ts`, `features/radio/radioSeeds.ts` |
 
@@ -730,7 +730,7 @@ Candidate gathering keeps at most six catalogue requests in flight, reuses answe
 | Outcomes, seed memory | `recMemory.ts` (60 days; seeds 12 h) |
 | Your Week | `localStorage` `vinax.weekly.v1` |
 
-The ledger records shown, queued, played, completed, skipped and disliked (penalties 0.14-0.80, decaying over 3-60 days) and reaches the scorer as `ctx.exposurePenaltyOf`; it never admits a song the filter rejects. **Never repeat** (`neverRepeat`) makes `heard-before` a hard rule in `filters.ts`, `admission.ts` and `nextup/rules.ts`; a thin pool widens the sources (`RecommendationContext.widen`, `planWideLookups`), then the plan says `exhausted`.
+The ledger records shown, queued, played, completed, skipped and disliked (penalties 0.14-0.80, decaying over 3-60 days) and reaches the scorer as `ctx.exposurePenaltyOf`; it never admits a song the filter rejects. **Never repeat** (`neverRepeat`) makes `heard-before` a hard rule in `filters.ts` and `admission.ts` (mixes; the queue's Autoplay does not read it); a thin pool widens the sources (`RecommendationContext.widen`, `planWideLookups`), then the plan says `exhausted`.
 
 ### Home and catalogue routes
 
@@ -953,9 +953,9 @@ Run Part 1 (one phone, about 22 min) before every release. Run Part 2 before an 
    - **Download all** finishes, and failures give their reason.
    - The iPhone Home Screen app opens offline.
 6. **Queue:**
-   - Up Next keeps the song's language.
-   - Tune this queue rebuilds it.
-   - Added songs stay ahead.
+   - Added songs play next and survive starting another album.
+   - Clear queue empties only Next in queue.
+   - Autoplay follows when the list ends, and stops with repeat on.
    - Check whether playback resumes after a call.
 7. **Notifications:**
    - A console test notification opens its song.
@@ -987,10 +987,9 @@ VinaX is free, with no ads. Sign in with Google or with email and a password. **
   - On the web, **Explore VinaX first** lets you browse signed out.
   - On iPhone: Share > Add to Home Screen.
 - **Play:**
-  - Tap a song, and VinaX queues five more.
-  - ⋯ > **Play next** or **Add to queue**. Your songs play first.
-  - Turn **Smart Queue** off to keep your own order.
-- **Queue page:** shows Played, Next in queue, Next from and Autoplay. **Tune this queue** changes the mood, and **Never repeat** plays only new songs.
+  - Tap a song in an album or playlist, and the rest of it plays after; then Autoplay plays similar songs.
+  - ⋯ > **Add to queue**. Your songs play next, in the order you added them.
+- **Queue page:** Now playing, Next in queue (**Clear queue**), Next from and Autoplay, with shuffle, repeat and the Autoplay switch; **Recently played** is the second tab.
 - **Now Playing:**
   - Swipe the artwork to change songs. Double-tap the edges for ±10 s, or the centre to like.
   - It also has Lyrics, Karaoke, Disco lights and the Sleep timer.

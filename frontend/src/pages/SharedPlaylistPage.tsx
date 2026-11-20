@@ -92,7 +92,7 @@ export default function SharedPlaylistPage() {
         meta={<EntityMeta items={[playlist.owner ? `by ${playlist.owner}` : null, `${playlist.songs.length} song${playlist.songs.length === 1 ? '' : 's'}`, canEdit && !mine ? 'You can add songs' : null]} />}
         actions={
           <>
-            <PlayFab label="Play" onClick={() => usePlayerStore.getState().playQueue(songs, 0, { keepList: true })} disabled={!songs.length} />
+            <PlayFab label="Play" onClick={() => usePlayerStore.getState().playQueue(songs, 0)} disabled={!songs.length} />
             <button type="button" onClick={save} disabled={!songs.length} className="vx-tap px-5 min-h-[44px] rounded-full btn-secondary font-semibold">Save to my library</button>
           </>
         }

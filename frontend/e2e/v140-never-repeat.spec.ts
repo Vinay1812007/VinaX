@@ -2,11 +2,9 @@ import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
- * 1.4 — Never repeat, from the built bundle with a mocked catalogue. The
- * listener's history already holds four songs (the heard-set reads them in on
- * its first load), one of which also exists as a DJ remix. With Never repeat
- * on, tapping a song fills the queue with songs that are none of those, in no
- * version. The Queue page shows the mode as a pressed chip.
+ * 1.4 — Never repeat, from the built bundle with a mocked catalogue: the
+ * switch is in Settings → Recommendations. (Since 1.20 the queue's Autoplay no
+ * longer reads it; the mixes VinaX makes do.)
  */
 interface Song {
   kind: 'song'; id: string; title: string; subtitle: string; artists: { id: string; name: string }[];
@@ -61,41 +59,6 @@ async function seed(page: Page, baseURL: string, neverRepeat = true): Promise<{ 
   });
   return { pool, heard, remix };
 }
-
-const queueIds = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []).map((s: { id: string }) => s.id) as string[]);
-
-test('Never repeat: playing a song fills the queue with songs never heard, in no version', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const { heard, remix } = await seed(page, baseURL!);
-  await page.goto('/search/telugu');
-  const rows = page.locator('[data-song-id]');
-  await expect(rows.first()).toBeVisible();
-  const tapped = await rows.first().getAttribute('data-song-id');
-  await rows.first().click();
-  await expect.poll(() => queueIds(page).then((q) => q[0])).toBe(tapped);
-  await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(3);
-  const automatic = (await queueIds(page)).slice(1);
-  for (const s of heard) expect(automatic, `heard song ${s.id}`).not.toContain(s.id);
-  expect(automatic).not.toContain(remix.id);
-  expect(new Set(automatic).size).toBe(automatic.length);
-
-  await page.goto('/queue');
-  await expect(page.getByRole('button', { name: 'Never repeat' })).toHaveAttribute('aria-pressed', 'true');
-});
-
-test('control: with Never repeat off, the same catalogue does bring heard songs back', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const { heard, remix } = await seed(page, baseURL!, false);
-  await page.goto('/search/telugu');
-  const rows = page.locator('[data-song-id]');
-  await expect(rows.first()).toBeVisible();
-  await rows.first().click();
-  await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(3);
-  await expect.poll(async () => {
-    const automatic = (await queueIds(page)).slice(1);
-    return [...heard.map((s) => s.id), remix.id].some((id) => automatic.includes(id));
-  }, { timeout: 20_000 }).toBe(true);
-});
 
 test('Never repeat appears in Settings → Recommendations', async ({ page, baseURL }) => {
   await seed(page, baseURL!);

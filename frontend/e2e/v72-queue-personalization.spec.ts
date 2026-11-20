@@ -3,15 +3,8 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
  * 7.2 from the built bundle, in a real browser, with Telugu, Hindi and Tamil
- * titles and a phone and a desktop width:
- *  - upcoming entries say whether VinaX picked them ("VinaX pick") or the listener added
- *    them, in words;
- *  - the queue can be reordered from the keyboard, with the result announced
- *    and focus kept on the row that moved;
- *  - removing a song offers an Undo that puts it back;
- *  - "Keep this song" turns a VinaX pick into the listener's own;
- *  - "Less like this" asks for how long, and Settings lists the mute and
- *    takes it back.
+ * titles: "Less like this" asks for how long, and Settings lists the mute and
+ * takes it back; Settings explains the discovery modes.
  *
  * The catalogue is mocked; a real (silent) audio file is served so playback
  * genuinely runs and the DJ builds a continuation the way it does in the app.
@@ -83,7 +76,7 @@ async function seed(page: Page, baseURL: string): Promise<ApiSong[]> {
   await page.addInitScript(({ fp, profile }) => {
     localStorage.setItem(
       'vinax.settings.v1',
-      JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi', 'tamil'], autoplay: true, djTakeover: true, discoveryMode: 'balanced' }, version: 4 }),
+      JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi', 'tamil'], autoplay: true, discoveryMode: 'balanced' }, version: 4 }),
     );
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.user-name', JSON.stringify('Lakshmi'));
@@ -121,93 +114,6 @@ const gotoInApp = (page: Page, path: string) =>
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, path);
 
-const queueIds = (page: Page) =>
-  page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []).map((s: { id: string }) => s.id) as string[]);
-
-/** Start a song from search so the DJ builds a real continuation, then open the queue. */
-async function playAndOpenQueue(page: Page): Promise<void> {
-  await page.goto('/search/telugu');
-  const rows = page.locator('[data-song-id]');
-  // The results page fetches the catalogue; under the parallel full run the default 5 s was too tight at phone width.
-  await expect(rows.first()).toBeVisible({ timeout: 20_000 });
-  await rows.first().click();
-  await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 25_000 }).toBeGreaterThan(2);
-  await gotoInApp(page, '/queue');
-  await expect(page.getByRole('heading', { name: 'Queue', exact: true })).toBeVisible();
-}
-
-for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
-  test(`the queue says who queued what, reorders from the keyboard and undoes a removal (${size.width}px)`, async ({ page, baseURL }) => {
-    await page.setViewportSize(size);
-    await seed(page, baseURL!);
-    await playAndOpenQueue(page);
-
-    // Every upcoming entry VinaX chose is marked in words, not by colour.
-    const rows = page.locator('ul li[data-row-key]');
-    await expect(rows.first()).toBeVisible();
-    await expect(page.getByText('VinaX pick').first()).toBeVisible();
-    await expect(page.locator('#vx-rebuild-note')).toContainText(/VinaX picks?\./);
-
-    // Hand-queue a song in another script: it goes ahead of VinaX's picks and says so.
-    await gotoInApp(page, '/search/telugu');
-    // The overview lists only the first few songs; the Songs tab has them all.
-    await page.getByRole('button', { name: /See all songs/ }).click();
-    const hindiRow = page.locator('[data-song-id]', { hasText: 'तुम ही हो' }).first();
-    await hindiRow.scrollIntoViewIfNeeded();
-    await hindiRow.getByRole('button', { name: /More options/ }).click();
-    await page.getByRole('menuitem', { name: 'Add to queue' }).click();
-    await gotoInApp(page, '/queue');
-    const mine = page.locator('li[data-row-key]', { hasText: 'तुम ही हो' });
-    await expect(mine.getByText('Added by you')).toBeVisible();
-    await expect(page.locator('#vx-rebuild-note')).toContainText('added by you');
-    // The title does not spill out of its row.
-    const spill = await mine.evaluate((li) => li.scrollWidth - li.clientWidth);
-    expect(spill).toBeLessThanOrEqual(1);
-
-    // Keyboard reorder: the grip takes arrow keys, announces the move and keeps focus.
-    const secondTitle = await rows.nth(1).locator('span.font-bold').first().innerText();
-    const grip = rows.nth(1).getByRole('button', { name: /^Reorder / });
-    await grip.focus();
-    await page.keyboard.press('ArrowUp');
-    await expect(page.locator('[role=status]').first()).toContainText('moved to position 1 of');
-    await expect(rows.first().locator('span.font-bold').first()).toHaveText(secondTitle);
-    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '')).toMatch(/^Reorder /);
-
-    // The same move from the row menu, for a pointer-free path that reads aloud.
-    await rows.first().getByRole('button', { name: /^More options for / }).click();
-    await page.getByRole('menuitem', { name: 'Move down' }).click();
-    await expect(page.locator('[role=status]').first()).toContainText('moved to position 2 of');
-    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '')).toMatch(/^More options for /);
-
-    // Remove, then Undo: the song comes back where it was.
-    const before = await queueIds(page);
-    const firstRemove = rows.first().getByRole('button', { name: /^Remove / });
-    await firstRemove.click();
-    await expect.poll(() => queueIds(page).then((q) => q.length)).toBe(before.length - 1);
-    await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.poll(() => queueIds(page)).toEqual(before);
-    await page.screenshot({ path: `test-results/v72-queue-${size.width}.png` });
-  });
-}
-
-test('Keep this song holds a VinaX pick through a rebuild', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await seed(page, baseURL!);
-  await playAndOpenQueue(page);
-
-  const pick = page.locator('li[data-row-key]', { has: page.getByText('VinaX pick') }).first();
-  const keptTitle = await pick.locator('span.font-bold').first().innerText();
-  await pick.getByRole('button', { name: /^More options for / }).click();
-  await page.getByRole('menuitem', { name: 'Keep this song' }).click();
-  const kept = page.locator('li[data-row-key]', { hasText: keptTitle }).first();
-  await expect(kept.getByText('Added by you')).toBeVisible();
-
-  // A deliberate rebuild replaces the other VinaX picks and leaves this one alone.
-  await page.getByRole('button', { name: 'Refresh up next' }).click();
-  await expect.poll(() => page.locator('li[data-row-key]', { hasText: keptTitle }).count(), { timeout: 25_000 }).toBe(1);
-  await expect(page.locator('li[data-row-key]', { hasText: keptTitle }).first().getByText('Added by you')).toBeVisible();
-});
-
 test('Less like this asks for how long; Settings lists the mute and takes it back', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await seed(page, baseURL!);
@@ -222,7 +128,6 @@ test('Less like this asks for how long; Settings lists the mute and takes it bac
   await row.getByRole('button', { name: /More options/ }).click();
   // 1.11 — the song menu opens short; the steering items live under More….
   await page.getByRole('menuitem', { name: 'More…' }).click();
-  await expect(page.getByRole('menuitem', { name: 'More like this' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Less like this…' }).click();
   // The menu asks for how long, naming the artist, and the permanent block is not here.
   await expect(page.getByRole('menu')).toContainText(artist);

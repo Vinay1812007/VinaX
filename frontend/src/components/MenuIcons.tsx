@@ -15,9 +15,7 @@ const svg = (children: ReactElement | ReactElement[]): ReactElement => (
 
 export const MENU_GLYPHS = {
   radio: () => svg([<circle key="a" cx="12" cy="12" r="2" />, <path key="b" d="M8.5 15.5a5 5 0 010-7M15.5 8.5a5 5 0 010 7M5.6 18.4a9 9 0 010-12.8M18.4 5.6a9 9 0 010 12.8" />]),
-  playNext: () => svg([<path key="a" d="M4 6h10M4 11h10M4 16h6" />, <path key="b" d="M16 13.5v6l5-3z" fill="currentColor" stroke="none" />]),
   addQueue: () => svg(<path d="M4 6h12M4 11h12M4 16h7M18 14v6M15 17h6" />),
-  moreLike: () => svg(<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012 2v4h5.5a2 2 0 012 2.3l-1.2 7A2 2 0 0117.3 20H7" />),
   lessLike: () => svg(<path d="M17 13V4h3v9zM17 13l-4 8a2 2 0 01-2-2v-4H5.5a2 2 0 01-2-2.3l1.2-7A2 2 0 016.7 4H17" />),
   why: () => svg([<circle key="a" cx="12" cy="12" r="9" />, <path key="b" d="M12 11v5M12 8h.01" />]),
   later: () => svg(<path d="M6 3.5h12v17l-6-4-6 4z" />),

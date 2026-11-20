@@ -101,7 +101,7 @@ export async function tryMusicCommand(text: string, say: (line: string) => void)
         }
         const player = usePlayerStore.getState();
         if (verb === 'queue') {
-          player.enqueueNext(results[0]);
+          player.enqueue(results[0], { quiet: true });
           say(`Queued ${results[0].title} by ${results[0].subtitle}.`);
         } else if (verb === 'shuffle') {
           player.playQueue(results, 0, { shuffle: true, from: { kind: 'search', label: `Search: ${rest}` } });

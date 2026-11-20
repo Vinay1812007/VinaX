@@ -1,6 +1,5 @@
 import { useLocation } from 'react-router-dom';
 import { usePlayerStore } from '@/store/playerStore';
-import { originOf, ORIGIN_LABEL } from '@/features/queue/origin';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NextIcon } from './Icons';
 
@@ -23,25 +22,24 @@ export function selectEndingIn(s: { currentTime: number; duration: number; isPla
  * Floating "Up next" preview that slides in during the last 30 seconds of a
  * track, showing the song that will play next. Tap to skip to it. Hidden on
  * the full-screen player (which already lists the queue) and on repeat-one.
- * 1.15 — shuffle reorders the queue itself, so the next row is the next song there too.
+ * The queue order is the play order (shuffle reorders the queue itself), so
+ * the next row is the next song. 1.20 — it says "Autoplay" for an Autoplay pick.
  */
 export function NextUpCard() {
   const { pathname } = useLocation();
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
+  const nextRun = usePlayerStore((s) => s.runs[s.index + 1]);
   const repeat = usePlayerStore((s) => s.repeat);
   const endingIn = usePlayerStore(selectEndingIn);
 
   const current = queue[index];
-  const upcoming =
-    repeat === 'one'
-      ? undefined
-      : queue[index + 1] ?? (repeat === 'all' && queue.length > 1 ? queue[0] : undefined);
+  const upcoming = repeat === 'one' ? undefined : queue[index + 1];
 
   if (endingIn === null || !upcoming || upcoming.id === current?.id || pathname === '/now-playing') return null;
 
-  // 7.2 — say who queued it, in the same words the Queue page uses.
-  const origin = ORIGIN_LABEL[originOf(upcoming.id)];
+  // In the same words the Queue page uses.
+  const origin = nextRun === 'autoplay' ? 'Autoplay' : nextRun === 'queued' ? 'Next in queue' : '';
 
   return (
     // From 1280px it steps aside for the Now Playing panel (clamp(300px, 22vw, 340px) wide) instead of covering it.

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
 import { PlayIcon, PlusIcon, QueueIcon } from '@/components/Icons';
 import { toast } from '@/store/toastStore';
-import { shuffleSongs } from '@/store/queueOrder';
+import { shuffleSongs } from '@/store/queueRules';
 import { parsePlaylistBlock } from './playlistBlock';
 import type { Lookup, SongResolver } from './suggest';
 
@@ -105,7 +105,7 @@ export function PlaylistCard({ text }: { text: string }) {
     const held: Song[] = [];
     const add = (songs: Song[]): void => {
       if (shuffled) held.push(...songs);
-      else player().enqueueAll(songs, { quiet: true });
+      else player().extendList(songs);
     };
     const stillOurs = (): boolean => run === playRun && firstId !== null && player().queue.some((s) => s.id === firstId);
     let started!: () => void;
@@ -119,8 +119,8 @@ export function PlaylistCard({ text }: { text: string }) {
       }
       if (firstId === null) {
         const [head, ...rest] = songs;
-        // keepList: a one-song start must not turn into radio before the rest arrives.
-        player().playQueue([head], 0, { keepList: true, from });
+        // The rest of the playlist joins "Next from" as it arrives.
+        player().playQueue([head], 0, { from });
         const p = player();
         started();
         if (p.queue[p.index]?.id !== head.id) {
@@ -142,7 +142,7 @@ export function PlaylistCard({ text }: { text: string }) {
         if (run !== playRun) return;
         if (firstId === null && !stopped) nothingFound(found);
         else if (firstId !== null) {
-          if (held.length && !stopped && stillOurs()) player().enqueueAll(shuffleSongs(held), { quiet: true });
+          if (held.length && !stopped && stillOurs()) player().extendList(shuffleSongs(held));
           missingToast(found);
         }
       })

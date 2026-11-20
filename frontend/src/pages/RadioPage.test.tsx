@@ -57,15 +57,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Radio page', () => {
-  it('a mood starts radio from its songs with that tune, in the listener language', async () => {
+  it('a mood starts radio from its songs, in the listener language', async () => {
     const songs = ['1', '2', '3', '4', '5', '6'].map((id) => makeSong(`s${id}`));
     search.mockResolvedValue(songs);
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Start Melody radio' }));
     await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
     expect(search.mock.calls[0][0]).toBe('telugu melody songs');
-    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[]; tune: string }];
-    expect(opts.tune).toBe('melody');
+    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[] }];
     expect([seed, ...opts.seeds]).toHaveLength(5);
     expect(await screen.findByText(/Playing Radio: Melody/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'See what’s next' }).getAttribute('href')).toBe('/queue');
@@ -79,8 +78,7 @@ describe('Radio page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start DJ remix radio' }));
     await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
     expect(search.mock.calls[0][0]).toBe('telugu dj remix');
-    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[]; tune: string }];
-    expect(opts.tune).toBe('dj');
+    const [seed] = startRadio.mock.calls[0] as [Song, { seeds: Song[] }];
     expect(seed.id).toMatch(/^dj/);
     expect(screen.getByRole('button', { name: 'Start Folk radio' })).toBeTruthy();
   });

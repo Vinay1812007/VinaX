@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Queue reordering and ownership: rows are keyed without their index, so a
- * keyboard move re-orders the SAME DOM node (focus survives, artwork is not
- * re-fetched), the result is announced, and drag hit-testing is a binary
- * search over a geometry snapshot rather than a rect read per row per
- * pointermove. 7.2 adds the manual / automatic marker, the row menu's
- * keyboard moves, "Keep this song", remove with Undo and the deliberate
- * rebuild of the automatic picks ("VinaX pick").
+ * 1.20 — the Queue page reads and works like Spotify's: Now playing, Next in
+ * queue (with Clear queue), Next from: <what you played>, Autoplay, and a
+ * Recently played tab. Rows are keyed without their index, so a keyboard move
+ * re-orders the SAME DOM node (focus survives) and is announced; drag
+ * hit-testing is a binary search over a geometry snapshot.
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -25,178 +23,139 @@ vi.mock('@/services/downloads', () => ({ canSaveOffline: () => false, downloadSo
 vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(), recordPlaylistAdd: vi.fn(), recordDislike: vi.fn(),
 }));
-vi.mock('@/features/queue/TuneChips', () => ({ TuneChips: () => null }));
+vi.mock('@/services/autoplay', () => ({ findAutoplaySongs: async () => [], pickAutoplay: (s: unknown[]) => s }));
 
-import { usePlayerStore } from '@/store/playerStore';
+import { usePlayerStore, type QueueRun } from '@/store/playerStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useHistoryStore } from '@/store/historyStore';
 import { useToastStore } from '@/store/toastStore';
 import { makeSong } from '@/__fixtures__/songs';
-import QueuePage, { defaultQueueName, PLAYED_OPEN_MAX, playedStartsOpen, slotForY } from './QueuePage';
-import { useLibraryStore } from '@/store/libraryStore';
+import QueuePage, { slotForY } from './QueuePage';
 
+const now = makeSong('now', { title: 'Now' });
 const dup = makeSong('x', { title: 'Twice' });
-const queue = [makeSong('now'), makeSong('a', { title: 'Alpha' }), dup, makeSong('b', { title: 'Beta' }), dup];
-
-/** The queue's ownership lives in the store's closure — drive it through the
- *  same calls the app makes: the recommender appends its tail, the listener
- *  queues by hand. */
-const pick1 = makeSong('p1', { title: 'Pick one' });
-const pick2 = makeSong('p2', { title: 'Pick two' });
+const alpha = makeSong('a', { title: 'Alpha' });
+const beta = makeSong('b', { title: 'Beta' });
 const mine = makeSong('hand', { title: 'Mine' });
-const seedOwnership = (withHandQueued = true) => {
-  act(() => {
-    usePlayerStore.getState().replaceAutoTail([pick1, pick2]);
-    if (withHandQueued) usePlayerStore.getState().enqueue(mine);
-  });
-};
+const sim = makeSong('sim', { title: 'Similar' });
+
+const setQueue = (songs: ReturnType<typeof makeSong>[], runs: QueueRun[]) =>
+  usePlayerStore.setState({ queue: songs, runs, index: 0, isPlaying: false, followMode: false, context: { kind: 'album', label: 'Pushpa 2', path: '/album/1' } });
 
 beforeEach(() => {
-  usePlayerStore.setState({ queue, index: 0, isPlaying: false });
+  setQueue([now, alpha, dup, beta, dup], ['context', 'context', 'context', 'context', 'context']);
+  useSettingsStore.setState({ autoplay: true });
   useToastStore.setState({ toasts: [] });
 });
 afterEach(cleanup);
 
 const mount = () => render(<MemoryRouter><QueuePage /></MemoryRouter>);
 const handle = (title: string) => screen.getAllByRole('button', { name: new RegExp(`^Reorder ${title}`) });
-const rows = () => screen.getAllByRole('listitem');
-const order = () => rows().map((li) => li.textContent?.replace(/Artist.*/, '') ?? '');
+const songRows = () => screen.getAllByRole('listitem');
+const order = () => songRows().map((li) => li.textContent?.replace(/Artist.*/, '') ?? '');
 const status = () => screen.getByRole('status').textContent;
-const openMenu = (title: string, nth = 0) => {
-  fireEvent.click(screen.getAllByRole('button', { name: `More options for ${title}` })[nth]);
-  return screen.getByRole('menu');
-};
-const removeButton = (title: string, nth = 0) => screen.getAllByRole('button', { name: `Remove ${title} from queue` })[nth];
+const ids = () => usePlayerStore.getState().queue.map((s) => s.id);
 
-describe('QueuePage reordering', () => {
+describe('Queue page — sections', () => {
+  it('reads Now playing, Next in queue, Next from: <what you played>, then Autoplay', () => {
+    setQueue([now, mine, alpha, sim], ['context', 'queued', 'context', 'autoplay']);
+    mount();
+    expect(screen.getByRole('heading', { name: 'Now playing' })).toBeTruthy();
+    const text = screen.getByRole('list').textContent ?? '';
+    expect(text.indexOf('Next in queue')).toBeLessThan(text.indexOf('Mine'));
+    expect(text.indexOf('Mine')).toBeLessThan(text.indexOf('Next from: Pushpa 2'));
+    expect(text.indexOf('Next from: Pushpa 2')).toBeLessThan(text.indexOf('Alpha'));
+    expect(text.indexOf('Alpha')).toBeLessThan(text.indexOf('Autoplay'));
+    expect(text.indexOf('Autoplay')).toBeLessThan(text.indexOf('Similar'));
+    expect(screen.getByRole('link', { name: 'Pushpa 2' }).getAttribute('href')).toBe('/album/1');
+  });
+
+  it('Clear queue drops only the songs you added', () => {
+    setQueue([now, mine, alpha], ['context', 'queued', 'context']);
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear queue' }));
+    expect(ids()).toEqual(['now', 'a']);
+    expect(screen.queryByText('Next in queue')).toBeNull();
+  });
+
+  it('the Autoplay switch is the Settings one; shuffle and repeat sit with the queue', () => {
+    mount();
+    fireEvent.click(screen.getByRole('switch', { name: 'Autoplay' }));
+    expect(useSettingsStore.getState().autoplay).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Shuffle' }));
+    expect(usePlayerStore.getState().shuffle).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Repeat off' }));
+    expect(usePlayerStore.getState().repeat).toBe('all');
+    act(() => usePlayerStore.getState().toggleShuffle());
+    act(() => usePlayerStore.setState({ repeat: 'off' }));
+  });
+
+  it('Recently played lists what this device played', () => {
+    useHistoryStore.setState({ entries: [{ song: beta, ts: 2, completed: true }, { song: alpha, ts: 1, completed: true }] });
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Recently played' }));
+    expect(order()).toEqual(['Beta', 'Alpha']);
+  });
+
+  it('an empty queue says how to start one', () => {
+    usePlayerStore.setState({ queue: [], runs: [], index: 0 });
+    mount();
+    expect(screen.getByText('Your queue is empty')).toBeTruthy();
+  });
+});
+
+describe('Queue page — rows', () => {
   it('a keyboard move keeps the same DOM node, keeps focus on the handle and announces the new position', () => {
     mount();
-    const grip = handle('Alpha')[0];
+    const [grip] = handle('Alpha');
     const row = grip.closest('li');
     grip.focus();
     fireEvent.keyDown(grip, { key: 'ArrowDown' });
-
-    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Twice', 'Alpha', 'Beta', 'Twice']);
-    const after = handle('Alpha')[0];
-    expect(after).toBe(grip); // not remounted
-    expect(after.closest('li')).toBe(row);
-    expect(document.activeElement).toBe(grip);
+    expect(order()).toEqual(['Twice', 'Alpha', 'Beta', 'Twice']);
+    expect(handle('Alpha')[0].closest('li')).toBe(row);
+    expect(document.activeElement).toBe(handle('Alpha')[0]);
     expect(status()).toBe('Alpha moved to position 2 of 4');
-
-    // Focus survived, so the next press keeps moving the same row.
-    fireEvent.keyDown(grip, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(grip);
-    expect(status()).toBe('Alpha moved to position 3 of 4');
   });
 
   it('does nothing at the ends of the list', () => {
     mount();
-    const first = handle('Alpha')[0];
-    fireEvent.keyDown(first, { key: 'ArrowUp' });
-    expect(status()).toBe('');
+    fireEvent.keyDown(handle('Alpha')[0], { key: 'ArrowUp' });
+    expect(order()).toEqual(['Alpha', 'Twice', 'Beta', 'Twice']);
   });
 
-  it('the row menu moves a row without a pointer and puts focus back on that row’s menu', () => {
+  it('the row menu removes and moves a row without a pointer', () => {
     mount();
-    const menu = openMenu('Alpha');
-    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Move down' }));
-    expect(status()).toBe('Alpha moved to position 2 of 4');
-    const trigger = screen.getByRole('button', { name: 'More options for Alpha' });
-    expect(document.activeElement).toBe(trigger);
-    // The first row has no "Move up"; the last has no "Move down" or "Clear from here down".
-    const first = openMenu('Twice');
-    expect(within(first).queryByRole('menuitem', { name: 'Move up' })).toBeNull();
-    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-    const last = openMenu('Twice', 1);
-    expect(within(last).queryByRole('menuitem', { name: 'Move down' })).toBeNull();
-    expect(within(last).queryByRole('menuitem', { name: 'Clear from here down' })).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: 'More options for Beta' })[0]);
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Move up' }));
+    expect(order()).toEqual(['Alpha', 'Beta', 'Twice', 'Twice']);
+    fireEvent.click(screen.getAllByRole('button', { name: 'More options for Beta' })[0]);
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Remove from queue' }));
+    expect(order()).toEqual(['Alpha', 'Twice', 'Twice']);
   });
 
-  it('removing a row leaves the rows below it mounted, announces it and offers Undo', () => {
+  it('× removes a row, leaves the rows below it mounted and announces it', () => {
     mount();
-    const beta = handle('Beta')[0];
-    fireEvent.click(removeButton('Alpha'));
-    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Twice', 'Beta', 'Twice']);
-    expect(handle('Beta')[0]).toBe(beta);
+    const betaRow = handle('Beta')[0].closest('li');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alpha from queue' }));
+    expect(order()).toEqual(['Twice', 'Beta', 'Twice']);
+    expect(handle('Beta')[0].closest('li')).toBe(betaRow);
     expect(status()).toBe('Removed Alpha');
-    // Focus moved to the row that took its place, not to nowhere.
-    expect(document.activeElement).toBe(removeButton('Twice'));
+  });
 
-    const toasts = useToastStore.getState().toasts;
-    const undo = toasts[toasts.length - 1]?.action;
-    expect(undo?.label).toBe('Undo');
-    act(() => undo!.onClick());
-    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Alpha', 'Twice', 'Beta', 'Twice']);
-    expect(status()).toBe('Alpha is back in the queue');
+  it('a tap plays the row: the list songs above it are skipped, your adds stay next', () => {
+    setQueue([now, mine, alpha, beta], ['context', 'queued', 'context', 'context']);
+    mount();
+    fireEvent.click(screen.getByText('Beta').closest('button')!);
+    const st = usePlayerStore.getState();
+    expect(st.queue[st.index].id).toBe('b');
+    expect(st.queue.slice(st.index + 1).map((s) => s.id)).toEqual(['hand']);
   });
 
   it('rows stay mounted when the playing song advances', () => {
     mount();
-    const beta = handle('Beta')[0];
+    const twice = handle('Twice')[1].closest('li');
     act(() => usePlayerStore.setState({ index: 1 }));
-    expect(handle('Beta')[0]).toBe(beta);
-  });
-
-  it('the 28px reorder grip carries a hit pad, and the sort chips call the store', () => {
-    const sortUpcoming = vi.fn();
-    usePlayerStore.setState({ sortUpcoming });
-    mount();
-    expect(handle('Alpha')[0].className).toContain('after:-m-[8px]');
-    fireEvent.click(screen.getByRole('button', { name: 'Energy' }));
-    expect(sortUpcoming).toHaveBeenCalledWith('energy');
-  });
-});
-
-describe('QueuePage ownership', () => {
-  it('marks automatic and hand-queued entries in words, and counts them for the listener', () => {
-    seedOwnership();
-    mount();
-    const handRow = rows().find((li) => li.textContent?.includes('Mine'))!;
-    expect(within(handRow).getByText('Added by you')).toBeTruthy();
-    const autoRow = rows().find((li) => li.textContent?.includes('Pick one'))!;
-    expect(within(autoRow).getByText('VinaX pick')).toBeTruthy();
-    // A song from the list the listener started carries no marker.
-    const listRow = rows().find((li) => li.textContent?.includes('Alpha'))!;
-    expect(within(listRow).queryByText('VinaX pick')).toBeNull();
-    expect(within(listRow).queryByText('Added by you')).toBeNull();
-    expect(screen.getByText(/2 VinaX picks · 1 added by you/)).toBeTruthy();
-  });
-
-  it('offers "Keep this song" on an automatic entry only, and keeping it turns the marker into the listener’s own', () => {
-    seedOwnership(false);
-    mount();
-    // Not on a song from the listener's own list…
-    expect(within(openMenu('Alpha')).queryByRole('menuitem', { name: 'Keep this song' })).toBeNull();
-    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-    // …only on a VinaX pick.
-    expect(within(openMenu('Pick one')).getByRole('menuitem', { name: 'Keep this song' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Keep this song' }));
-    const kept = rows().find((li) => li.textContent?.includes('Pick one'))!;
-    expect(within(kept).getByText('Added by you')).toBeTruthy();
-    expect(status()).toMatch(/stays when VinaX picks change/);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More options for Pick one' }));
-    // Now that it is the listener's own, the menu no longer offers to keep it.
-    expect(within(openMenu('Pick one')).queryByRole('menuitem', { name: 'Keep this song' })).toBeNull();
-  });
-
-  it('"Refresh up next" says what it replaces, keeps hand-queued songs and reports when nothing comes back', () => {
-    seedOwnership();
-    vi.useFakeTimers();
-    const regenerateAutoTail = vi.fn();
-    usePlayerStore.setState({ regenerateAutoTail });
-    mount();
-    const button = screen.getByRole('button', { name: 'Refresh up next' });
-    // Three songs came from the list that was tapped, so the note says so.
-    // 7.2.0 — a rebuild replaces the DJ's picks only; the list the listener started stays.
-    expect(screen.getByText(/Replaces the 2 VinaX picks after this song\. Songs you added, and the list you started, stay\./)).toBeTruthy();
-    expect(button.getAttribute('aria-describedby')).toBe('vx-rebuild-note');
-    fireEvent.click(button);
-    expect(regenerateAutoTail).toHaveBeenCalled();
-    expect(status()).toBe('Refreshing up next. Songs you added stay.');
-    act(() => {
-      vi.advanceTimersByTime(12_000);
-    });
-    expect(screen.getByRole('alert').textContent).toMatch(/Couldn’t refresh up next/);
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
-    vi.useRealTimers();
+    expect(handle('Twice')[1].closest('li')).toBe(twice);
   });
 });
 
@@ -212,138 +171,5 @@ describe('slotForY', () => {
   });
   it('is safe on an empty list', () => {
     expect(slotForY([], 10)).toBe(0);
-  });
-});
-
-describe('1.11 — Save as playlist and Clear', () => {
-  it('suggests a dated name and saves each song once', () => {
-    useLibraryStore.setState({ collections: [] });
-    const prompt = vi.spyOn(window, 'prompt').mockImplementation((_m, def) => def ?? null);
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Save as playlist' }));
-    expect(prompt.mock.calls[0][1]).toMatch(/^Queue · \d{1,2} [A-Z][a-z]{2}/);
-    const saved = useLibraryStore.getState().collections[0];
-    expect(saved.songs.map((s) => s.id).sort()).toEqual(['a', 'b', 'now', 'x']);
-    prompt.mockRestore();
-  });
-
-  it('defaultQueueName reads like "Queue · 7 Nov"', () => {
-    expect(defaultQueueName(new Date(2026, 10, 7))).toBe('Queue · 7 Nov');
-  });
-
-  it('Clear keeps the playing song, empties what follows and offers Undo', () => {
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear the queue after this song' }));
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now']);
-    const toasts = useToastStore.getState().toasts;
-    const last = toasts[toasts.length - 1];
-    expect(last.message).toBe('Cleared 4 upcoming songs');
-    expect(toasts.filter((t) => t.message === last.message)).toHaveLength(1);
-    act(() => last.action!.onClick());
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x']);
-  });
-});
-
-describe('1.15 — Spotify-style queue sections', () => {
-  it('reads Next in queue, Next from: <what you started>, then Autoplay; Clear queue drops only your adds', () => {
-    // Earlier tests leave ownership marks in the store's closure: start clean.
-    act(() => usePlayerStore.getState().clearQueue());
-    usePlayerStore.setState({ queue, index: 0, context: { kind: 'playlist', label: 'Telugu Hits', path: '/playlist/1' } });
-    seedOwnership();
-    mount();
-    const titles = Array.from(document.querySelectorAll('.vx-queue-group-title')).map((el) => el.textContent?.trim());
-    expect(titles).toEqual(['Next in queue', 'Next from: Telugu Hits', 'Autoplay']);
-    expect(screen.getByRole('link', { name: 'Telugu Hits' }).getAttribute('href')).toBe('/playlist/1');
-    // The song added by hand plays first, ahead of the rest of the playlist.
-    expect(order()[0]).toMatch(/^Mine/);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear queue' }));
-    expect(usePlayerStore.getState().queue.some((s) => s.id === 'hand')).toBe(false);
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x', 'p1', 'p2']);
-    usePlayerStore.setState({ context: null });
-  });
-});
-
-describe('1.16 — Played', () => {
-  const played = [makeSong('h1', { title: 'Old one' }), makeSong('h2', { title: 'Old two' })];
-  const withPast = [...played, makeSong('now'), makeSong('a', { title: 'Alpha' })];
-  const playedTitles = () =>
-    Array.from(document.querySelectorAll('#vx-queue-played-list .vx-queue-row-title')).map((el) => el.textContent);
-  const toggle = () => screen.getByRole('button', { name: 'Played' });
-
-  beforeEach(() => {
-    sessionStorage.clear();
-    usePlayerStore.setState({ queue: withPast, index: 2, isPlaying: false, followMode: false });
-  });
-  afterEach(() => usePlayerStore.setState({ followMode: false }));
-
-  it('lists the songs already played, oldest first, above Now playing', () => {
-    mount();
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    expect(playedTitles()).toEqual(['Old one', 'Old two']);
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(headings.slice(0, 3)).toEqual(['Played', 'Now playing', 'Up next']);
-    // Played rows are not part of Up next: no reorder grip, and Up next still counts one song.
-    expect(screen.queryAllByRole('button', { name: /^Reorder Old/ })).toHaveLength(0);
-    expect(screen.getByText(/^1 song/)).toBeTruthy();
-  });
-
-  it('a tap plays that song again: the queue jumps back and the songs after it are Up next again', () => {
-    mount();
-    fireEvent.click(screen.getAllByTitle('Play again')[0]);
-    expect(usePlayerStore.getState().index).toBe(0);
-    expect(status()).toBe('Playing Old one again');
-    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull(); // nothing before it now
-    expect(handle('Old two')).toHaveLength(1);
-  });
-
-  it('the row menu works on a played song; Add to queue puts it in again', () => {
-    mount();
-    const menu = openMenu('Old two');
-    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Add to queue' }));
-    const q = usePlayerStore.getState().queue.map((s) => s.id);
-    expect(q.slice(0, 3)).toEqual(['h1', 'h2', 'now']);
-    expect(q.slice(3)).toContain('h2');
-    expect(useToastStore.getState().toasts.some((t) => t.message === 'Already in queue')).toBe(false);
-  });
-
-  it('starts folded when long, and remembers the listener’s choice for the session', () => {
-    const many = Array.from({ length: PLAYED_OPEN_MAX + 1 }, (_, i) => makeSong(`old${i}`, { title: `Old ${i}` }));
-    usePlayerStore.setState({ queue: [...many, makeSong('now')], index: many.length });
-    const { unmount } = mount();
-    expect(toggle().getAttribute('aria-expanded')).toBe('false');
-    expect(document.getElementById('vx-queue-played-list')).toBeNull();
-    fireEvent.click(toggle());
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    expect(playedTitles()).toHaveLength(many.length);
-    unmount();
-    mount();
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    fireEvent.click(toggle());
-    expect(playedStartsOpen(1)).toBe(false);
-  });
-
-  it('Clear drops the played songs, keeps the playing song current and offers Undo', () => {
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear played songs' }));
-    let st = usePlayerStore.getState();
-    expect(st.queue.map((s) => s.id)).toEqual(['now', 'a']);
-    expect(st.index).toBe(0);
-    expect(st.queue[st.index].id).toBe('now');
-    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull();
-    const toasts = useToastStore.getState().toasts;
-    const last = toasts[toasts.length - 1];
-    expect(last.message).toBe('Cleared 2 played songs');
-    expect(toasts.filter((t) => t.message === last.message)).toHaveLength(1);
-    act(() => last.action!.onClick());
-    st = usePlayerStore.getState();
-    expect(st.queue.map((s) => s.id)).toEqual(['h1', 'h2', 'now', 'a']);
-    expect(st.queue[st.index].id).toBe('now');
-  });
-
-  it('is hidden for a Listen Together guest, whose queue is the room’s', () => {
-    usePlayerStore.setState({ followMode: true });
-    mount();
-    expect(screen.queryByRole('button', { name: 'Played' })).toBeNull();
-    expect(screen.queryByText('Old one')).toBeNull();
   });
 });

@@ -96,11 +96,8 @@ export interface SettingsState {
    * queued songs and an explicit "Play again" are never held back.
    */
   neverRepeat: boolean;
-  /** 1.12 — Up Next and Home know the time of day and weekday/weekend, from the listener's own history. */
+  /** 1.12 — Home knows the time of day and weekday/weekend, from the listener's own history. */
   momentAware: boolean;
-  /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
-   *  continuation on the device, instead of following the tapped list. */
-  djTakeover: boolean;
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
   kidMode: boolean;
@@ -161,7 +158,6 @@ export interface SettingsState {
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
   setMomentAware(v: boolean): void;
-  setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
   setManualCountry(c: string | null): void;
@@ -232,7 +228,6 @@ const defaults = {
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
   momentAware: true,
-  djTakeover: true,
   kidMode: false,
   allowRegionInference: true,
   manualCountry: null,
@@ -369,7 +364,6 @@ export const useSettingsStore = create<SettingsState>()(
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
       },
-      setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
       setManualCountry: (manualCountry) => set({ manualCountry }),

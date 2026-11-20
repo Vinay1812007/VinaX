@@ -490,7 +490,6 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np-meta { color: rgb(var(--ink-300)); font-size: 13px; font-weight: 600; }
 .vx-np-empty { display: flex; align-items: center; gap: 8px; padding: 12px 0; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.5; }
 .vx-np-empty svg { color: rgb(var(--tide-400)); }
-.vx-np-tune { margin-top: 28px; }
 
 /* ------------------------------------------- Up next rows (stage + rail) */
 .vx-upnext { display: flex; flex-direction: column; margin: 0 -8px; list-style: none; }
@@ -509,38 +508,14 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-upnext-row:active { background: var(--vx-pressed); }
 .vx-upnext-row img { width: 48px; height: 48px; flex-shrink: 0; border-radius: 4px; object-fit: cover; }
 .vx-upnext-text { min-width: 0; flex: 1; }
-.vx-upnext-title, .vx-upnext-meta, .vx-upnext-why { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-upnext-title, .vx-upnext-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-upnext-title { color: rgb(var(--ink-100)); font-size: 16px; font-weight: 400; line-height: 1.45; }
 .vx-upnext-meta { margin-top: 1px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 400; line-height: 1.45; }
-.vx-upnext-origin { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 4px; }
-.vx-upnext-why { min-width: 0; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 500; }
 .vx-upnext.is-rail { margin: 0 -8px; }
 .vx-upnext.is-rail .vx-upnext-row { gap: 12px; min-height: 56px; padding: 8px; border-radius: 4px; }
 .vx-upnext.is-rail .vx-upnext-row img { width: 48px; height: 48px; border-radius: 4px; }
 .vx-upnext.is-rail .vx-upnext-title { font-size: 16px; }
 .vx-upnext.is-rail .vx-upnext-meta { color: rgb(var(--ink-300)); font-size: 14px; }
-.vx-upnext.is-rail .vx-upnext-origin { margin-top: 3px; }
-
-/* The queue's ownership marker (7.2; 9.0 words "VinaX pick" / "Added by
-   you"): who put this song in the list. Words carry the meaning — a screen
-   reader reads them with the row — and the tint and glyph only repeat it:
-   Rose for what VinaX picked, Marigold for the listener's own. */
-.vx-queue-origin {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 8px 0 6px;
-  border-radius: var(--radius-pill);
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-}
-.vx-queue-origin-glyph { width: 11px; height: 11px; flex: none; }
-.vx-queue-origin[data-origin='auto'] { color: rgb(var(--tide-400)); background: rgb(var(--ink-100) / 0.14); }
-.vx-queue-origin[data-origin='manual'] { color: rgb(var(--ember-400)); background: rgb(var(--ink-100) / 0.16); }
 
 /* ---------------------------------------------------------------- credits */
 .vx-np-about-block + .vx-np-about-block { margin-top: 28px; }
@@ -1019,18 +994,6 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
 .vx-queue-now-open::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-queue-now-open:hover { background: rgb(var(--ink-100) / 0.16); }
 
-/* The tools above the list: a labelled row for sorting, one for tuning. */
-.vx-queue-toolrow { display: flex; align-items: center; gap: 12px; min-width: 0; margin-bottom: 8px; }
-.vx-queue-toolrow-label { flex: none; width: 40px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 700; }
-.vx-queue-toolrow > :last-child { min-width: 0; flex: 1; }
-.vx-queue-tools { margin: 4px 0 8px; }
-/* Chip rows that scroll sideways fade out at the edge instead of cutting a chip in half. */
-.vx-queue-tune [role='group'], .vx-queue [aria-label='Sort upcoming songs'] {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
-  scrollbar-width: none;
-}
-.vx-queue-tune [role='group']::-webkit-scrollbar, .vx-queue [aria-label='Sort upcoming songs']::-webkit-scrollbar { display: none; }
 .vx-queue-callout { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border-radius: var(--vx-radius-card); background: rgb(var(--ink-850)); color: rgb(var(--ink-200)); font-size: 13px; line-height: 1.5; }
 .vx-queue-empty { display: flex; align-items: center; gap: 10px; padding: 16px 0; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.5; }
 .vx-queue-empty b { color: rgb(var(--ink-100)); font-weight: 650; }
@@ -1093,8 +1056,6 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
 .vx-queue-row-text { min-width: 0; flex: 1; }
 .vx-queue-row-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; line-height: 1.45; white-space: nowrap; text-overflow: ellipsis; }
 .vx-queue-row-meta { display: block; overflow: hidden; margin-top: 1px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; white-space: nowrap; text-overflow: ellipsis; }
-.vx-queue-row-origin { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 4px; }
-.vx-queue-row-why { min-width: 0; overflow: hidden; color: rgb(var(--ink-400)); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .vx-queue-row-end { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
 .vx-queue-remove {
   position: relative;
@@ -1111,15 +1072,22 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
   .vx-queue-row .vx-queue-remove { opacity: 0; }
   .vx-queue-row:hover .vx-queue-remove, .vx-queue-row:focus-within .vx-queue-remove { opacity: 1; }
 }
-/* 1.16 — "Played": the session's earlier songs, above Now playing, folded when long. */
-.vx-queue-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: inherit; font: inherit; letter-spacing: inherit; border-radius: 8px; }
-.vx-queue-fold-icon { width: 18px; height: 18px; color: rgb(var(--ink-400)); transform: rotate(-90deg); transition: transform var(--dur-quick) var(--ease-standard); }
-.vx-queue-fold[aria-expanded='true'] .vx-queue-fold-icon { transform: none; }
-.vx-queue-played-end { display: inline-flex; align-items: center; gap: 12px; }
 .vx-queue-row.is-played .vx-queue-row-title { color: rgb(var(--ink-300)); }
 .vx-queue-row.is-played .vx-queue-play img { opacity: 0.75; }
-.vx-queue-shape { margin-top: 32px; }
-.vx-queue-shape .vx-smartq { margin-top: 0; padding: 16px; border-radius: var(--vx-radius-card); }
+/* 1.20 — Queue / Recently played tabs, shuffle and repeat, and the Autoplay switch. */
+.vx-queue-tabs { display: flex; gap: 8px; }
+.vx-queue-tab { min-height: 36px; padding: 0 16px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); font-size: 14px; font-weight: 650; transition: background-color var(--dur-quick) var(--ease-standard); }
+.vx-queue-tab:hover { background: rgb(var(--ink-100) / 0.14); }
+.vx-queue-tab.is-on { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+.vx-queue-modes { display: inline-flex; align-items: center; gap: 4px; }
+.vx-queue-mode { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-pill); color: rgb(var(--ink-400)); transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard); }
+.vx-queue-mode:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
+.vx-queue-mode.is-on { color: rgb(var(--ember-400)); }
+.vx-queue-mode.is-on::after { content: ''; position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; }
+.vx-queue-mode-one { position: absolute; top: 6px; right: 6px; font-size: 9px; font-weight: 800; line-height: 1; }
+.vx-queue-autoplay { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border-radius: var(--vx-radius-card); background: rgb(var(--ink-850)); }
+.vx-queue-autoplay .vx-queue-note { margin: 2px 0 0; }
+.vx-queue-autoplay-title { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 750; }
 @media (max-width: 767px) {
   /* Phone: the header scrolls away (a sticky block this tall would eat the list). */
   .vx-queue-head { position: static; margin: 0 0 8px; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -1134,7 +1102,6 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
   .vx-queue-actions::-webkit-scrollbar { display: none; }
   .vx-queue-now { gap: 14px; padding: 10px; }
   .vx-queue-now-art img { width: 56px; height: 56px; border-radius: 8px; }
-  .vx-queue-toolrow-label { width: auto; }
 }
 
 /* ================================================================ the rail */

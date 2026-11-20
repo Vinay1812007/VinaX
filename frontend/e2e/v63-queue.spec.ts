@@ -2,9 +2,10 @@ import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
- * v6.3 Queue Builder from the built bundle with a mocked catalogue: the
- * sheet opens from the Queue page, plans a bounded arc from real (mocked)
- * candidates, previews it, and "Play this plan" installs it as the queue.
+ * 1.20 — the Spotify-style Queue from the built bundle with a mocked
+ * catalogue: Now playing, Next in queue (Clear queue), Next from: <list>,
+ * Autoplay, the Autoplay switch and the Recently played tab, at a phone and a
+ * desktop width.
  */
 interface Song {
   kind: 'song'; id: string; title: string; subtitle: string; artists: { id: string; name: string }[];
@@ -27,7 +28,7 @@ async function seed(page: Page, baseURL: string): Promise<void> {
       localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], autoplay: true }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: pool.slice(0, 2), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
-      localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: [pool[0]], index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
+      localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: pool.slice(0, 6), runs: ['context', 'queued', 'queued', 'context', 'context', 'autoplay'], index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1, context: { kind: 'album', label: 'Album 0', path: '/album/al0' } }, version: 1 }));
       localStorage.setItem('vinax.onboarded.v1', 'true');
       localStorage.setItem('vinax.user-name', JSON.stringify('Tester'));
       localStorage.setItem('vinax.user-handle', JSON.stringify('tester'));
@@ -49,31 +50,25 @@ async function seed(page: Page, baseURL: string): Promise<void> {
   });
 }
 
-const bodyText = (page: Page) => page.evaluate(() => document.body.innerText);
 const queueIds = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []).map((s: { id: string }) => s.id) as string[]);
 
 for (const size of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-  test(`Queue Builder previews an arc and installs it (${size.width}px)`, async ({ page, baseURL }) => {
+  test(`the Queue reads like Spotify's and Clear queue empties only Next in queue (${size.width}px)`, async ({ page, baseURL }) => {
     await page.setViewportSize(size);
     await seed(page, baseURL!);
     await page.goto('/queue');
-    await page.getByRole('button', { name: 'Build a queue' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Build a queue' })).toBeVisible();
-    await page.getByRole('button', { name: '20 min' }).click();
-    await page.getByRole('button', { name: 'Build up' }).click();
-    await page.getByRole('button', { name: 'Preview my queue' }).click();
-    await expect.poll(() => bodyText(page), { timeout: 30_000 }).toMatch(/\d+ songs · \d+ min · from \d+ candidates/);
-    const dialog = page.getByRole('dialog', { name: 'Build a queue' });
-    await expect(dialog.getByRole('img', { name: 'Energy arc of the planned queue' })).toBeVisible();
-    const rows = await dialog.locator('ol li').count();
-    expect(rows).toBeGreaterThanOrEqual(3);
-    // Every planned row carries a reason line.
-    expect(await dialog.locator('ol li').first().innerText()).toMatch(/energy|mood|favourite|discovery|hand-off/);
-    await page.screenshot({ path: `test-results/v63-queue-builder-${size.width}.png` });
-    await dialog.getByRole('button', { name: 'Play this plan' }).click();
-    await expect.poll(async () => (await queueIds(page)).length, { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
-    const ids = await queueIds(page);
-    expect(new Set(ids).size).toBe(ids.length);
-    await expect.poll(() => bodyText(page)).toMatch(/Queue/);
+    await expect(page.getByRole('heading', { name: 'Now playing' })).toBeVisible();
+    const list = page.locator('ul.vx-queue-list');
+    await expect(list).toContainText('Next in queue');
+    await expect(list).toContainText('Next from: Album 0');
+    await expect(list).toContainText('Autoplay');
+    await expect(page.getByRole('switch', { name: 'Autoplay' })).toHaveCount(1);
+    await expect(page.locator('.vx-queue-autoplay')).toBeVisible();
+    await page.screenshot({ path: `test-results/v120-queue-${size.width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Clear queue' }).click();
+    await expect(list).not.toContainText('Next in queue');
+    await expect.poll(() => queueIds(page)).toEqual(['p0', 'p3', 'p4', 'p5']);
+    await page.getByRole('tab', { name: 'Recently played' }).click();
+    await expect(page.locator('.vx-queue-row.is-played')).toHaveCount(4);
   });
 }

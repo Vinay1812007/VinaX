@@ -100,7 +100,7 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   });
-  useSettingsStore.setState({ pinnedLanguages: ['telugu'], djTakeover: false, autoplay: true });
+  useSettingsStore.setState({ pinnedLanguages: ['telugu'], autoplay: true });
   useLibraryStore.setState({ favorites: [], collections: [], saved: [] });
   useHistoryStore.setState({ entries: [] });
   usePlayerStore.setState({ queue: [], index: 0, isPlaying: false });

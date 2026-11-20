@@ -1,34 +1,39 @@
-import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { songLine } from '@/utils/songLine';
-
-const QueueBuilderSheet = lazy(() => import('@/features/queue/QueueBuilderSheet').then((m) => ({ default: m.QueueBuilderSheet })));
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { Fragment, memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
-import { useLibraryStore } from '@/store/libraryStore';
-import { useReasonStore } from '@/store/reasonStore';
+import { songLine } from '@/utils/songLine';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePlayerStore, useCurrentSong, type QueueRun } from '@/store/playerStore';
+import { useHistoryStore } from '@/store/historyStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { EmptyState } from '@/components/States';
-import { Chip } from '@/components/Chip';
 import { occurrenceKeys, VirtualChunks } from '@/components/VirtualChunks';
+import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
+import { Toggle } from '@/features/settings/SettingsControls';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
-import { TuneChips } from '@/features/queue/TuneChips';
-import { SmartQueue } from '@/features/queue/SmartQueue';
-import { NeverRepeatChip } from '@/features/queue/NeverRepeatChip';
-import { MomentRow } from '@/features/queue/MomentRow';
-import { OriginBadge } from '@/features/queue/OriginBadge';
-import { originOf, type QueueOrigin } from '@/features/queue/origin';
-import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { useSettingsStore } from '@/store/settingsStore';
-import { XIcon, QueueIcon, GripIcon, SparkleIcon, ChevronDownIcon } from '@/components/Icons';
+import { cn } from '@/utils/cn';
+import { XIcon, QueueIcon, GripIcon, ShuffleIcon, RepeatIcon } from '@/components/Icons';
 import type { Song } from '@/types';
 import '@/styles/pages/player.css';
 
-/** One row (48px art + up to three lines, 6px padding) — the off-screen size estimate for list chunks. */
-const ROW_HEIGHT = 76;
-/** How long a rebuild may take before the page offers to try again. */
-const REBUILD_TIMEOUT_MS = 12_000;
+/**
+ * 1.20 — the Queue, rebuilt to read and work like Spotify's.
+ *
+ *   Now playing
+ *   Next in queue        songs you added (Add to queue) · Clear queue
+ *   Next from: <list>    the rest of the album, playlist or page you played
+ *   Autoplay             similar songs once your list ends
+ *
+ * A second tab, Recently played, lists what this device played. The rules
+ * behind every action live in store/queueRules.ts: tap a row to play it, drag
+ * (or arrow keys on the handle) to reorder — a row dropped among Next in queue
+ * becomes a song you added — and × to remove it.
+ */
+
+/** One row (48px art + two lines, 6px padding) — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 68;
+/** How many plays Recently played lists. */
+const RECENT_MAX = 50;
 
 /**
  * Which slot a pointer at `y` falls in, given each row's vertical midpoint
@@ -46,54 +51,13 @@ export function slotForY(mids: readonly number[], y: number): number {
   return Math.max(0, Math.min(lo, mids.length - 1));
 }
 
-const SORTS = [
-  ['energy', 'Energy'],
-  ['calm', 'Calm first'],
-  ['new', 'Newest'],
-  ['old', 'Classics'],
-  ['mood', 'Mood arc'],
-] as const;
-
-/** Played songs start folded away once there are more than this many. */
-export const PLAYED_OPEN_MAX = 5;
-const PLAYED_OPEN_KEY = 'vx-queue-played-open';
-
-/**
- * Whether "Played" starts open: what the listener last chose in this session,
- * else open only while the list is short. Storage can throw (private mode).
- */
-export function playedStartsOpen(count: number): boolean {
-  try {
-    const saved = sessionStorage.getItem(PLAYED_OPEN_KEY);
-    if (saved === '1') return true;
-    if (saved === '0') return false;
-  } catch {
-    /* no session storage: fall back to the length rule */
-  }
-  return count <= PLAYED_OPEN_MAX;
-}
-
-function rememberPlayedOpen(open: boolean): void {
-  try {
-    sessionStorage.setItem(PLAYED_OPEN_KEY, open ? '1' : '0');
-  } catch {
-    /* not remembered, still works */
-  }
-}
-
-/** "1 VinaX pick" / "3 VinaX picks". */
-const picks = (n: number): string => `${n} VinaX ${n === 1 ? 'pick' : 'picks'}`;
-
 type DropEdge = 'above' | 'below' | null;
 
 interface QueueRowProps {
   song: Song;
-  /** 0-based position within "Up next". */
+  /** 0-based position after the playing song. */
   pos: number;
   rowKey: string;
-  origin: QueueOrigin;
-  /** The one-line reason for an automatic pick, when one was recorded. */
-  reason?: string;
   isFirst: boolean;
   isLast: boolean;
   dragging: boolean;
@@ -102,30 +66,22 @@ interface QueueRowProps {
   onDragStart: (pos: number, e: React.PointerEvent<HTMLButtonElement>) => void;
   onDragMove: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onDragEnd: () => void;
-  onNudge: (pos: number, rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => void;
+  onNudge: (rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => void;
   onMove: (rowKey: string, delta: -1 | 1) => void;
-  onKeep: (rowKey: string) => void;
-  onClearFrom: (rowKey: string) => void;
   onRemove: (rowKey: string) => void;
   onPlay: (rowKey: string) => void;
 }
 
 /**
- * One "Up next" row. Memoised with stable handlers: a drag restyles the two
- * rows involved and a removal re-renders nothing above it.
- *
- * Every action a row offers is reachable without a pointer: the grip takes
- * arrow keys, and the row's "⋯" menu repeats Move up / Move down alongside
- * Keep this song, Clear from here down and the usual song actions. Positions
- * are looked up by row key when the action runs, never captured, so a queue
- * that moved on under an open menu cannot move the wrong song.
+ * One upcoming row. Memoised with stable handlers: a drag restyles the two
+ * rows involved and a removal re-renders nothing above it. Positions are
+ * looked up by row key when an action runs, never captured, so a queue that
+ * moved on under an open menu cannot move the wrong song.
  */
 const QueueRow = memo(function QueueRow({
   song: s,
   pos,
   rowKey,
-  origin,
-  reason,
   isFirst,
   isLast,
   dragging,
@@ -136,25 +92,20 @@ const QueueRow = memo(function QueueRow({
   onDragEnd,
   onNudge,
   onMove,
-  onKeep,
-  onClearFrom,
   onRemove,
   onPlay,
 }: QueueRowProps) {
   const line = songLine(s);
   const menuItems: TrackMenuItem[] = [
-    ...(origin === 'auto' ? [{ label: 'Keep this song', action: () => onKeep(rowKey) }] : []),
+    { label: 'Remove from queue', action: () => onRemove(rowKey) },
     ...(isFirst ? [] : [{ label: 'Move up', action: () => onMove(rowKey, -1) }]),
     ...(isLast ? [] : [{ label: 'Move down', action: () => onMove(rowKey, 1) }]),
-    ...(isLast ? [] : [{ label: 'Clear from here down', action: () => onClearFrom(rowKey) }]),
-    { label: 'Remove from queue', action: () => onRemove(rowKey) },
   ];
   return (
     <li
       ref={(el) => setRowEl(pos, el)}
       data-row-key={rowKey}
-      style={{ ['--i' as string]: Math.min(pos, 8) }}
-      className={`vx-queue-row${dragging ? ' is-dragging' : dropEdge === 'above' ? ' drop-above' : dropEdge === 'below' ? ' drop-below' : ''}`}
+      className={cn('vx-queue-row', dragging ? 'is-dragging' : dropEdge === 'above' ? 'drop-above' : dropEdge === 'below' ? 'drop-below' : '')}
     >
       <div className="vx-queue-row-main">
         <button
@@ -164,7 +115,7 @@ const QueueRow = memo(function QueueRow({
           onPointerMove={onDragMove}
           onPointerUp={onDragEnd}
           onPointerCancel={onDragEnd}
-          onKeyDown={(e) => onNudge(pos, rowKey, e)}
+          onKeyDown={(e) => onNudge(rowKey, e)}
           aria-label={`Reorder ${s.title} — drag, or use arrow keys`}
           title="Drag to reorder"
           // 28px grip, 44px hit area (IconButton's invisible-pad pattern).
@@ -173,75 +124,17 @@ const QueueRow = memo(function QueueRow({
           <GripIcon className="w-4 h-4" />
         </button>
         <button type="button" onClick={() => onPlay(rowKey)} className="vx-queue-play">
-          <img
-            src={bestImage(s.images, 96)}
-            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
+          <img src={bestImage(s.images, 96)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
           <span className="vx-queue-row-text">
-            {/* Song – Movie/Album – Artist, then who queued it and why */}
             <span className="vx-queue-row-title font-bold">{line.title}</span>
             <span className="vx-queue-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
-            {/* The marker keeps its own line: on a phone it would otherwise
-                leave the film and artist with a few characters. */}
-            {origin !== 'list' && (
-              <span className="vx-queue-row-origin">
-                <OriginBadge origin={origin} />
-                {reason && <span className="vx-queue-row-why">{reason}</span>}
-              </span>
-            )}
           </span>
         </button>
         <span className="vx-queue-row-end">
           <TrackMenu song={s} label={`More options for ${s.title}`} leadItems={menuItems} />
-          <button
-            type="button"
-            onClick={() => onRemove(rowKey)}
-            aria-label={`Remove ${s.title} from queue`}
-            title="Remove from queue"
-            className="vx-queue-remove"
-          >
+          <button type="button" onClick={() => onRemove(rowKey)} aria-label={`Remove ${s.title} from queue`} title="Remove from queue" className="vx-queue-remove">
             <XIcon className="w-4 h-4" />
           </button>
-        </span>
-      </div>
-    </li>
-  );
-});
-
-interface PlayedRowProps {
-  song: Song;
-  rowKey: string;
-  onPlay: (rowKey: string) => void;
-}
-
-/**
- * One "Played" row: tap to play it again (the queue jumps back to it, so the
- * songs after it become Up next again), and the usual song menu. No grip or
- * remove: the past is cleared all at once with Clear.
- */
-const PlayedRow = memo(function PlayedRow({ song: s, rowKey, onPlay }: PlayedRowProps) {
-  const line = songLine(s);
-  return (
-    <li className="vx-queue-row is-played">
-      <div className="vx-queue-row-main">
-        <button type="button" onClick={() => onPlay(rowKey)} className="vx-queue-play" title="Play again">
-          <img
-            src={bestImage(s.images, 96)}
-            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
-          <span className="vx-queue-row-text">
-            <span className="vx-queue-row-title font-bold">{line.title}</span>
-            <span className="vx-queue-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
-          </span>
-        </button>
-        <span className="vx-queue-row-end">
-          <TrackMenu song={s} label={`More options for ${s.title}`} />
         </span>
       </div>
     </li>
@@ -251,61 +144,94 @@ const PlayedRow = memo(function PlayedRow({ song: s, rowKey, onPlay }: PlayedRow
 /** Where focus goes after the list re-orders or loses the control that had it. */
 type Refocus = { key: string; target: 'grip' | 'menu' | 'remove' } | { key: null; target: 'heading' } | null;
 
-/** 1.11 — "Queue · 7 Nov": the suggested name when the queue is saved as a playlist. */
-export function defaultQueueName(now = new Date()): string {
-  return `Queue · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+/** The section a run opens, in words (never colour alone). */
+function SectionHead({ run, onClear }: { run: QueueRun; onClear: () => void }) {
+  const context = usePlayerStore((s) => s.context);
+  if (run === 'queued') {
+    return (
+      <li role="presentation" className="vx-queue-group">
+        <span className="vx-queue-group-title">Next in queue</span>
+        <button type="button" onClick={onClear} className="vx-queue-group-action">
+          Clear queue
+        </button>
+      </li>
+    );
+  }
+  if (run === 'context') {
+    return (
+      <li role="presentation" className="vx-queue-group">
+        <span className="vx-queue-group-title">
+          Next from: {context?.path ? <Link to={context.path}>{context.label}</Link> : context?.label ?? 'your list'}
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li role="presentation" className="vx-queue-group is-auto">
+      <span className="vx-queue-group-title">Autoplay</span>
+      <span className="vx-queue-group-note">Similar songs play when your music ends</span>
+    </li>
+  );
+}
+
+/** Recently played: what this device played, newest first. A tap plays the song. */
+function RecentlyPlayed() {
+  const entries = useHistoryStore((s) => s.entries);
+  const recent = useMemo(() => entries.slice(0, RECENT_MAX), [entries]);
+  if (!recent.length) return <p className="vx-queue-empty">Songs you play show up here.</p>;
+  return (
+    <ul className="vx-queue-list">
+      {recent.map((e) => {
+        const line = songLine(e.song);
+        return (
+          <li key={e.ts} className="vx-queue-row is-played">
+            <div className="vx-queue-row-main">
+              <button type="button" onClick={() => usePlayerStore.getState().playSong(e.song)} className="vx-queue-play" title="Play">
+                <img src={bestImage(e.song.images, 96)} onError={(ev) => ((ev.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
+                <span className="vx-queue-row-text">
+                  <span className="vx-queue-row-title font-bold">{line.title}</span>
+                  <span className="vx-queue-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
+                </span>
+              </button>
+              <span className="vx-queue-row-end">
+                <TrackMenu song={e.song} label={`More options for ${e.song.title}`} />
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 export default function QueuePage() {
   usePageTitle('Queue');
   const queue = usePlayerStore((s) => s.queue);
-  const djTakeover = useSettingsStore((s) => s.djTakeover);
+  const runs = usePlayerStore((s) => s.runs);
   const index = usePlayerStore((s) => s.index);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const queueContext = usePlayerStore((s) => s.context);
   const shuffle = usePlayerStore((s) => s.shuffle);
-  // Listen Together guest: the queue here is the room's, one song at a time,
-  // and a tap would leave the room's song — so no "Played" list.
+  const repeat = usePlayerStore((s) => s.repeat);
+  const autoplayLoading = usePlayerStore((s) => s.autoplayLoading);
   const following = usePlayerStore((s) => s.followMode);
+  const autoplay = useSettingsStore((s) => s.autoplay);
   const song = useCurrentSong();
-  const online = useOnlineStatus();
-  const reasons = useReasonStore((s) => s.reasons);
+  const [tab, setTab] = useState<'queue' | 'recent'>('queue');
   const upNext = useMemo(() => queue.slice(index + 1), [queue, index]);
-  // Index-free keys, numbered over the WHOLE queue so they also survive the
-  // playing song advancing. `${id}-${index}` remounted the moved row on every
-  // keyboard step (dropping focus) and every row below a removed one.
+  const upRuns = useMemo(() => runs.slice(index + 1), [runs, index]);
+  // Index-free keys, numbered over the WHOLE queue so they survive the playing
+  // song advancing: a moved row is the same DOM node (focus stays on it).
   const allKeys = useMemo(() => occurrenceKeys(queue.map((s) => s.id)), [queue]);
   const rowKeys = useMemo(() => allKeys.slice(index + 1), [allKeys, index]);
-  // The songs already played this session, oldest first, so the list runs on into Now playing.
-  const played = useMemo(() => (following ? [] : queue.slice(0, index)), [queue, index, following]);
-  const playedKeys = useMemo(() => allKeys.slice(0, played.length), [allKeys, played.length]);
-  const playedKeysRef = useRef(playedKeys);
-  playedKeysRef.current = playedKeys;
-  const [playedOpen, setPlayedOpen] = useState(() => playedStartsOpen(index));
-  // 7.2 — who queued each upcoming entry. Read from the player's own sets;
-  // every ownership change replaces `queue`, so this recomputes with it.
-  const origins = useMemo(() => upNext.map((s) => originOf(s.id)), [upNext]);
-  const mix = useMemo(() => {
-    const counts: Record<QueueOrigin, number> = { auto: 0, manual: 0, list: 0 };
-    for (const o of origins) counts[o] += 1;
-    return counts;
-  }, [origins]);
-  // v6.3.0 — Queue Builder.
-  const [building, setBuilding] = useState(false);
+  const rowKeysRef = useRef(rowKeys);
+  rowKeysRef.current = rowKeys;
   /** Spoken through the polite live region below — reorders are otherwise silent. */
   const [announcement, setAnnouncement] = useState('');
 
   // ---- Drag-to-reorder (pointer events, zero deps) -----------------------
-  // dragFrom/dragOver are 0-based positions within upNext; the store call
-  // translates to absolute queue indexes. Works for touch AND mouse: the
-  // handle sets touch-action:none so the gesture never fights page scroll.
-  // Gesture truth lives in refs (pointer events outrun React state); the
-  // mirrored state exists only so the rows restyle while dragging.
-  //
-  // Row geometry is snapshotted ONCE at drag start (midpoints relative to the
-  // list) and binary-searched per move; each pointermove then costs a single
-  // rect read on the list — which also keeps it right if the page scrolls —
-  // instead of a getBoundingClientRect on every row.
+  // Positions are 0-based within what comes next; the store gets absolute
+  // indexes. Row geometry is snapshotted once at drag start and
+  // binary-searched per move.
   const dragRef = useRef<{ from: number; over: number; mids: number[] } | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
@@ -315,9 +241,6 @@ export default function QueuePage() {
   const setRowEl = useCallback((pos: number, el: HTMLLIElement | null) => {
     rowRefs.current[pos] = el;
   }, []);
-  /** The live row keys, for handlers that must not capture a stale position. */
-  const rowKeysRef = useRef(rowKeys);
-  rowKeysRef.current = rowKeys;
 
   const startDrag = useCallback((pos: number, e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -358,12 +281,10 @@ export default function QueuePage() {
   }, []);
 
   // ---- Keyboard reorder and the row actions ------------------------------
-  // Every one of these restores focus itself: re-ordering or removing a DOM
-  // node blurs whatever had focus, and a queue you can only drive with a
-  // mouse is not a queue everyone can drive.
+  // Each restores focus itself: re-ordering or removing a DOM node blurs
+  // whatever had focus.
   const refocus = useRef<Refocus>(null);
 
-  /** Move the row with this key one slot, announce it, and keep focus on `target`. */
   const moveRow = useCallback((rowKey: string, delta: -1 | 1, target: 'grip' | 'menu') => {
     const pos = rowKeysRef.current.indexOf(rowKey);
     if (pos < 0) return;
@@ -376,10 +297,8 @@ export default function QueuePage() {
     moveInQueue(at + 1 + pos, at + 1 + to);
     setAnnouncement(`${title} moved to position ${to + 1} of ${count}`);
   }, []);
-
-  /** Keyboard fallback on the handle: arrow keys nudge the row a slot. */
   const nudge = useCallback(
-    (_pos: number, rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => {
+    (rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       e.preventDefault();
       moveRow(rowKey, e.key === 'ArrowUp' ? -1 : 1, 'grip');
@@ -392,83 +311,8 @@ export default function QueuePage() {
     const pos = rowKeysRef.current.indexOf(rowKey);
     if (pos < 0) return;
     const { index: at, playAt } = usePlayerStore.getState();
+    refocus.current = { key: null, target: 'heading' };
     playAt(at + 1 + pos);
-  }, []);
-
-  /** Play a song from "Played" again: the queue jumps back to it. */
-  const onPlayAgain = useCallback((rowKey: string) => {
-    const at = playedKeysRef.current.indexOf(rowKey);
-    if (at < 0) return;
-    const { queue: q, playAt } = usePlayerStore.getState();
-    const target = q[at];
-    if (!target) return;
-    // The tapped row leaves "Played" (it is Now playing now): keep focus on the page.
-    refocus.current = { key: null, target: 'heading' };
-    playAt(at);
-    // Signed out, playAt only asks for an account: nothing moved, so no refocus either.
-    if (usePlayerStore.getState().index !== at) {
-      refocus.current = null;
-      return;
-    }
-    setAnnouncement(`Playing ${target.title} again`);
-  }, []);
-
-  const togglePlayed = useCallback(() => {
-    setPlayedOpen((open) => {
-      rememberPlayedOpen(!open);
-      return !open;
-    });
-  }, []);
-
-  // Clear the played songs; the playing song and Up next stay. Undo puts them
-  // back while the same song is still playing.
-  const clearPlayedSongs = useCallback(() => {
-    const { queue: q, index: at, clearPlayed } = usePlayerStore.getState();
-    const gone = q.slice(0, at);
-    if (!gone.length) return;
-    const playingId = q[at]?.id;
-    refocus.current = { key: null, target: 'heading' };
-    clearPlayed();
-    setAnnouncement('Cleared the songs you played');
-    // Same words as the store's own confirmation, so this one (with Undo) replaces it.
-    toast(`Cleared ${gone.length} played ${gone.length === 1 ? 'song' : 'songs'}`, {
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          const now = usePlayerStore.getState();
-          if (now.followMode || !playingId || now.queue[now.index]?.id !== playingId) {
-            toast('Could not put them back — the queue has moved on');
-            return;
-          }
-          usePlayerStore.setState({ queue: [...gone, ...now.queue], index: now.index + gone.length });
-        },
-      },
-      duration: 7000,
-    });
-  }, []);
-  const renderPlayed = useCallback((s: Song, i: number) => <PlayedRow song={s} rowKey={playedKeys[i]} onPlay={onPlayAgain} />, [playedKeys, onPlayAgain]);
-  const keyOfPlayed = useCallback((_s: Song, i: number) => playedKeys[i], [playedKeys]);
-
-  const onKeep = useCallback((rowKey: string) => {
-    const pos = rowKeysRef.current.indexOf(rowKey);
-    if (pos < 0) return;
-    const { index: at, queue: q, keepSong } = usePlayerStore.getState();
-    const target = q[at + 1 + pos];
-    if (!target) return;
-    refocus.current = { key: rowKey, target: 'menu' };
-    keepSong(target.id);
-    setAnnouncement(`${target.title} is yours now — it stays when VinaX picks change`);
-    toast(`Keeping “${target.title}” — a refresh won’t replace it`);
-  }, []);
-
-  const onClearFrom = useCallback((rowKey: string) => {
-    const pos = rowKeysRef.current.indexOf(rowKey);
-    if (pos < 0) return;
-    const { index: at, clearFrom } = usePlayerStore.getState();
-    const above = rowKeysRef.current[pos - 1] ?? null;
-    refocus.current = above ? { key: above, target: 'menu' } : { key: null, target: 'heading' };
-    clearFrom(at + 1 + pos);
-    setAnnouncement('Cleared the rest of the queue');
   }, []);
 
   const onRemove = useCallback((rowKey: string) => {
@@ -482,26 +326,20 @@ export default function QueuePage() {
     refocus.current = nextKey ? { key: nextKey, target: 'remove' } : { key: null, target: 'heading' };
     removeAt(at + 1 + pos);
     setAnnouncement(`Removed ${target.title}`);
-    toast(`Removed “${target.title}”`, {
-      duration: 8000,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          if (usePlayerStore.getState().undoRemove()) {
-            refocus.current = { key: rowKey, target: 'remove' };
-            setAnnouncement(`${target.title} is back in the queue`);
-          } else {
-            toast('Could not put it back — the queue has moved on');
-          }
-        },
-      },
-    });
   }, []);
 
-  // Re-ordering DOM nodes can drop focus from the moved one (the browser
-  // blurs a node that is re-inserted), and removing a row takes its button
-  // with it. Put focus back where the listener was working — but only if it
-  // was lost, so this can never steal focus from somewhere else.
+  // Spotify's "Clear queue": only the songs you added go.
+  const clearQueued = useCallback(() => {
+    const { runs: r, index: at, clearUserQueue } = usePlayerStore.getState();
+    const n = r.slice(at + 1).filter((x) => x === 'queued').length;
+    if (!n) return;
+    refocus.current = { key: null, target: 'heading' };
+    clearUserQueue();
+    setAnnouncement('Cleared the queue');
+    toast(n === 1 ? 'Cleared 1 song from your queue' : `Cleared ${n} songs from your queue`);
+  }, []);
+
+  // Put focus back where the listener was working — only if it was lost.
   useLayoutEffect(() => {
     const want = refocus.current;
     if (!want) return;
@@ -513,8 +351,7 @@ export default function QueuePage() {
       headingRef.current?.focus({ preventScroll: true });
       return;
     }
-    // Row keys carry a "#n" suffix for a repeated song, which an attribute
-    // selector would have to escape — read the dataset instead.
+    // Row keys carry a "#n" suffix for a repeated song: read the dataset, not a selector.
     const row = Array.from(list?.querySelectorAll<HTMLElement>('[data-row-key]') ?? []).find((el) => el.dataset.rowKey === want.key);
     const el =
       want.target === 'grip'
@@ -527,92 +364,19 @@ export default function QueuePage() {
     el.scrollIntoView?.({ block: 'nearest' });
   }, [queue]);
 
-  // ---- "Refresh up next": a deliberate rebuild, with its own states -------
-  // `base` is how many automatic entries were left the moment the rebuild was
-  // asked for (the player drops them synchronously): the wait ends when more
-  // than that many are back, never merely because some already were.
-  const [rebuild, setRebuild] = useState<{ phase: 'idle' | 'working' | 'failed'; base: number }>({ phase: 'idle', base: 0 });
-  const rebuildTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(rebuildTimer.current), []);
-  useEffect(() => {
-    if (rebuild.phase === 'working' && mix.auto > rebuild.base) {
-      window.clearTimeout(rebuildTimer.current);
-      setRebuild({ phase: 'idle', base: 0 });
-      setAnnouncement(`${mix.auto} new VinaX ${mix.auto === 1 ? 'pick' : 'picks'} in the queue`);
-    }
-  }, [rebuild, mix.auto]);
-  const regenerate = useCallback(() => {
-    setAnnouncement('Refreshing up next. Songs you added stay.');
-    const player = usePlayerStore.getState();
-    player.regenerateAutoTail();
-    setRebuild({ phase: 'working', base: player.autoTail().length });
-    window.clearTimeout(rebuildTimer.current);
-    rebuildTimer.current = window.setTimeout(
-      () => setRebuild((r) => (r.phase === 'working' ? { ...r, phase: 'failed' } : r)),
-      REBUILD_TIMEOUT_MS,
-    );
-  }, []);
-
-  // 1.15 — Spotify's "Clear queue": only the songs added by hand go; the list and Autoplay stay.
-  const clearAdded = useCallback(() => {
-    const { queue: q, index: at, removeAt, enqueueAll, isManualQueued } = usePlayerStore.getState();
-    const added = q.slice(at + 1).filter((s) => isManualQueued(s.id));
-    if (!added.length) return;
-    for (let i = q.length - 1; i > at; i -= 1) if (isManualQueued(q[i].id)) removeAt(i);
-    refocus.current = { key: null, target: 'heading' };
-    setAnnouncement(`Removed ${added.length} songs you added`);
-    toast(`Removed ${added.length} songs you added`, { action: { label: 'Undo', onClick: () => enqueueAll(added) }, duration: 7000 });
-  }, []);
-
   const total = upNext.length;
   const renderRow = useCallback(
     (s: Song, i: number) => {
-      // 1.15 — the list reads in Spotify's three runs, each opened by a title
-      // in words (never colour alone): the songs the listener added, then the
-      // rest of what they pressed play on, then what VinaX picked to follow.
-      const group = origins[i];
-      const prevGroup = i > 0 ? origins[i - 1] : null;
+      const run = upRuns[i] ?? 'context';
+      const opens = i === 0 || upRuns[i - 1] !== run;
       return (
         <Fragment>
-          {group !== prevGroup ? (
-            <li key="group" role="presentation" className={`vx-queue-group${group === 'auto' ? ' is-auto' : ''}`}>
-              {group === 'auto' ? (
-                <>
-                  <span className="vx-queue-group-title">
-                    <SparkleIcon />
-                    Autoplay
-                  </span>
-                  <span className="vx-queue-group-note">VinaX picks similar songs to keep the music going · Refresh up next replaces them</span>
-                </>
-              ) : group === 'manual' ? (
-                <>
-                  <span className="vx-queue-group-title">Next in queue</span>
-                  <span className="vx-queue-group-note">
-                    Songs you added play first, in the order you added them
-                    {' · '}
-                    <button type="button" onClick={clearAdded} className="vx-queue-group-action">
-                      Clear queue
-                    </button>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="vx-queue-group-title">
-                    Next from:{' '}
-                    {queueContext?.path ? <Link to={queueContext.path}>{queueContext.label}</Link> : queueContext?.label ?? 'your list'}
-                  </span>
-                  <span className="vx-queue-group-note">{shuffle ? 'Shuffled · turn shuffle off to play it in order' : 'Plays in its order and stays through every refresh'}</span>
-                </>
-              )}
-            </li>
-          ) : null}
+          {opens ? <SectionHead key="head" run={run} onClear={clearQueued} /> : null}
           <QueueRow
             key="row"
             song={s}
             pos={i}
             rowKey={rowKeys[i]}
-            origin={origins[i]}
-            reason={origins[i] === 'auto' ? reasons[s.id] : undefined}
             isFirst={i === 0}
             isLast={i === total - 1}
             dragging={dragFrom === i}
@@ -623,294 +387,168 @@ export default function QueuePage() {
             onDragEnd={endDrag}
             onNudge={nudge}
             onMove={onMove}
-            onKeep={onKeep}
-            onClearFrom={onClearFrom}
             onRemove={onRemove}
             onPlay={onPlay}
           />
         </Fragment>
       );
     },
-    [rowKeys, origins, reasons, total, dragFrom, dragOver, setRowEl, startDrag, onDragMove, endDrag, nudge, onMove, onKeep, onClearFrom, onRemove, onPlay, queueContext, shuffle, clearAdded],
+    [upRuns, rowKeys, total, dragFrom, dragOver, setRowEl, startDrag, onDragMove, endDrag, nudge, onMove, onRemove, onPlay, clearQueued],
   );
   const keyOfRow = useCallback((_s: Song, i: number) => rowKeys[i], [rowKeys]);
 
-  // Package D5 — freeze this queue into a Collection the listener keeps.
-  // 1.11 — the suggested name carries the day ("Queue · 7 Nov").
-  const saveAsPlaylist = (): void => {
-    const name = window.prompt('Playlist name', defaultQueueName());
-    if (!name || !name.trim()) return;
-    const { createCollection, addToCollection } = useLibraryStore.getState();
-    const cid = createCollection(name.trim());
-    const seen = new Set<string>();
-    let n = 0;
-    for (const s of queue) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      addToCollection(cid, s);
-      n += 1;
-    }
-    toast(`Saved ${n} songs to “${name.trim()}”`);
-  };
+  const tabs = (
+    <div role="tablist" aria-label="Queue views" className="vx-queue-tabs">
+      {(
+        [
+          ['queue', 'Queue'],
+          ['recent', 'Recently played'],
+        ] as const
+      ).map(([id, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('vx-queue-tab', tab === id && 'is-on')}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
-  // 1.11 — Clear: everything after the playing song goes, with an Undo that puts it back.
-  const clearUpNext = (): void => {
-    const { queue: q, index: at, clearFrom, enqueueAll } = usePlayerStore.getState();
-    const tail = q.slice(at + 1);
-    if (!tail.length) return;
-    clearFrom(at + 1);
-    setAnnouncement('Cleared everything after this song');
-    // Same words as the store's own confirmation, so this one (with Undo) replaces it.
-    toast(`Cleared ${tail.length} upcoming ${tail.length === 1 ? 'song' : 'songs'}`, {
-      action: { label: 'Undo', onClick: () => enqueueAll(tail) },
-      duration: 7000,
-    });
-  };
-
-  if (!queue.length) {
+  if (!queue.length && tab === 'queue') {
     return (
-      <>
-        {/* The page keeps its title when empty, for screen-reader heading navigation. */}
-        <h1 className="sr-only">Queue</h1>
-        {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
+      <div className="vx-queue">
+        <header className="vx-queue-head">
+          <h1>Queue</h1>
+          {tabs}
+        </header>
         <EmptyState
           icon={<QueueIcon className="w-8 h-8" />}
-          title="Queue is empty"
-          message="Play a song, album or playlist to start your queue — or let VinaX build one from your taste."
+          title="Your queue is empty"
+          message="Play a song, album or playlist, or use Add to queue in any song menu."
           action={
             <span className="flex flex-wrap gap-2 justify-center">
-              <button type="button" onClick={() => setBuilding(true)} className="vx-tap px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
+              <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-primary inline-flex items-center">Browse Home</Link>
               <Link to="/radio" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Start radio</Link>
-              <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Browse Home</Link>
             </span>
           }
         />
-      </>
+      </div>
     );
   }
 
-  // What a rebuild would replace, in the listener's own terms: only VinaX's picks.
-  const rebuildNote =
-    mix.auto > 0
-      ? `Replaces the ${picks(mix.auto)} after this song. Songs you added, and the list you started, stay.`
-      : 'Asks VinaX for songs that follow what’s playing. Songs you added, and the list you started, stay.';
-  const canRebuild = !!song;
-  const upcomingMinutes = Math.round(upNext.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
+  const cycleRepeat = (): void => {
+    const st = usePlayerStore.getState();
+    st.cycleRepeat();
+    const now = usePlayerStore.getState().repeat;
+    setAnnouncement(now === 'off' ? 'Repeat off' : now === 'all' ? 'Repeat on' : 'Repeat one song');
+  };
 
   return (
     <div className="vx-queue">
-      {/* Reorder, removal and rebuild results for screen readers — otherwise
-          silent. First on the page, so it is the page's first live region. */}
+      {/* Reorders and removals for screen readers — otherwise silent. */}
       <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
 
-      {/* A sticky header: the title and the queue's actions stay in reach while the list scrolls. */}
       <header className="vx-queue-head">
-        <div className="min-w-0">
-          <h1>Queue</h1>
-          <p>{djTakeover ? 'VinaX builds around what’s playing — songs you add always stay' : 'Your selected songs, in order'}</p>
-        </div>
-        <div className="vx-queue-actions">
-          <button type="button" onClick={() => setBuilding(true)} className="vx-queue-btn is-primary">Build a queue</button>
-          {canRebuild && (
-            <button
-              type="button"
-              onClick={regenerate}
-              disabled={rebuild.phase === 'working'}
-              aria-describedby="vx-rebuild-note"
-              className="vx-queue-btn is-outline"
-            >
-              {rebuild.phase === 'working' && <span className="vx-np-spinner" aria-hidden />}
-              {rebuild.phase === 'working' ? 'Refreshing…' : 'Refresh up next'}
-            </button>
-          )}
-          {queue.length >= 2 && (
-            <button type="button" onClick={saveAsPlaylist} className="vx-queue-btn is-outline">
-              Save as playlist
-            </button>
-          )}
-          {upNext.length > 0 && (
-            <button type="button" onClick={clearUpNext} className="vx-queue-btn is-outline" aria-label="Clear the queue after this song">
-              Clear
-            </button>
-          )}
-        </div>
+        <h1>Queue</h1>
+        {tabs}
       </header>
 
-      {/* 1.16 — Played: what this session already played, folded away when long. */}
-      {played.length > 0 && (
-        <section className="vx-queue-section vx-queue-played" aria-labelledby="vx-queue-played-title">
-          <div className="vx-queue-titlebar">
-            <h2 id="vx-queue-played-title" className="vx-queue-title">
-              <button
-                type="button"
-                onClick={togglePlayed}
-                aria-expanded={playedOpen}
-                aria-controls={playedOpen ? 'vx-queue-played-list' : undefined}
-                className="vx-queue-fold"
-              >
-                Played
-                <ChevronDownIcon className="vx-queue-fold-icon" />
-              </button>
-            </h2>
-            <span className="vx-queue-played-end">
-              <span className="vx-queue-count tabular-nums">
-                {played.length} {played.length === 1 ? 'song' : 'songs'}
-              </span>
-              <button type="button" onClick={clearPlayedSongs} className="vx-queue-btn is-outline" aria-label="Clear played songs">
-                Clear
-              </button>
-            </span>
-          </div>
-          {playedOpen && (
-            <ul id="vx-queue-played-list" className="vx-queue-list">
-              <VirtualChunks items={played} keyOf={keyOfPlayed} renderItem={renderPlayed} rowHeight={ROW_HEIGHT} />
-            </ul>
-          )}
+      {tab === 'recent' ? (
+        <section className="vx-queue-section" aria-label="Recently played">
+          <RecentlyPlayed />
         </section>
-      )}
+      ) : (
+        <>
+          {song && (
+            <section className="vx-queue-section" aria-labelledby="vx-queue-now-title">
+              <h2 id="vx-queue-now-title" className="vx-queue-title mb-3">Now playing</h2>
+              <div className="vx-queue-now">
+                <span className="vx-queue-now-art">
+                  <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
+                </span>
+                <div className="vx-queue-now-text">
+                  <p className="vx-queue-now-title">{song.title}</p>
+                  <p className="vx-queue-now-meta">{song.subtitle}</p>
+                  <p className="vx-queue-now-state">
+                    {isPlaying ? (
+                      <>
+                        <span className="vx-eq" aria-hidden>
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                        Playing
+                      </>
+                    ) : (
+                      'Paused'
+                    )}
+                  </p>
+                </div>
+                <Link to="/now-playing" className="vx-queue-now-open">
+                  Open player
+                </Link>
+              </div>
+            </section>
+          )}
 
-      {/* now playing */}
-      {song && (
-        <section className="vx-queue-section" aria-labelledby="vx-queue-now-title">
-          <h2 id="vx-queue-now-title" className="vx-queue-title mb-3">Now playing</h2>
-          <div className="vx-queue-now">
-            <span className="vx-queue-now-art">
-              <img
-                src={bestImage(song.images, 150)}
-                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-              />
-            </span>
-            <div className="vx-queue-now-text">
-              <p className="vx-queue-now-title">{song.title}</p>
-              <p className="vx-queue-now-meta">{song.subtitle}</p>
-              <p className="vx-queue-now-state">
-                {isPlaying ? (
+          <section className="vx-queue-section" aria-labelledby="vx-queue-next-title">
+            <div className="vx-queue-titlebar">
+              <h2 id="vx-queue-next-title" ref={headingRef} tabIndex={-1} className="vx-queue-title">
+                Up next
+              </h2>
+              {/* Spotify keeps shuffle and repeat with the queue. A Listen Together guest's queue is the room's. */}
+              {!following && (
+                <span className="vx-queue-modes">
+                  <button type="button" onClick={() => usePlayerStore.getState().toggleShuffle()} aria-pressed={shuffle} aria-label="Shuffle" title="Shuffle" className={cn('vx-queue-mode', shuffle && 'is-on')}>
+                    <ShuffleIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cycleRepeat}
+                    aria-pressed={repeat !== 'off'}
+                    aria-label={repeat === 'one' ? 'Repeat one song' : repeat === 'all' ? 'Repeat' : 'Repeat off'}
+                    title="Repeat"
+                    className={cn('vx-queue-mode', repeat !== 'off' && 'is-on')}
+                  >
+                    <RepeatIcon className="w-5 h-5" />
+                    {repeat === 'one' && <span className="vx-queue-mode-one" aria-hidden>1</span>}
+                  </button>
+                </span>
+              )}
+            </div>
+
+            {upNext.length === 0 ? (
+              <p className="vx-queue-empty">
+                {autoplayLoading ? (
                   <>
-                    <span className="vx-eq" aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    Playing
+                    <span className="vx-np-spinner" aria-hidden />
+                    Autoplay is finding songs like this one…
                   </>
                 ) : (
-                  'Paused'
+                  <span>
+                    Nothing up next. Use <b>Add to queue</b> in any song menu.
+                  </span>
                 )}
               </p>
-            </div>
-            <Link to="/now-playing" className="vx-queue-now-open">
-              Open player
-            </Link>
-          </div>
-        </section>
-      )}
-
-      {/* up next — who queued what, and how to change it */}
-      <section className="vx-queue-section" aria-labelledby="vx-queue-next-title">
-        <div className="vx-queue-titlebar">
-          <h2 id="vx-queue-next-title" ref={headingRef} tabIndex={-1} className="vx-queue-title">Up next</h2>
-          {total > 0 && (
-            <span className="vx-queue-count tabular-nums">
-              {total} {total === 1 ? 'song' : 'songs'}
-              {upcomingMinutes > 0 && ` · ${upcomingMinutes} min`}
-            </span>
-          )}
-        </div>
-        <p id="vx-rebuild-note" className="vx-queue-note">
-          {mix.auto > 0 || mix.manual > 0 ? (
-            <>
-              {mix.auto > 0 && picks(mix.auto)}
-              {mix.auto > 0 && mix.manual > 0 && ' · '}
-              {mix.manual > 0 && `${mix.manual} added by you`}
-              {'. '}
-            </>
-          ) : null}
-          {canRebuild ? rebuildNote : 'Songs you add by hand play before anything VinaX picks.'}
-        </p>
-        {!online && (
-          <p className="vx-queue-callout">You’re offline. The queue keeps playing; new VinaX picks need a connection.</p>
-        )}
-        {rebuild.phase === 'failed' && (
-          <div role="alert" className="vx-queue-callout">
-            <span>Couldn’t refresh up next just now.</span>
-            <button type="button" onClick={regenerate} className="vx-queue-btn is-outline shrink-0">
-              Try again
-            </button>
-          </div>
-        )}
-
-        <div className="vx-queue-tools">
-          {/* v6.5.0 — tune chips: rebuild VinaX's picks toward a feel. */}
-          <section aria-label="Tune this queue" className="vx-queue-tune vx-queue-toolrow">
-            <span className="vx-queue-toolrow-label" aria-hidden>
-              Tune
-            </span>
-            <TuneChips compact />
+            ) : (
+              <ul ref={listRef} className="vx-queue-list">
+                <VirtualChunks items={upNext} keyOf={keyOfRow} renderItem={renderRow} rowHeight={ROW_HEIGHT} />
+              </ul>
+            )}
           </section>
-          {/* 1.4 — Never repeat: every automatic song is one you have not heard. */}
-          <div className="vx-queue-toolrow">
-            <span className="vx-queue-toolrow-label" aria-hidden>
-              Repeats
-            </span>
-            <NeverRepeatChip />
-          </div>
-          {/* 1.12 — the moment Up Next is planning for (time of day, weekday or weekend). */}
-          <MomentRow />
-          {/* D5 — sort the upcoming stretch; the playing song never moves. */}
-          {upNext.length >= 3 && (
-            <div className="vx-queue-toolrow">
-              <span className="vx-queue-toolrow-label" aria-hidden>
-                Sort
-              </span>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1" role="group" aria-label="Sort upcoming songs">
-                {SORTS.map(([k, label]) => (
-                  <Chip
-                    key={k}
-                    onClick={() => {
-                      usePlayerStore.getState().sortUpcoming(k);
-                      toast(`Sorted upcoming by ${label.toLowerCase()}`);
-                      setAnnouncement(`Upcoming songs sorted by ${label.toLowerCase()}`);
-                    }}
-                  >
-                    {label}
-                  </Chip>
-                ))}
+
+          {/* Spotify's Autoplay switch: similar songs when the music ends. */}
+          {!following && (
+            <section className="vx-queue-section vx-queue-autoplay" aria-label="Autoplay">
+              <div className="min-w-0">
+                <p className="vx-queue-autoplay-title">Autoplay</p>
+                <p className="vx-queue-note">
+                  {repeat !== 'off' ? 'Paused while repeat is on.' : 'When your music ends, keep playing similar songs.'}
+                </p>
               </div>
-            </div>
+              <Toggle on={autoplay} onChange={(v) => useSettingsStore.getState().setAutoplay(v)} label="Autoplay" />
+            </section>
           )}
-        </div>
-
-        {upNext.length === 0 ? (
-          rebuild.phase === 'working' ? (
-            <p className="vx-queue-empty">
-              <span className="vx-np-spinner" aria-hidden />
-              Finding songs that follow this one…
-            </p>
-          ) : (
-            <p className="vx-queue-empty">
-              <span>
-                Nothing queued yet — use <b>Play next</b> or <b>Add to queue</b> in any song menu
-                {canRebuild ? ', or use Refresh up next above.' : '.'}
-              </span>
-            </p>
-          )
-        ) : (
-          <ul ref={listRef} className="vx-queue-list">
-            <VirtualChunks items={upNext} keyOf={keyOfRow} renderItem={renderRow} rowHeight={ROW_HEIGHT} />
-          </ul>
-        )}
-      </section>
-
-      {/* 8.2.0 — Smart Queue: Autoplay + "DJ builds every queue" as one switch, explained.
-          9.0 — after the list: the header already says which way the queue
-          runs, and on a phone the songs come first. */}
-      <section className="vx-queue-shape" aria-labelledby="vx-smartq-label">
-        <SmartQueue />
-      </section>
-      {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
+        </>
+      )}
     </div>
   );
 }
