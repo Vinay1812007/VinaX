@@ -129,11 +129,11 @@ describe('frosted materials keep text legible over any backdrop', () => {
     expect(ratio([18, 18, 18], over([248, 248, 248], 0.5, mid))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('1.21 — light "meadow glass": panel text clears AA on the thinnest frost over the darkest meadow', () => {
+  it('1.21 — light "meadow glass": panel text clears AA on the clearest liquid glass over the darkest meadow', () => {
     const light = readFileSync(resolve(__dirname, '../styles/templates/vinax-light.css'), 'utf8');
     const look = readFileSync(resolve(__dirname, '../styles/templates/vinax.css'), 'utf8');
-    // The frost is floored at 45% white and solid at Solid.
-    expect(light).toContain('--vx-panel-fill: rgb(255 255 255 / clamp(0.45, calc(1 - (1 - var(--glass-alpha)) * 2.5), 1));');
+    // The glass is floored at 26% white and solid at Solid.
+    expect(light).toContain('--vx-panel-fill: rgb(255 255 255 / clamp(0.26, calc(1 - (1 - var(--glass-alpha)) * 3.4), 1));');
     // Every rule is light-only, so dark mode cannot change with it.
     const selectors = light.replace(/\/\*[\s\S]*?\*\//g, '').match(/^[^@{}\n][^{}]*\{/gm) ?? [];
     for (const sel of selectors.filter((s) => !/^\s*(from|to)\b/.test(s))) expect(sel).toContain('html.light');
@@ -142,9 +142,9 @@ describe('frosted materials keep text legible over any backdrop', () => {
       return block.match(new RegExp(`--${name}: (\\d+) (\\d+) (\\d+);`))!.slice(1).map(Number);
     };
     // The darkest green in public/bg/meadow.svg that a panel can sit on.
-    const meadow = [79, 126, 52];
+    const meadow = [106, 156, 70];
     for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
-      expect(ratio(inks(ink), over(WHITE, 0.45, meadow)), ink).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(inks(ink), over(WHITE, 0.26, meadow)), ink).toBeGreaterThanOrEqual(4.5);
     }
     const svg = readFileSync(resolve(__dirname, '../../public/bg/meadow.svg'), 'utf8');
     const fills = [...svg.matchAll(/(?:fill|stop-color)="#([0-9a-f]{6})"/g)].map((m) => [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
@@ -175,9 +175,16 @@ describe('frosted materials keep text legible over any backdrop', () => {
         const blended = setLum(hsl(h, s, 0.5), L(back)).map((v) => v * 255);
         const tinted = over(blended, 0.85, meadow);
         for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
-          expect(ratio(inks(ink), over(WHITE, 0.45, tinted)), `${ink} on hue ${h} sat ${s}`).toBeGreaterThanOrEqual(4.5);
+          expect(ratio(inks(ink), over(WHITE, 0.26, tinted)), `${ink} on hue ${h} sat ${s}`).toBeGreaterThanOrEqual(4.5);
         }
       }
+    }
+    // The bars, the mini player and sheets float over the page, where a black
+    // cover can scroll under them: their floors hold AA on black.
+    expect(light).toContain('--vx-mat-chrome: rgb(var(--ink-950) / clamp(0.66,');
+    expect(light).toContain('--vx-mat-thick: rgb(var(--ink-950) / clamp(0.74,');
+    for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
+      expect(ratio(inks(ink), over(WHITE, 0.66, [0, 0, 0])), `${ink} on the chrome over black`).toBeGreaterThanOrEqual(4.5);
     }
   });
 

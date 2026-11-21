@@ -23,11 +23,11 @@
     <linearGradient id="near" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#9cc464"/>
       <stop offset=".6" stop-color="#77a443"/>
-      <stop offset="1" stop-color="#68953c"/>
+      <stop offset="1" stop-color="#6d9c3f"/>
     </linearGradient>
     <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#7fab4c"/>
-      <stop offset="1" stop-color="#5a8a3a"/>
+      <stop offset="1" stop-color="#669d42"/>
     </linearGradient>
     <radialGradient id="mist" cx=".5" cy=".5" r=".5">
       <stop offset="0" stop-color="#f4f6e6" stop-opacity=".75"/>
@@ -41,20 +41,20 @@
   <g filter="url(#soft)">
    <g transform="translate(0 -150)">
     <path d="M-100 330 C 180 250 420 300 640 270 S 1080 210 1300 250 S 1620 230 1720 260 L 1720 1300 L -100 1300 Z" fill="url(#far)"/>
-    <path d="M-100 360 C 120 330 260 350 420 335 C 520 325 560 300 640 315 C 720 330 800 300 900 320 C 1000 340 1120 300 1240 330 C 1360 360 1500 320 1720 345 L 1720 400 L -100 410 Z" fill="#6f8f4c" opacity=".55"/>
+    <path d="M-100 360 C 120 330 260 350 420 335 C 520 325 560 300 640 315 C 720 330 800 300 900 320 C 1000 340 1120 300 1240 330 C 1360 360 1500 320 1720 345 L 1720 400 L -100 410 Z" fill="#779951" opacity=".55"/>
     <path d="M-100 460 C 220 380 520 440 820 400 S 1340 360 1720 420 L 1720 1300 L -100 1300 Z" fill="url(#mid)"/>
-    <path d="M-100 500 C 60 470 160 480 260 470 C 330 462 380 440 450 455 C 520 470 600 450 680 470 L 680 520 L -100 540 Z" fill="#5f8546" opacity=".8"/>
-    <path d="M1040 470 C 1120 440 1200 455 1280 440 C 1360 428 1420 450 1500 445 C 1580 440 1650 460 1720 455 L 1720 520 L 1040 520 Z" fill="#5f8546" opacity=".7"/>
+    <path d="M-100 500 C 60 470 160 480 260 470 C 330 462 380 440 450 455 C 520 470 600 450 680 470 L 680 520 L -100 540 Z" fill="#6f9b52" opacity=".8"/>
+    <path d="M1040 470 C 1120 440 1200 455 1280 440 C 1360 428 1420 450 1500 445 C 1580 440 1650 460 1720 455 L 1720 520 L 1040 520 Z" fill="#6f9b52" opacity=".7"/>
     <path d="M-100 640 C 200 520 520 560 760 610 S 1200 700 1720 620 L 1720 1300 L -100 1300 Z" fill="url(#near)"/>
     <path d="M-100 700 C 240 640 520 660 760 700 S 1180 760 1720 700 L 1720 740 C 1200 800 760 740 420 720 S 40 740 -100 760 Z" fill="#a9cf72" opacity=".35"/>
     <path d="M-100 780 C 300 720 640 740 980 790 S 1500 800 1720 770 L 1720 800 C 1400 830 1000 820 640 780 S 100 790 -100 820 Z" fill="#b5d67e" opacity=".25"/>
-    <g fill="#5a8a3a">
+    <g fill="#669d42">
       <circle cx="1180" cy="640" r="70"/><circle cx="1250" cy="590" r="85"/><circle cx="1335" cy="575" r="80"/>
       <circle cx="1410" cy="610" r="75"/><circle cx="1460" cy="670" r="70"/><circle cx="1220" cy="700" r="75"/>
       <circle cx="1310" cy="680" r="95"/><circle cx="1400" cy="720" r="80"/>
     </g>
-    <g fill="#6a9842" opacity=".8"><circle cx="1230" cy="610" r="45"/><circle cx="1300" cy="590" r="40"/><circle cx="1190" cy="660" r="35"/></g>
-    <g fill="#4f7e34" opacity=".85"><circle cx="1400" cy="700" r="55"/><circle cx="1450" cy="660" r="40"/><circle cx="1330" cy="740" r="60"/></g>
+    <g fill="#6c9c44" opacity=".8"><circle cx="1230" cy="610" r="45"/><circle cx="1300" cy="590" r="40"/><circle cx="1190" cy="660" r="35"/></g>
+    <g fill="#639e41" opacity=".85"><circle cx="1400" cy="700" r="55"/><circle cx="1450" cy="660" r="40"/><circle cx="1330" cy="740" r="60"/></g>
     <path d="M-100 860 C 260 760 620 800 900 860 S 1400 900 1720 840 L 1720 1300 L -100 1300 Z" fill="url(#front)"/>
     <ellipse cx="560" cy="520" rx="420" ry="70" fill="url(#mist)"/>
     <ellipse cx="1300" cy="420" rx="380" ry="60" fill="url(#mist)"/>
