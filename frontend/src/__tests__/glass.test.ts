@@ -129,6 +129,28 @@ describe('frosted materials keep text legible over any backdrop', () => {
     expect(ratio([18, 18, 18], over([248, 248, 248], 0.5, mid))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('1.21 — light "meadow glass": panel text clears AA on the thinnest frost over the darkest meadow', () => {
+    const light = readFileSync(resolve(__dirname, '../styles/templates/vinax-light.css'), 'utf8');
+    const look = readFileSync(resolve(__dirname, '../styles/templates/vinax.css'), 'utf8');
+    // The frost is floored at 45% white and solid at Solid.
+    expect(light).toContain('--vx-panel-fill: rgb(255 255 255 / clamp(0.45, calc(1 - (1 - var(--glass-alpha)) * 2.5), 1));');
+    // Every rule is light-only, so dark mode cannot change with it.
+    const selectors = light.replace(/\/\*[\s\S]*?\*\//g, '').match(/^[^@{}\n][^{}]*\{/gm) ?? [];
+    for (const sel of selectors.filter((s) => !/^\s*(from|to)\b/.test(s))) expect(sel).toContain('html.light');
+    const inks = (name: string): number[] => {
+      const block = look.slice(look.indexOf("html.light[data-template='vinax']:root {"));
+      return block.match(new RegExp(`--${name}: (\\d+) (\\d+) (\\d+);`))!.slice(1).map(Number);
+    };
+    // The darkest green in public/bg/meadow.svg that a panel can sit on.
+    const meadow = [79, 126, 52];
+    for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
+      expect(ratio(inks(ink), over(WHITE, 0.45, meadow)), ink).toBeGreaterThanOrEqual(4.5);
+    }
+    const svg = readFileSync(resolve(__dirname, '../../public/bg/meadow.svg'), 'utf8');
+    const fills = [...svg.matchAll(/(?:fill|stop-color)="#([0-9a-f]{6})"/g)].map((m) => [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
+    for (const f of fills) expect(lum(f), `meadow colour ${f} is darker than the tested floor`).toBeGreaterThanOrEqual(lum(meadow) - 1e-9);
+  });
+
   it('dark: muted text on the chrome, body text on menus and snackbars clear AA over a white cover', () => {
     // 1.15 — the black-and-green inks (index.css :root).
     const ink950 = [0, 0, 0];

@@ -39,28 +39,30 @@ html[data-template='vinax']:root {
   --vx-on-accent: #000;
   --art: 83 83 83;
 }
-/* Light: white window, near-white panels, near-black type; a deeper green
-   so it still reads as text and as a ring on white (4.5:1 and 3:1), with
-   black labels on it. */
+/* Light (1.21): "meadow glass" — the window is a hazy green meadow
+   (templates/vinax-light.css) and the panels are white frost over it. The
+   inks lean a little green so they sit in that world; type is a deep
+   forest, near-black. The green keeps its 1.15.1 depth so it still reads as
+   text and as a ring (4.5:1 and 3:1), with black labels on it. */
 html.light[data-template='vinax']:root {
   --ink-950: 255 255 255;
-  --ink-900: 248 248 248;
-  --ink-850: 240 240 240;
-  --ink-800: 235 235 235;
-  --ink-700: 222 222 222;
-  --ink-600: 140 140 140;
-  --ink-500: 100 100 100;
-  --ink-400: 88 88 88;
-  --ink-300: 77 77 77;
-  --ink-200: 40 40 40;
-  --ink-100: 18 18 18;
+  --ink-900: 246 249 242;
+  --ink-850: 238 243 233;
+  --ink-800: 231 238 225;
+  --ink-700: 216 226 208;
+  --ink-600: 124 142 126;
+  --ink-500: 80 98 84;
+  --ink-400: 46 64 50;
+  --ink-300: 40 58 44;
+  --ink-200: 30 46 34;
+  --ink-100: 14 30 19;
   --ember-600: 16 120 50;
   --ember-500: 20 138 60;
   --ember-400: 15 112 48;
   --ember-300: 30 160 80;
   --tide-500: 20 138 60;
   --tide-400: 15 112 48;
-  --art: 190 190 190;
+  --art: 190 200 180;
 }
 
 /* ------------------------------------------------------------------ dials */

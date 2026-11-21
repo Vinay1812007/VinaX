@@ -1,0 +1,196 @@
+/* ============================================================================
+   VinaX light — "meadow glass" (1.21).
+
+   The light theme is a world, not a white page: the window is a hazy green
+   meadow (public/bg/meadow.svg, out of focus on purpose) and everything on it
+   is frosted glass, as in a single glass card held up against a landscape.
+     - panels: white frost that lets the green through, a bright rim along
+       the top edge, a soft white hairline round them and a long, low shadow;
+     - softer, larger corners: 22px panels, 14px cards, 10px artwork;
+     - controls are glass pills; the main action is a pale mint, glossy,
+       with deep forest type (no saturated fill);
+     - the player bar and the phone's tab bar are frosted glass too.
+   Type is deep forest (--ink-100, near-black) so text keeps AA on the frost
+   over the darkest part of the meadow (__tests__/glass.test.ts). Dark mode
+   is untouched: every rule here starts with html.light.
+   ========================================================================= */
+
+/* ------------------------------------------------------------- materials */
+html.light[data-template='vinax']:root {
+  /* The frost on the panels: 45% white at the default Glass level (and never
+     less), solid at Solid. */
+  --vx-panel-fill: rgb(255 255 255 / clamp(0.45, calc(1 - (1 - var(--glass-alpha)) * 2.5), 1));
+  --vx-mat-regular: rgb(var(--ink-950) / clamp(0.72, calc(var(--glass-alpha) - 0.02), 1));
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.04), 1));
+  --vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 1));
+  --vx-mat-specular: rgb(255 255 255 / 0.95);
+  --vx-mat-hairline: rgb(255 255 255 / 0.6);
+  /* The glass rim and its shadow, shared by panels, cards and bars. */
+  --vx-rim: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 0 0 1px rgb(255 255 255 / 0.55);
+  --vx-lift: 0 18px 40px -24px rgb(28 52 24 / 0.45);
+  /* Small glass: chips, pills, the search field. */
+  --vx-glass-pill: rgb(255 255 255 / 0.5);
+  --vx-glass-pill-hover: rgb(255 255 255 / 0.72);
+  /* The main action: pale mint glass, lit from above. */
+  --vx-mint: linear-gradient(180deg, rgb(246 251 236) 0%, rgb(226 240 206) 55%, rgb(207 228 182) 100%);
+  --vx-mint-hover: linear-gradient(180deg, rgb(250 253 243) 0%, rgb(232 244 214) 55%, rgb(214 233 190) 100%);
+  --vx-mint-ink: 22 58 26;
+  --vx-mint-edge: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(110 150 80 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.75), 0 10px 22px -12px rgb(40 80 30 / 0.5);
+  --vx-hover: rgb(255 255 255 / 0.45);
+  --vx-pressed: rgb(255 255 255 / 0.6);
+  --vx-art-shadow: 0 12px 28px -10px rgb(28 52 24 / 0.45);
+  /* Softer, larger corners. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+  --tpl-r-art: 10px;
+  --tpl-r-art-sm: 8px;
+  --tpl-r-row: 10px;
+  --tpl-r-tile: 14px;
+  --tpl-r-mini: 16px;
+  --tpl-r-np-art: 16px;
+  --vx-radius-panel: 22px;
+  --vx-radius-card: 14px;
+}
+
+/* ---------------------------------------------------------------- window */
+/* The meadow, fixed behind everything; it breathes very slowly. */
+html.light[data-template='vinax']:root .vx-shell { background: rgb(206 222 184); }
+html.light[data-template='vinax'] .vx-shell::before {
+  inset: -5%;
+  background: url('/bg/meadow.svg') center 42% / cover no-repeat;
+}
+@keyframes vx-meadow-breathe {
+  from { transform: scale(1.02) translate3d(-1%, 0, 0); }
+  to { transform: scale(1.07) translate3d(1.5%, -1%, 0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html.light[data-template='vinax']:not(.reduce-motion) .vx-shell::before { animation: vx-meadow-breathe 64s ease-in-out infinite alternate; }
+}
+
+/* ---------------------------------------------------------------- panels */
+html.light[data-template='vinax']:root :is(.vx-workspace, .vx-sidebar, .vx-playing-rail) { background: var(--vx-panel-fill); }
+@media (min-width: 768px) {
+  html.light[data-template='vinax'] :is(.vx-workspace, .vx-sidebar, .vx-playing-rail) {
+    border-radius: var(--vx-radius-panel);
+    box-shadow: var(--vx-rim), var(--vx-lift);
+  }
+  html.light[data-template='vinax'] .vx-panels { --vx-panel-gap: 10px; }
+}
+
+/* ------------------------------------------------------------ window bar */
+html.light[data-template='vinax'] :is(.vx-winbar-search, .vx-winbar-home) {
+  background: var(--vx-glass-pill);
+  box-shadow: var(--vx-rim);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+html.light[data-template='vinax'] :is(.vx-winbar-search, .vx-winbar-home):hover { background: var(--vx-glass-pill-hover); }
+html.light[data-template='vinax'] .vx-winbar-search:is(.is-active, :focus-within) { background: rgb(255 255 255 / 0.82); box-shadow: var(--vx-rim), 0 0 0 2px rgb(var(--ink-100) / 0.7); }
+html.light[data-template='vinax'] :is(.vx-winbar-link, .vx-topbar-feedback):hover,
+html.light[data-template='vinax'] .vx-winbar-link.is-active { background: var(--vx-glass-pill); box-shadow: var(--vx-rim); }
+html.light[data-template='vinax'] .vx-winbar-search-rule { background: rgb(var(--ink-100) / 0.2); }
+
+/* --------------------------------------------------------- main actions */
+html.light[data-template='vinax'] :is(.vx-topbar-signin, .vxh-guest-card .vxh-pill, .btn-primary, .btn-premium, .vx-btn--primary) {
+  border-color: transparent;
+  background: var(--vx-mint);
+  box-shadow: var(--vx-mint-edge);
+  color: rgb(var(--vx-mint-ink));
+  font-weight: 700;
+}
+html.light[data-template='vinax'] :is(.vx-topbar-signin, .vxh-guest-card .vxh-pill, .btn-primary, .btn-premium, .vx-btn--primary):hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--vx-mint-hover);
+}
+
+/* ------------------------------------------------------- chips and pills */
+html.light[data-template='vinax'] :is(.vx-chip-idle, .vxh-chip, .btn-secondary, .vx-btn--tonal) {
+  border-color: transparent;
+  background: var(--vx-glass-pill);
+  box-shadow: var(--vx-rim);
+  color: rgb(var(--ink-100));
+}
+html.light[data-template='vinax'] :is(.vx-chip-idle, .vxh-chip, .btn-secondary, .vx-btn--tonal):hover:not(:disabled) { background: var(--vx-glass-pill-hover); }
+/* The chosen chip: deep forest with near-white type. */
+html.light[data-template='vinax'] .vx-chip-on {
+  border-color: rgb(var(--ink-100));
+  background: rgb(var(--ink-100));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  color: rgb(var(--ink-950));
+}
+
+/* ------------------------------------------------------------ cards, rows */
+html.light[data-template='vinax'] .vxh-guest-card {
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.5);
+  box-shadow: var(--vx-rim), var(--vx-lift);
+}
+html.light[data-template='vinax'] .vxh-tile { background: rgb(255 255 255 / 0.5); box-shadow: var(--vx-rim); }
+html.light[data-template='vinax'] .vxh-tile:hover { background: rgb(255 255 255 / 0.72); }
+html.light[data-template='vinax'] .vx-home .vxh-tile { border-radius: var(--radius-md); }
+@media (hover: hover) {
+  html.light[data-template='vinax'] .vx-media-card:hover { background: rgb(255 255 255 / 0.45); box-shadow: var(--vx-rim); }
+  html.light[data-template='vinax'] .vx-media-card:hover .vx-media-art { box-shadow: 0 16px 30px -12px rgb(28 52 24 / 0.55); }
+}
+html.light[data-template='vinax'] .vx-media-card { border-radius: var(--radius-md); }
+html.light[data-template='vinax'] .vx-track-row.is-current { background: rgb(255 255 255 / 0.6); box-shadow: var(--vx-rim); }
+html.light[data-template='vinax'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+@media (min-width: 1024px) {
+  html.light[data-template='vinax'] .vx-np-panel { border-radius: var(--radius-lg); background: rgb(255 255 255 / 0.45); box-shadow: var(--vx-rim); }
+}
+
+/* ------------------------------------------------------------ player bar */
+/* Frosted glass across the foot of the window (it was plain like dark's). */
+html.light[data-template='vinax'] .vx-deck { background: transparent; }
+html.light[data-template='vinax'] .vx-deck-wrap {
+  background: var(--vx-mat-chrome);
+  -webkit-backdrop-filter: blur(var(--vx-mat-chrome-blur)) saturate(var(--vx-mat-sat));
+  backdrop-filter: blur(var(--vx-mat-chrome-blur)) saturate(var(--vx-mat-sat));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+}
+@media (min-width: 1024px) {
+  /* A computer: the bar is one more glass panel, floating on the meadow. */
+  html.light[data-template='vinax'] .vx-deck-wrap {
+    margin: 0 10px 10px;
+    border-radius: var(--vx-radius-panel);
+    overflow: hidden;
+    box-shadow: var(--vx-rim), var(--vx-lift);
+  }
+}
+
+/* Phone: the tab bar and the mini player are glass too. */
+html.light[data-template='vinax'] .vx-dock {
+  background: var(--vx-mat-chrome);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 -10px 30px -20px rgb(28 52 24 / 0.4);
+}
+html.light[data-template='vinax'] .np-mini {
+  border-radius: var(--tpl-r-mini);
+  background: linear-gradient(rgb(var(--art) / 0.22), rgb(var(--art) / 0.22)), rgb(255 255 255 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 1));
+  box-shadow: var(--vx-rim), var(--vx-lift);
+}
+html.light[data-template='vinax'] :is(.np-mini-thumb, .np-mini-thumb img) { border-radius: var(--radius-sm); }
+
+/* --------------------------------------------------------------- overlays */
+/* Sheets and dialogs: thick frost with the same rim, rounder, a soft green
+   shadow; the page behind dims to a hazy green instead of going dark. */
+html.light[data-template='vinax'] .vx-sheet {
+  --mat-lift: 0 -16px 48px -20px rgb(28 52 24 / 0.4);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+@media (min-width: 640px) {
+  html.light[data-template='vinax'] .vx-sheet { --mat-lift: 0 30px 60px -24px rgb(28 52 24 / 0.5); border-radius: var(--radius-xl); }
+}
+html.light[data-template='vinax'] .bg-black\/60:has(> .vx-sheet) {
+  background: rgb(36 60 30 / 0.3);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* The wordmark's green sits straight on the meadow: a deeper green keeps it
+   at AA on the mid-tone haze (the window's fallback colour). */
+html.light[data-template='vinax'] .vx-wordmark em { color: rgb(10 88 36); }
