@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.0': {
+    title: 'A new light mode: liquid glass over a meadow in the VinaX colours',
+    changes: [
+      { type: 'improved', text: 'Light mode is redesigned: the app floats as clear liquid glass panels over a soft, hazy meadow.' },
+      { type: 'improved', text: 'The meadow wears the VinaX logo\'s orange and pink, and turns the colour of the song that is playing, fading smoothly between songs.' },
+      { type: 'improved', text: 'Play buttons, Start listening and the big play in the full player wear the logo\'s orange-to-pink gradient; accents and links are the logo\'s orange.' },
+      { type: 'improved', text: 'On phones the tab bar floats as a rounded glass bar with a lit pill under the current tab, and the mini player is a matching glass capsule above it.' },
+    ],
+  },
   '1.20.1': {
     title: 'Autoplay keeps playing, the player bar is plain black, every artist song and full credits',
     changes: [
