@@ -150,10 +150,14 @@ describe('frosted materials keep text legible over any backdrop', () => {
     const fills = [...svg.matchAll(/(?:fill|stop-color)="#([0-9a-f]{6})"/g)].map((m) => [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
     for (const f of fills) expect(lum(f), `meadow colour ${f} is darker than the tested floor`).toBeGreaterThanOrEqual(lum(meadow) - 1e-9);
 
-    // While a song plays the meadow takes its colour: --art at 85% in the
-    // "color" blend (W3C compositing: the song's hue and saturation, the
-    // meadow's luminosity). Every hue, vivid or muted, keeps the text AA.
-    expect(light).toContain("[style*='--art:'] { --vx-song: rgb(var(--art) / 0.85); }");
+    // The meadow is always coloured: the logo's orange into pink at 90% when
+    // nothing plays, the song's colour (--art) at 85% while one does, in the
+    // "color" blend (W3C compositing: the colour's hue and saturation, the
+    // meadow's luminosity). Every hue, vivid or muted, at either strength,
+    // keeps the text AA.
+    expect(light).toContain("[style*='--art:'] { --vx-song-a: rgb(var(--art) / 0.85); --vx-song-b: rgb(var(--art) / 0.85); }");
+    expect(light).toContain('--vx-song-a: rgb(255 164 46 / 0.9);');
+    expect(light).toContain('--vx-song-b: rgb(255 99 132 / 0.9);');
     expect(light).toContain('background-blend-mode: color, normal;');
     const L = ([r, g, b]: number[]) => 0.3 * r + 0.59 * g + 0.11 * b;
     const setLum = (c: number[], l: number): number[] => {
@@ -173,9 +177,11 @@ describe('frosted materials keep text legible over any backdrop', () => {
     for (let h = 0; h < 360; h += 10) {
       for (const s of [1, 0.6, 0.3]) {
         const blended = setLum(hsl(h, s, 0.5), L(back)).map((v) => v * 255);
-        const tinted = over(blended, 0.85, meadow);
-        for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
-          expect(ratio(inks(ink), over(WHITE, 0.26, tinted)), `${ink} on hue ${h} sat ${s}`).toBeGreaterThanOrEqual(4.5);
+        for (const strength of [0.85, 0.9, 1]) {
+          const tinted = over(blended, strength, meadow);
+          for (const ink of ['ink-100', 'ink-300', 'ink-400']) {
+            expect(ratio(inks(ink), over(WHITE, 0.26, tinted)), `${ink} on hue ${h} sat ${s} at ${strength}`).toBeGreaterThanOrEqual(4.5);
+          }
         }
       }
     }

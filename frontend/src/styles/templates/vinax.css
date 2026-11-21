@@ -39,30 +39,31 @@ html[data-template='vinax']:root {
   --vx-on-accent: #000;
   --art: 83 83 83;
 }
-/* Light (1.21): "meadow glass" — the window is a hazy green meadow
-   (templates/vinax-light.css) and the panels are white frost over it. The
-   inks lean a little green so they sit in that world; type is a deep
-   forest, near-black. The green keeps its 1.15.1 depth so it still reads as
-   text and as a ring (4.5:1 and 3:1), with black labels on it. */
+/* Light (1.21): "meadow glass" — the window is a hazy meadow in the logo's
+   colours (templates/vinax-light.css) and the panels are liquid glass over
+   it. The inks are warm neutrals, near-black for type. The accent is the
+   logo's: orange for fills and rings (black labels on it), a deep burnt
+   orange for accent text (4.5:1 on the light tiers), its pink as the second
+   colour; buttons and play wear the logo gradient itself. */
 html.light[data-template='vinax']:root {
   --ink-950: 255 255 255;
-  --ink-900: 246 249 242;
-  --ink-850: 238 243 233;
-  --ink-800: 231 238 225;
-  --ink-700: 216 226 208;
-  --ink-600: 124 142 126;
-  --ink-500: 80 98 84;
-  --ink-400: 36 52 40;
-  --ink-300: 32 48 36;
-  --ink-200: 30 46 34;
-  --ink-100: 14 30 19;
-  --ember-600: 16 120 50;
-  --ember-500: 20 138 60;
-  --ember-400: 15 112 48;
-  --ember-300: 30 160 80;
-  --tide-500: 20 138 60;
-  --tide-400: 15 112 48;
-  --art: 190 200 180;
+  --ink-900: 250 246 244;
+  --ink-850: 244 238 235;
+  --ink-800: 238 231 228;
+  --ink-700: 226 216 212;
+  --ink-600: 150 132 134;
+  --ink-500: 106 88 90;
+  --ink-400: 60 44 46;
+  --ink-300: 54 40 42;
+  --ink-200: 50 38 40;
+  --ink-100: 34 24 26;
+  --ember-600: 200 84 16;
+  --ember-500: 226 100 22;
+  --ember-400: 168 58 16;
+  --ember-300: 184 70 12;
+  --tide-500: 226 74 112;
+  --tide-400: 176 40 84;
+  --art: 200 180 176;
 }
 
 /* ------------------------------------------------------------------ dials */
