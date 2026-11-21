@@ -280,3 +280,128 @@ html.light[data-template='vinax'] :is(.vx-play-fab, .card-play, .vx-home .vxh-ct
     --vx-mat-thick: rgb(var(--ink-950) / 0.97);
   }
 }
+
+/* ------------------------------------------------------------- full player */
+/* Play wears the logo; the seek line fills in its orange-to-pink. */
+html.light[data-template='vinax'] .vx-np-play {
+  background: var(--vx-logo-fill);
+  color: rgb(0 0 0);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 10px 18px -12px rgb(255 255 255 / 0.7), 0 14px 30px -12px rgb(200 70 60 / 0.6);
+}
+html.light[data-template='vinax'] .vx-np-play:hover { background: var(--vx-logo-fill-hover); }
+html.light[data-template='vinax'] .vx-np-seek input[type='range'] { --range-on: rgb(var(--ember-500)); }
+html.light[data-template='vinax'] :is(.vx-np-tools, .vx-np-top .vx-np-icon, .vx-np-top .vx-np-menu button[aria-haspopup='menu']) {
+  background: var(--vx-sheen), rgb(255 255 255 / 0.3);
+  box-shadow: var(--vx-pill-rim);
+}
+
+/* ------------------------------------------------------------------ phone */
+/* A phone is one pane on the meadow, so the chrome carries the premium
+   feel: a liquid-glass header once the page scrolls, a floating glass tab
+   bar with a lit pill under the current tab, the mini player as a matching
+   capsule above it, glass fields and glass cards instead of flat ones. */
+@media (max-width: 767px) {
+  /* Header: clear at the top, liquid glass once content runs under it. */
+  html.light[data-template='vinax'] .vx-topbar.is-scrolled {
+    background-color: rgb(255 255 255 / clamp(0.66, calc(var(--glass-alpha) - 0.08), 1));
+    background-image: var(--vx-sheen);
+    box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.7), 0 10px 26px -20px rgb(70 36 28 / 0.5);
+  }
+  html.light[data-template='vinax'] .vx-topbar { gap: 8px; }
+  html.light[data-template='vinax'] .vx-topbar-actions { gap: 6px; }
+  html.light[data-template='vinax'] :is(.vx-langbtn, .vx-topbar-feedback, .vx-topbar-actions .vx-icon-btn) {
+    min-height: 34px;
+    background: var(--vx-glass-pill);
+    box-shadow: var(--vx-pill-rim);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+  }
+  html.light[data-template='vinax'] .vx-topbar-actions .vx-icon-btn { width: 34px; height: 34px; color: rgb(var(--ink-100)); }
+  /* Home also shows the wordmark, so the language button folds to its globe
+     (the language names stay as its accessible name). */
+  html.light[data-template='vinax'] .vx-topbar:has(.vx-wordmark) .vx-langbtn { justify-content: center; width: 34px; padding: 0; }
+  html.light[data-template='vinax'] .vx-topbar:has(.vx-wordmark) .vx-langbtn-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  html.light[data-template='vinax'] .vx-avatar { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), 0 4px 10px -4px rgb(200 70 60 / 0.5); }
+
+  /* The tab bar floats: a rounded pane of glass, 12px in from the edges. */
+  html.light[data-template='vinax'] .vx-dock {
+    margin: 0 12px 8px;
+    border-radius: 30px;
+    background: var(--vx-sheen), var(--vx-mat-chrome);
+    box-shadow: var(--vx-rim), 0 18px 40px -18px rgb(70 36 28 / 0.55), 0 2px 8px -4px rgb(70 36 28 / 0.2);
+  }
+  html.light[data-template='vinax'] .vx-dock ul { padding: 6px; }
+  html.light[data-template='vinax'] .vx-dock-item {
+    min-height: 54px;
+    padding: 6px 2px 5px;
+    border-radius: 24px;
+    color: rgb(var(--ink-300));
+    transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
+  }
+  /* The current tab: a lit glass pill, its icon and label in the logo's orange. */
+  html.light[data-template='vinax'] .vx-dock-active,
+  html.light[data-template='vinax'] .vx-dock-active:hover {
+    background: var(--vx-sheen), rgb(255 255 255 / 0.62);
+    box-shadow: var(--vx-pill-rim), 0 6px 14px -8px rgb(200 70 60 / 0.45);
+    color: rgb(var(--ember-400));
+  }
+
+  /* The mini player: a glass capsule the width of the tab bar, above it. */
+  html.light[data-template='vinax'] .vx-bottom-chrome > [data-tour='player'] { padding: 0 12px 8px; }
+  html.light[data-template='vinax'] .np-mini { border-radius: 22px; }
+  html.light[data-template='vinax'] .np-mini > div:first-child { padding: 7px 7px 9px 8px; }
+  html.light[data-template='vinax'] :is(.np-mini-thumb, .np-mini-thumb img) { border-radius: 12px; }
+  html.light[data-template='vinax'] .np-mini-thumb { box-shadow: 0 6px 14px -6px rgb(70 36 28 / 0.55); }
+  html.light[data-template='vinax'] .np-mini .np-mini-play {
+    background: var(--vx-logo-fill);
+    color: rgb(0 0 0);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 6px 14px -6px rgb(200 70 60 / 0.6);
+  }
+  html.light[data-template='vinax'] .np-mini .np-mini-play svg { width: 22px; height: 22px; }
+  html.light[data-template='vinax'] .np-mini-progress { left: 18px; right: 18px; bottom: 3px; height: 3px; background: rgb(var(--ink-100) / 0.14); }
+  html.light[data-template='vinax'] .np-mini-progress > i { background: var(--vx-logo-fill); }
+
+  /* Fields: glass pills with dark type (Search's was a near-black slab). */
+  html.light[data-template='vinax'] .vx-browse .search-field input {
+    border-radius: var(--radius-pill);
+    background: rgb(255 255 255 / 0.55);
+    color: rgb(var(--ink-100));
+    font-weight: 600;
+    box-shadow: var(--vx-pill-rim), 0 10px 24px -16px rgb(70 36 28 / 0.5);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+  }
+  html.light[data-template='vinax'] .vx-browse .search-field input::placeholder { color: rgb(var(--ink-400)); font-weight: 600; }
+  html.light[data-template='vinax'] .vx-browse .search-field > svg:first-child,
+  html.light[data-template='vinax'] .vx-browse .search-field:focus-within > svg:first-child,
+  html.light[data-template='vinax'] .vx-browse .search-field .search-field-btn { color: rgb(var(--ink-100)); }
+  /* The glass field is its own layer (backdrop blur), so the icons sit above it. */
+  html.light[data-template='vinax'] .vx-browse .search-field > svg:first-child { z-index: 2; }
+  html.light[data-template='vinax'] .vx-workspace :is(input[type='text'], input[type='search'], .vx-set-input, .vx-set-select, .vx-lselect) {
+    border-color: transparent;
+    background-color: rgb(255 255 255 / 0.5);
+    box-shadow: var(--vx-pill-rim);
+  }
+
+  /* Cards: glass instead of flat off-white. */
+  html.light[data-template='vinax'] .vx-workspace :is(.vxh-feature, .vxh-shortcut, .vxh-free, .vxh-guide, .vx-lp-tile, .vx-set-rows, .glass-card, .search-trend-chip, .vx-account) {
+    border-color: rgb(255 255 255 / 0.5);
+    background-color: rgb(255 255 255 / 0.34);
+    background-image: var(--vx-sheen);
+    box-shadow: var(--vx-pill-rim);
+  }
+  html.light[data-template='vinax'] .vx-workspace .glass-card { box-shadow: var(--vx-rim), var(--vx-lift); }
+
+  /* The back button on a detail page. */
+  html.light[data-template='vinax'] .vx-backpill {
+    background: rgb(255 255 255 / 0.5);
+    box-shadow: var(--vx-pill-rim), 0 8px 18px -12px rgb(70 36 28 / 0.5);
+  }
+}
