@@ -57,11 +57,30 @@ html.light[data-template='vinax']:root {
 }
 
 /* ---------------------------------------------------------------- window */
-/* The meadow, fixed behind everything; it breathes very slowly. */
+/* The meadow, fixed behind everything; it breathes very slowly. While a song
+   plays it takes the song's colour: the artwork's colour (--art, set on
+   <html> by the player) is laid over it in the "color" blend, which keeps
+   the meadow's light and shade and swaps only its hue, so text keeps the
+   contrast the green has (glass.test.ts checks every hue). --vx-song is a
+   registered colour so the change fades instead of jumping; with nothing
+   playing it is transparent and the meadow is green. */
+@property --vx-song {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 0);
+}
+html.light[data-template='vinax'] {
+  --vx-song: rgb(0 0 0 / 0);
+  transition: --vx-song calc(var(--dur-page) * 3) var(--ease-standard);
+}
+html.light[data-template='vinax'][style*='--art:'] { --vx-song: rgb(var(--art) / 0.85); }
 html.light[data-template='vinax']:root .vx-shell { background: rgb(206 222 184); }
 html.light[data-template='vinax'] .vx-shell::before {
   inset: -5%;
-  background: url('/bg/meadow.svg') center 42% / cover no-repeat;
+  background:
+    linear-gradient(var(--vx-song), var(--vx-song)),
+    url('/bg/meadow.svg') center 42% / cover no-repeat;
+  background-blend-mode: color, normal;
 }
 @keyframes vx-meadow-breathe {
   from { transform: scale(1.02) translate3d(-1%, 0, 0); }

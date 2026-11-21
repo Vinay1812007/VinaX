@@ -44,7 +44,7 @@ This README is the only document in the repository. Version source of truth: `fr
 - **Friends.** Public profiles `/u/<handle>`, follows, Blend, shared playlists, and **Listen Together** jam rooms (a shared queue; mutual followers can **Join**).
 - **Discovery.** Discover 5, Your Week, the weekly VinaX chart, podcasts, release alerts, focus sounds, playlist import.
 - **Removed.** Badges, streaks, quiz, recap and song reactions. Old routes redirect, and old API calls answer empty or 410.
-- **Look and comfort.** Black-and-green look with System / Light / Dark theme; Light is frosted glass over a green meadow. Ideas & bugs (lands in the console Feedback inbox), shortcuts, accessibility options, Kid mode, tours. App language: English, Telugu, Hindi, Tamil, Kannada, Malayalam.
+- **Look and comfort.** Black-and-green look with System / Light / Dark theme; Light is frosted glass over a meadow in the playing song's colour. Ideas & bugs (lands in the console Feedback inbox), shortcuts, accessibility options, Kid mode, tours. App language: English, Telugu, Hindi, Tamil, Kannada, Malayalam.
 - **Android app.** Background playback, widgets, downloads, push, in-app updates. iPhone users install from Safari with Add to Home Screen.
 - **Privacy.** Works offline through the service worker. Anonymous usage statistics are on by default and can be switched off.
 
@@ -797,7 +797,7 @@ node scripts/eval-recs.mjs --baseline <commit>  # side by side; the commit must 
 
 ## App styles
 
-VinaX has one look, `vinax`: black and green with glass, in System, Light or Dark (`templates/vinax.css`). Light is "meadow glass" (`templates/vinax-light.css`, every rule starts with `html.light`): a blurred green meadow (`public/bg/meadow.svg`, drawn for VinaX) fixed behind the window, white frost panels (45% at the default Glass level, floored there; `glass.test.ts` checks text AA over the meadow's darkest green, so keep the SVG no darker), a white rim and soft green shadow, larger corners, mint glossy main buttons with deep green type, and a floating glass player bar. Older style ids map to it through `LEGACY_TEMPLATES` in `utils/theme.ts`. The `template` setting stays, so a second look can be added. From 768px the layout is a window bar plus three panels: Your Library, the page, and (from 1280px) Now playing. Phones get a tab bar (`DOCK_NAV`). User-facing copy never names another product.
+VinaX has one look, `vinax`: black and green with glass, in System, Light or Dark (`templates/vinax.css`). Light is "meadow glass" (`templates/vinax-light.css`, every rule starts with `html.light`): a blurred green meadow (`public/bg/meadow.svg`, drawn for VinaX) fixed behind the window that takes the playing song's colour (`--art` laid over it in the `color` blend through the registered `--vx-song`, so only the hue changes and it fades; green when nothing plays or the cover is grey), white frost panels (45% at the default Glass level, floored there; `glass.test.ts` checks text AA over the meadow's darkest green, so keep the SVG no darker), a white rim and soft green shadow, larger corners, mint glossy main buttons with deep green type, and a floating glass player bar. Older style ids map to it through `LEGACY_TEMPLATES` in `utils/theme.ts`. The `template` setting stays, so a second look can be added. From 768px the layout is a window bar plus three panels: Your Library, the page, and (from 1280px) Now playing. Phones get a tab bar (`DOCK_NAV`). User-facing copy never names another product.
 
 ### Adding an app style
 

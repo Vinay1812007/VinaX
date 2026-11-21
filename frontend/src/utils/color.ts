@@ -68,33 +68,55 @@ export function applyArtColor(rgbTriplet: string | null): void {
 const vibrantCache = new Map<string, string | null>();
 
 /**
- * Vibrancy-weighted color as an "R G B" triplet for rgb(var(--art) / a).
- * Saturated mid-luma pixels dominate; the result is lifted to a UI-safe
- * brightness.
+ * The artwork's main colour as an "R G B" triplet for rgb(var(--art) / a).
+ * 1.21: pixels vote for one of 12 hue families, weighted by saturation
+ * (mid-luma pixels count most); the strongest family (with half of each
+ * neighbour) wins and only its pixels are averaged. A plain average mixed
+ * opposite colours into grey: a blue sea on yellow sand came out grey-green.
+ * Near-grey artwork gives null (no colour). The result is lifted to a
+ * UI-safe brightness.
  */
+export function vibrantFromPixels(d: Uint8ClampedArray): string | null {
+  const BUCKETS = 12;
+  const sum = Array.from({ length: BUCKETS }, () => [0, 0, 0, 0]);
+  for (let i = 0; i < d.length; i += 4) {
+    const pr = d[i], pg = d[i + 1], pb = d[i + 2];
+    const max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
+    const sat = max - min;
+    if (sat < 12) continue;
+    const luma = 0.2126 * pr + 0.7152 * pg + 0.0722 * pb;
+    const wt = sat * (luma > 40 && luma < 215 ? 1 : 0.15);
+    let h = max === pr ? (pg - pb) / sat : max === pg ? 2 + (pb - pr) / sat : 4 + (pr - pg) / sat;
+    if (h < 0) h += 6;
+    const s = sum[Math.floor((h / 6) * BUCKETS) % BUCKETS];
+    s[0] += pr * wt; s[1] += pg * wt; s[2] += pb * wt; s[3] += wt;
+  }
+  const at = (k: number) => sum[(k + BUCKETS) % BUCKETS];
+  let best = -1, bestScore = 0;
+  for (let k = 0; k < BUCKETS; k++) {
+    const score = at(k)[3] + 0.5 * (at(k - 1)[3] + at(k + 1)[3]);
+    if (score > bestScore) { bestScore = score; best = k; }
+  }
+  if (best < 0 || bestScore < 1) return null;
+  let r = 0, g = 0, b = 0, w = 0;
+  for (const k of [best - 1, best, best + 1]) {
+    const s = at(k);
+    r += s[0]; g += s[1]; b += s[2]; w += s[3];
+  }
+  r /= w; g /= w; b /= w;
+  if (Math.max(r, g, b) - Math.min(r, g, b) < 24) return null;
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (luma < 92) {
+    const k = 92 / Math.max(luma, 1);
+    r = Math.min(255, r * k); g = Math.min(255, g * k); b = Math.min(255, b * k);
+  }
+  return `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`;
+}
+
 export function extractVibrantColor(url: string): Promise<string | null> {
   if (vibrantCache.has(url)) return Promise.resolve(vibrantCache.get(url) ?? null);
   return loadPixels(url, 24).then((d) => {
-    let out: string | null = null;
-    if (d) {
-      let r = 0, g = 0, b = 0, w = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        const pr = d[i], pg = d[i + 1], pb = d[i + 2];
-        const sat = Math.max(pr, pg, pb) - Math.min(pr, pg, pb);
-        const luma = 0.2126 * pr + 0.7152 * pg + 0.0722 * pb;
-        const wt = sat * (luma > 40 && luma < 215 ? 1 : 0.15);
-        r += pr * wt; g += pg * wt; b += pb * wt; w += wt;
-      }
-      if (w >= 1) {
-        r /= w; g /= w; b /= w;
-        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        if (luma < 92) {
-          const k = 92 / Math.max(luma, 1);
-          r = Math.min(255, r * k); g = Math.min(255, g * k); b = Math.min(255, b * k);
-        }
-        out = `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`;
-      }
-    }
+    const out = d ? vibrantFromPixels(d) : null;
     lruSet(vibrantCache, url, out);
     return out;
   });
