@@ -49,9 +49,15 @@ test('the model menu opens fully on a phone screen', async ({ page }) => {
   const list = page.getByRole('listbox', { name: 'Choose a model' });
   await expect(list).toBeVisible();
   await shot(page, 'model-menu');
+  // Measured once its opening slide has settled.
+  await list.locator('xpath=..').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   const box = (await list.locator('xpath=..').boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(360);
+  // 1.21.2 — and top to bottom: on the new-chat screen it used to open
+  // upward from the mid-page message box and start 262px above the screen.
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(780);
 });
 
 test('the Thinking menu opens on screen and its button stays clear of the model button', async ({ page }) => {
@@ -61,9 +67,12 @@ test('the Thinking menu opens on screen and its button stays clear of the model 
   const menu = page.getByRole('menu', { name: 'Thinking' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+  await menu.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   const m = (await menu.boundingBox())!;
   expect(m.x).toBeGreaterThanOrEqual(0);
   expect(m.x + m.width).toBeLessThanOrEqual(360);
+  expect(m.y).toBeGreaterThanOrEqual(0);
+  expect(m.y + m.height).toBeLessThanOrEqual(780);
   await menu.getByRole('menuitemradio', { name: /Extended/ }).click();
   await expect(page.getByRole('button', { name: /^Thinking: Extended/ })).toBeVisible();
   await shot(page, 'thinking-menu');

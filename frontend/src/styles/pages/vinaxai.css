@@ -2381,3 +2381,52 @@ html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-settings-body section {
   background: var(--vx-ai-sheen), rgb(255 255 255 / 0.55);
   box-shadow: var(--vx-ai-rim);
 }
+
+/* =========================================================================
+   1.21.2 — the model and Thinking menus always fit on screen.
+   They opened upward from the message box at up to 460–560px tall; on the
+   new-chat screen the box sits mid-page, so the top of the menu ran under
+   the header and off the screen (measured on a 360x800 phone: the model
+   list started 262px above the top, Thinking 26px; on a computer 69px).
+   - New chat, computer: they open downward, where the room is.
+   - Phone (≤640px): they open as a bottom sheet, full width, the page
+     dimmed behind (a tap outside closes them, as before).
+   ========================================================================= */
+.vx-ai-welcome :is(.vx-ai-picker-list, .vx-ai-thinkpick-menu) { top: calc(100% + 6px); bottom: auto; }
+.vx-ai-welcome .vx-ai-picker-list { --vx-ai-dy: -6px; transform-origin: top right; }
+.vx-ai-welcome .vx-ai-thinkpick-menu { --vx-ai-dy: -6px; transform-origin: top left; }
+
+@media (max-width: 640px) {
+  html[data-template] .vx-ai .vx-ai-pop:is(.vx-ai-picker-list, .vx-ai-thinkpick-menu),
+  html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-pop:is(.vx-ai-picker-list, .vx-ai-thinkpick-menu) {
+    position: fixed;
+    top: auto;
+    right: 8px;
+    bottom: calc(8px + var(--safe-bottom));
+    left: 8px;
+    z-index: 90;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: min(74dvh, 600px);
+    padding: 8px 6px;
+    border-radius: 20px;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45), 0 -12px 40px rgb(0 0 0 / 0.35);
+    --vx-ai-dy: 10px;
+    transform-origin: bottom center;
+  }
+}
+
+/* Narrow phones: the Thinking button is a steady 34px icon (its level is in
+   its name for screen readers, and it is tinted when Extended or Maximum is
+   on); the model name gives way with an ellipsis instead. It used to be
+   squeezed to a sliver showing "· M". */
+@media (max-width: 480px) {
+  .vx-ai .vx-ai-thinkpick { flex-shrink: 0 !important; }
+  .vx-ai .vx-ai-thinkpick-btn { position: relative; justify-content: center; width: 34px; padding: 0; }
+  .vx-ai .vx-ai-thinkpick-label,
+  .vx-ai .vx-ai-thinkpick-btn > svg:last-child { display: none; }
+  .vx-ai .vx-ai-thinkpick-dot { position: absolute; top: 5px; right: 5px; }
+  .vx-ai .vx-ai-picker { flex: 0 1 auto; min-width: 0; }
+  .vx-ai .vx-ai-picker-btn { max-width: 100%; }
+}
