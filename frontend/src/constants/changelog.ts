@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.1': {
+    title: 'Faster on phones, fixed for iPhone, and VinaX AI in glass',
+    changes: [
+      { type: 'fixed', text: 'Switching between Home, Search, Flow, Library and VinaX AI on a phone is instant now: the page shows the moment you tap, with no waiting for an animation.' },
+      { type: 'fixed', text: 'The app no longer lags: the background behind the glass is now still, so scrolling and the player stay smooth on computers and phones.' },
+      { type: 'fixed', text: 'iPhone: tapping a search box or any field no longer zooms the page in, and text no longer grows when the phone turns sideways.' },
+      { type: 'fixed', text: 'iPhone: Home\'s top bar fits the screen again, with the language button as a globe so your profile picture is always reachable.' },
+    ],
+  },
   '1.21.0': {
     title: 'A new light mode: liquid glass over a meadow in the VinaX colours',
     changes: [
