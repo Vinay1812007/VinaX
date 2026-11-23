@@ -39,11 +39,26 @@ const SOUNDTRACK = /\s*[([]?\s*(?:original\s+)?(?:motion\s+picture\s+)?soundtrac
 const SONGS_WORD = /\b(?:songs|hits|collection|jukebox|mix|vol\.?\s*\d+)\b/i;
 const shortName = (t: string): string => t.replace(/\s*[([][^)\]]*[)\]]/g, '').trim() || t;
 
+/**
+ * A compilation's name, not a film's: "World Music Day 2026", "Wedding Love
+ * Songs", "Romance Trending Now", "Arijit Singh Hits". A title names the singer
+ * and language instead.
+ */
+const COMPILATION = /\b(?:songs|hits|collection|jukebox|mix|mashup|vol\.?\s*\d+|trending|best of|top \d+|playlist|essentials|lofi|(?:19|20)\d\d)\b/i;
+
+/** "A, B and C"; past three names, "A, B, C and more". */
+function someSingers(artist: string): string {
+  const parts = artist.split(',').map((x) => x.trim()).filter(Boolean);
+  return parts.length > 3 ? `${parts.slice(0, 3).join(', ')} and more` : andList(parts.join(', '));
+}
+
 /** The film or album a song is from, for its title: never the song itself. */
 function songContext(name: string, album?: string | null): string | undefined {
   if (filmOf(name)) return undefined;
   const lower = name.toLowerCase();
-  const ctx = filmOf(album) ?? (album ? album.replace(FROM, '').replace(SOUNDTRACK, '').trim() : undefined);
+  // A "(From …)" album names its film; any other album counts only when it is not a compilation.
+  const plainAlbum = album ? album.replace(FROM, '').replace(SOUNDTRACK, '').trim() : undefined;
+  const ctx = filmOf(album) ?? (plainAlbum && !COMPILATION.test(plainAlbum) ? plainAlbum : undefined);
   // "÷ (Deluxe)" leaves "÷": a name with no word in it says nothing.
   return ctx && /[\p{L}\p{N}]{2}/u.test(ctx) && ctx.toLowerCase() !== lower && !lower.includes(ctx.toLowerCase()) ? ctx : undefined;
 }
@@ -77,7 +92,10 @@ export function songTitle(name: string, album?: string | null, artist?: string |
 export function fitDesc(sentences: Array<string | string[] | false | undefined | null>, must = 2): string {
   const list = sentences.filter((s): s is string | string[] => !!s && s.length > 0);
   const first = (s: string | string[]) => (Array.isArray(s) ? s[0] : s);
-  let out = clampDesc(list.slice(0, must).map(first).join(' '));
+  // When the required sentences run long, the opening one ("Listen to … online.") goes before anything is cut.
+  const head = list.slice(0, must).map(first).join(' ');
+  const rest = list.slice(1, must).map(first).join(' ');
+  let out = head.length > 160 && rest && rest.length <= 160 ? rest : clampDesc(head);
   for (const s of list.slice(must)) {
     const fit = (Array.isArray(s) ? s : [s]).find((x) => x && `${out} ${x}`.length <= 160);
     if (fit) out = `${out} ${fit}`;
@@ -94,7 +112,7 @@ export function songDesc(
   duration?: number | null,
 ): string {
   const L = lang ? cap(lang) : '';
-  const people = artist ? andList(artist) : '';
+  const people = artist ? someSingers(artist) : '';
   const al = album ? album.replace(SOUNDTRACK, '').trim() || album : undefined;
   const own = !al || al.toLowerCase() === name.toLowerCase();
   return fitDesc([

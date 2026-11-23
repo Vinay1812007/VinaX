@@ -407,6 +407,16 @@ describe('SEO 2026-11-23 — song pages are worded like JioSaavn\'s', () => {
   it('says the language when the album is the song itself, and skips an album name with no word in it', () => {
     expect(songTitle('Aaho Raja', 'Aaho Raja', 'Anirudh Ravichander, Arivu', 'tamil')).toBe('Aaho Raja - Song by Anirudh Ravichander and Arivu | Tamil Song | VinaX');
     expect(songTitle('Shape of You', '÷', 'Ed Sheeran', 'english')).toBe('Shape of You - Song by Ed Sheeran | English Song | VinaX');
+    // A compilation is not a film: the singer and language stay (live pages, 2026-11-23).
+    expect(songTitle('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe('Phir Bhi Tumko Chaahunga - Song by Manoj Muntashir and Mithoon | VinaX');
+    expect(songTitle('Apna Bana Le', 'Wedding Love Songs', 'Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh', 'hindi')).toBe('Apna Bana Le - Song by Amitabh Bhattacharya and Sachin-Jigar | VinaX');
+    expect(songTitle('Ve Maahi', 'Romance Trending Now', 'Arijit Singh, Asees Kaur', 'hindi')).toBe('Ve Maahi - Song by Arijit Singh and Asees Kaur | Hindi Song | VinaX');
+    expect(songDesc('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe(
+      'Listen to Phir Bhi Tumko Chaahunga online. Phir Bhi Tumko Chaahunga is a Hindi language song and is sung by Manoj Muntashir, Mithoon, Arijit Singh and more.',
+    );
+    expect(songDesc('Pal Pal Dil Ke Paas- Title Track', 'World Music Day 2026', 'Siddharth-Garima, Arijit Singh, Parampara Thakur, Sachet Tandon', 'hindi', 2019, 200)).toBe(
+      'Pal Pal Dil Ke Paas- Title Track is a Hindi language song and is sung by Siddharth-Garima, Arijit Singh, Parampara Thakur and more.',
+    ); // too long with "Listen to … online.", so that sentence goes, not the singers
   });
   it('stays within 70 characters', () => {
     expect(songTitle('Chandaniya (From "Master of Melody") (feat. Ashish Chanchlani and Ruhani Sharma)', 'Master of Melody', 'Sachet Tandon', 'hindi')).toBe('Chandaniya - Song by Sachet Tandon | Master of Melody | VinaX'); // brackets go first
