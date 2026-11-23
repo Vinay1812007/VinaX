@@ -62,6 +62,33 @@ describe('page transitions', () => {
     expect(calls[0][1]?.viewTransition).toBeUndefined();
   });
 
+  it('skips phones and tablets: a tab tap shows the new page at once (1.21.1)', async () => {
+    const { router, calls } = fakeRouter('/library');
+    const queries: string[] = [];
+    const prev = window.matchMedia;
+    window.matchMedia = ((q: string) => { queries.push(q); return { matches: q === '(pointer: coarse), (max-width: 1023px)', media: q } as MediaQueryList; }) as typeof window.matchMedia;
+    try {
+      await router.navigate('/search');
+      expect(calls[0][1]?.viewTransition).toBeUndefined();
+      expect(document.documentElement.classList.contains('vx-vt-on')).toBe(false);
+      expect(queries).toContain('(pointer: coarse), (max-width: 1023px)');
+    } finally {
+      window.matchMedia = prev;
+    }
+  });
+
+  it('keeps the transition on a computer screen', async () => {
+    const { router, calls } = fakeRouter('/library');
+    const prev = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: false, media: q }) as MediaQueryList) as typeof window.matchMedia;
+    try {
+      await router.navigate('/search');
+      expect(calls[0][1]).toMatchObject({ viewTransition: true });
+    } finally {
+      window.matchMedia = prev;
+    }
+  });
+
   it('leaves the router alone where the browser has no View Transitions', () => {
     delete (document as unknown as Record<string, unknown>).startViewTransition;
     const router = { state: { location: { pathname: '/' } }, navigate: vi.fn() };

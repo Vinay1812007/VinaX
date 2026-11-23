@@ -23,9 +23,21 @@ function section(path: string): string {
  * inside it from blurring what is behind.
  *
  * Skipped for replace navigations (redirects, filters), moves inside one
- * screen (search queries, chat threads), reduced motion, and browsers without
- * the API — those keep the CSS page entrance.
+ * screen (search queries, chat threads), reduced motion, phones and tablets,
+ * and browsers without the API — those keep the CSS page entrance.
  */
+/**
+ * 1.21.1 — phones and tablets (a touch screen, or narrower than 1024px) skip
+ * the transition and keep the light CSS entrance. Measured with a 4x CPU
+ * throttle on a 390px screen: the new page was only usable when the
+ * transition finished, 330–470 ms after each tab tap, with taps blocked
+ * meanwhile; without it the page is on screen in 36–144 ms.
+ */
+const COMPACT = '(pointer: coarse), (max-width: 1023px)';
+function compactScreen(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(COMPACT).matches;
+}
+
 export function enablePageTransitions(router: AppRouter): void {
   if (typeof document === 'undefined' || typeof (document as { startViewTransition?: unknown }).startViewTransition !== 'function') return;
   const root = document.documentElement;
@@ -40,11 +52,11 @@ export function enablePageTransitions(router: AppRouter): void {
   };
   // Back and Forward: react-router replays the transition on its own.
   window.addEventListener('popstate', () => {
-    if (!reducedMotion()) arm();
+    if (!reducedMotion() && !compactScreen()) arm();
   });
   const navigate = router.navigate;
   router.navigate = ((to: Parameters<AppRouter['navigate']>[0], opts?: Parameters<AppRouter['navigate']>[1]) => {
-    if (typeof to === 'number' || opts?.replace || reducedMotion()) return navigate(to, opts);
+    if (typeof to === 'number' || opts?.replace || reducedMotion() || compactScreen()) return navigate(to, opts);
     const here = router.state.location.pathname;
     let next = here;
     try {
