@@ -137,6 +137,24 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose,
   const read = voice?.voices.includes(prefs.voice) ? prefs.voice : voice?.voices[0];
   const live = voice?.liveVoices.includes(prefs.liveVoice) ? prefs.liveVoice : voice?.liveVoices[0];
   const liveModels = voice?.liveModels ?? [];
+  // 1.21.2 — the tab of the section being read is marked (the tabs were only
+  // jump links, so nothing showed where you were); it follows the scroll.
+  const body = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<SettingsSection>('general');
+  const onBodyScroll = () => {
+    const el = body.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + 24;
+    let current: SettingsSection = 'general';
+    for (const sec of el.querySelectorAll<HTMLElement>('section[id^="vx-ai-set-"]')) {
+      if (sec.getBoundingClientRect().top <= top) current = sec.id.replace('vx-ai-set-', '') as SettingsSection;
+    }
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+      const last = el.querySelectorAll<HTMLElement>('section[id^="vx-ai-set-"]');
+      if (last.length) current = last[last.length - 1].id.replace('vx-ai-set-', '') as SettingsSection;
+    }
+    setActiveTab((prev) => (prev === current ? prev : current));
+  };
   const liveModel = liveModels.some((m) => m.id === prefs.liveModel) ? prefs.liveModel : 'auto';
   const hasVoice = !!voice && (voice.dictation || voice.readAloud || voice.live);
 
@@ -167,10 +185,22 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose,
         </header>
         <nav className="vx-ai-settings-nav" aria-label="Settings sections">
           {([['general', 'General'], ['personal', 'Personalisation'], ['memory', 'Memory'], ['chat', 'Chat'], ...(hasVoice ? [['voice', 'Voice']] : []), ['chats', 'Your chats']] as Array<[SettingsSection, string]>).map(([id, label]) => (
-            <button key={id} type="button" className="vx-ai-chip" onClick={() => box.current?.querySelector<HTMLElement>(`#vx-ai-set-${id}`)?.scrollIntoView({ block: 'start' })}>{label}</button>
+            <button
+              key={id}
+              type="button"
+              className="vx-ai-chip"
+              aria-current={activeTab === id ? 'true' : undefined}
+              onClick={(e) => {
+                setActiveTab(id);
+                e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                box.current?.querySelector<HTMLElement>(`#vx-ai-set-${id}`)?.scrollIntoView({ block: 'start' });
+              }}
+            >
+              {label}
+            </button>
           ))}
         </nav>
-        <div className="vx-ai-settings-body">
+        <div className="vx-ai-settings-body" ref={body} onScroll={onBodyScroll}>
           <section id="vx-ai-set-general" aria-labelledby="vx-ai-set-general-h">
             <h3 id="vx-ai-set-general-h">General</h3>
             <Field id="theme" label="Appearance" hint="The same theme as the rest of VinaX.">

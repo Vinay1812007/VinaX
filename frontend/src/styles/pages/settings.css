@@ -662,3 +662,97 @@
   .vx-settings *, .vx-settings *::before, .vx-settings *::after { transition: none !important; }
 }
 html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, html.reduce-motion .vx-settings *::after { transition: none !important; }
+
+/* =========================================================================
+   1.21.2 — a cleaner, more professional page.
+   - Left-aligned like the other pages, the section index level with the
+     page title (it was centred, with the index pushed 186px down, which
+     left a large empty gutter on a wide window).
+   - Plain cards with a hairline edge instead of the corner glow; calmer
+     section titles; one outlined button style; the account chip and its
+     actions on one line.
+   ========================================================================= */
+@media (min-width: 1024px) {
+  .vx-settings {
+    grid-template-columns: 220px minmax(0, 780px);
+    gap: 48px;
+    max-width: 1048px;
+    margin: 0;
+    padding-top: 8px;
+  }
+  .vx-set-index { margin-top: 0; top: calc(var(--vx-topbar-h) + 12px); }
+}
+.vx-set-index { gap: 2px; padding: 4px; }
+.vx-set-index-item {
+  position: relative;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+.vx-set-index-item[aria-current='true'] { background: var(--set-fill-hover); }
+.vx-set-index-item[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ember-500));
+}
+
+/* Search: a quieter, rounded field. */
+.vx-set-search input { height: 44px; border-radius: var(--radius-md); background: var(--set-card); font-size: 14.5px; }
+
+/* Section heads. */
+.vx-set-section { margin-bottom: 44px; }
+.vx-set-head { margin-bottom: 12px; }
+.vx-set-title { font-size: 20px; font-weight: 750; letter-spacing: -0.02em; }
+.vx-set-lede { margin-top: 4px; font-size: 13.5px; max-width: 64ch; }
+
+/* The section card: a plain panel with a hairline edge. */
+.vx-set-section > .vx-set-rows {
+  padding: 4px 22px;
+  border: 1px solid var(--set-line);
+  border-radius: var(--radius-lg);
+  background: var(--set-card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+@media (max-width: 767px) {
+  .vx-set-section > .vx-set-rows { padding: 2px 16px; border-radius: var(--radius-md); }
+}
+.vx-set-sub { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Rows. */
+.vx-set-row { min-height: 60px; padding: 14px 0; }
+.vx-set-label { font-size: 14.5px; font-weight: 600; }
+.vx-set-hint { font-size: 13px; }
+
+/* One button style: an outlined pill; the accent and danger variants keep
+   their meaning. */
+.vx-set-btn {
+  min-height: 34px;
+  padding: 0 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.18);
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.vx-set-btn:hover { background: var(--set-fill); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.28); }
+.vx-set-btn.is-danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vx-danger) 45%, transparent); }
+.vx-set-btn.is-danger:hover { background: color-mix(in srgb, var(--vx-danger) 10%, transparent); }
+.vx-set-btn.is-accent { box-shadow: none; }
+
+/* Fields. */
+.vx-set-input, .vx-set-select { height: 38px; border-radius: var(--radius-sm); }
+.vx-set-select { border-radius: var(--radius-pill); }
+
+/* Account: the signed-in chip and its actions on one line under the label. */
+.vx-set-row.is-stack:has(.vx-account) { display: block; }
+.vx-set-row:has(.vx-account) .vx-set-control { flex-wrap: wrap; width: 100%; margin-top: 14px; gap: 10px; }
+.vx-set-row:has(.vx-account) .vx-set-control > :has(.vx-account) { flex: 1 1 320px; min-width: 0; }
+.vx-set-row:has(.vx-account) .vx-set-control > .mt-2 { margin-top: 0; }
+.vx-set-row:has(.vx-account) .vx-account { max-width: none; padding: 10px 12px; border: 1px solid var(--set-line); background: var(--set-inset); }
+.vx-set-row:has(.vx-account) .vx-account-out { background: transparent; box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.18); }
