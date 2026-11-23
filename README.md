@@ -917,7 +917,8 @@ The owner's console delete removes a person's device row, events, memberships, a
   - A build with fewer than 300 entity pages (`ENTITY_MIN_PAGES`) fails.
   - A build that would drop more than 20% of live pages fails.
   - The build reads `musicapi.vinaxmusic.online` first.
-- **Nightly growth:** `seo-pages.yml` adds up to 3,000 pages a night, up to 18,800. The Pages Free plan allows 20,000 files. Refresh `scripts/seo-wanted.txt` by hand.
+- **Nightly growth:** `seo-pages.yml` adds up to 3,000 pages a night, up to 18,800, and re-renders the 4,000 oldest. The Pages Free plan allows 20,000 files. Refresh `scripts/seo-wanted.txt` by hand.
+- **Wording (JioSaavn style, 2026-11-23):** song titles read `Raavana - Song by Divya Kumar | Jai Lava Kusa | VinaX`, and descriptions read "Raavana is a Telugu language song and is sung by Divya Kumar. Raavana, from the album Jai Lava Kusa, was released in the year 2017." A song page also has a Track details list (Song, Movie, Singer, Music, Lyrics, Duration), FAQs with `FAQPage` JSON-LD, and a composer and lyricist (`recordingOf`). The rules live in `render.ts` (`songTitle`, `songDesc`, `albumDesc`) and in the app's copy, `src/utils/songSeo.ts`: change both. Titles for Trending, New Releases, Top Songs, Charts and the language pages live in `src/constants/seoPages.ts`, which both the prerender and the app read. Every title stays within 70 characters and every description within 160.
 - **Redirects:** host redirects are Cloudflare Redirect Rules, not `_redirects`. IndexNow runs every 6 h. Song ids are dashed (`<slug>-<id>`).
 - **Owner checklist:** submit `https://www.vinaxmusic.online/sitemap.xml` and review the URLs that are not indexed.
 

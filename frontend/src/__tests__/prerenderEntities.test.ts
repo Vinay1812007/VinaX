@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, wantedPages, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, wantedPages, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, rowFrom, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -108,18 +108,34 @@ describe('SEO 2026-11 — links lead only to built pages, and the chart pages li
     expect(pruneEntityLinks(html, built)).toBe('<li><a href="/album/a-1">A</a></li><li><a href="/song/real-title-X2">S</a></li><li>Nobody</li><a href="/telugu-songs/">Telugu</a>');
   });
 
-  it('builds song lists for Charts, Top Songs, Trending and each language page', () => {
+  it('builds song lists for Charts, Top Songs, Trending, New Releases and each language page', () => {
     const rows = [
-      { path: '/song/a-1', lang: 'telugu', title: 'A & B', artist: 'Sid', year: 2026, plays: 9 },
-      { path: '/song/b-2', lang: 'hindi', title: 'Old', artist: '', year: 2001, plays: 99 },
+      { path: '/song/a-1', lang: 'telugu', title: 'A & B', artist: 'Sid', album: 'Film', year: 2026, plays: 9 },
+      { path: '/song/b-2', lang: 'hindi', title: 'Old', artist: '', album: 'Old', year: 2001, plays: 99 },
+      { path: '/song/c-3', lang: 'telugu', title: 'C (From "Film")', artist: 'Sid', album: 'C (From "Film")', year: 2025, plays: 5 },
+      { path: '/song/d-4', lang: 'telugu', title: 'D', artist: 'Ravi', album: 'Film', year: 2026, plays: 4 },
     ];
     const out = songSections(rows, 2026);
-    expect(Object.keys(out).sort()).toEqual(['/charts', '/hindi-songs', '/telugu-songs', '/top-songs', '/trending']);
-    expect(out['/charts']).toContain('<h2>Top Telugu songs</h2><ol><li><a href="/song/a-1">A &amp; B</a> — Sid</li></ol>');
+    expect(Object.keys(out).sort()).toEqual(['/charts', '/hindi-songs', '/new-releases', '/telugu-songs', '/top-songs', '/trending']);
+    // Each row names its singer and film, as JioSaavn's lists do; never the song itself as its film.
+    expect(out['/charts']).toContain('<h2>Top 10 Telugu songs</h2><ol><li><a href="/song/a-1">A &amp; B</a> — Sid · Film</li><li><a href="/song/c-3">C (From &quot;Film&quot;)</a> — Sid</li>');
     expect(out['/top-songs'].indexOf('/song/b-2')).toBeLessThan(out['/top-songs'].indexOf('/song/a-1'));
     expect(out['/trending']).toContain('/song/a-1');
     expect(out['/trending']).not.toContain('/song/b-2');
+    expect(out['/trending']).toContain('<h2>Trending Telugu songs</h2>');
+    expect(out['/new-releases']).toContain('<h2>New songs of 2025 and 2026</h2>');
+    expect(out['/new-releases']).not.toContain('/song/b-2');
+    expect(out['/telugu-songs']).toContain('<h2>New Telugu songs of 2025 and 2026</h2>');
+    expect(out['/top-songs']).toContain('"@type":"ItemList"');
+    expect(out['/top-songs']).toContain('"url":"https://www.vinaxmusic.online/song/b-2"');
     expect(songSections([])).toEqual({});
+  });
+
+  it('keeps a song name from closing the list\'s JSON-LD', () => {
+    const out = songSections([{ path: '/song/x-1', lang: 'hindi', title: '</script><b>', artist: '', album: '', year: 2026, plays: 1 }], 2026);
+    expect(out['/top-songs']).not.toContain('</script><b>');
+    expect(rowFrom({ title: 'Raavana', album: 'Jai Lava Kusa' })).toBe('Jai Lava Kusa');
+    expect(rowFrom({ title: 'Raavana', album: 'Raavana' })).toBe('');
   });
 
   it('puts a section just before the site nav, and leaves a page without one alone', () => {

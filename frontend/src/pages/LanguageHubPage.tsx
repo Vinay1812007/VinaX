@@ -16,6 +16,7 @@ import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState, InlineError } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
+import { languagePageSeo } from '@/constants/seoPages';
 import type { Song } from '@/types/music';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Shelf } from '@/components/Shelf';
@@ -88,11 +89,9 @@ export default function LanguageHubPage({ language }: { language: string }) {
   const headline = [...(trending.data ?? []), ...(fresh.data ?? []).filter((s) => !(trending.data ?? []).some((t) => t.id === s.id))];
   const playQueue = usePlayerStore((s) => s.playQueue);
 
-  usePageMeta({
-    title: `${label} Songs — Latest Hits & Trending`,
-    description: `Stream the latest ${label} songs free on VinaX — trending hits, new releases and evergreen favourites. Private by design.`,
-    canonicalPath: `/${language}-songs`,
-  });
+  // SEO 2026-11-23: the prerendered page's words (constants/seoPages.ts).
+  const seo = languagePageSeo(language);
+  usePageMeta({ title: seo.t, description: seo.d, canonicalPath: `/${language}-songs/` });
   useJsonLd(
     (trending.data?.length ?? 0) > 0 && {
       '@context': 'https://schema.org',

@@ -11,6 +11,7 @@ import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
+import { LIST_PAGE_SEO } from '@/constants/seoPages';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ChevronRightIcon, ShuffleIcon, WaveformIcon } from '@/components/Icons';
 import { EntityAction, EntityHeader, EntityMeta, PlayFab, songsLabel } from '@/components/EntityHeader';
@@ -47,8 +48,9 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
   top: {
     path: '/top-songs',
     h1: 'Top songs',
-    title: 'Top Songs — Most Popular Right Now',
-    desc: `The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.`,
+    // SEO 2026-11-23: the prerendered page's words (constants/seoPages.ts).
+    title: LIST_PAGE_SEO['/top-songs'].t,
+    desc: LIST_PAGE_SEO['/top-songs'].d,
     seed: `top hit songs india ${YEAR}`,
     listName: 'Top Songs on VinaX',
     feed: 'vinax',
@@ -56,8 +58,8 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
   trending: {
     path: '/trending',
     h1: 'Trending songs',
-    title: 'Trending Songs This Week',
-    desc: `Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.`,
+    title: LIST_PAGE_SEO['/trending'].t,
+    desc: LIST_PAGE_SEO['/trending'].d,
     seed: `trending songs india this week ${YEAR}`,
     listName: 'Trending Songs on VinaX',
     feed: 'trending',
@@ -123,7 +125,7 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
   const songs = fromFeed ? feedSongs : flattenSongPages(songsQ.data?.pages);
   const playQueue = usePlayerStore((s) => s.playQueue);
 
-  usePageMeta({ title: cfg.title, description: cfg.desc, canonicalPath: cfg.path });
+  usePageMeta({ title: cfg.title, description: cfg.desc, canonicalPath: `${cfg.path}/` });
   useJsonLd(
     songs.length > 0 && {
       '@context': 'https://schema.org',

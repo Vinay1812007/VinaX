@@ -2,7 +2,7 @@
 #
 # Every night (02:00 India time) this builds the website with its page store
 # (frontend/scripts/prerender-entities.mjs) restored from the Actions cache,
-# rebuilds the charts' pages, re-renders the 1,000 oldest pages, adds up to
+# rebuilds the charts' pages, re-renders the 4,000 oldest pages, adds up to
 # 3,000 new pages that the others link to, and deploys to Cloudflare Pages.
 # The site grows until ENTITY_MAX_TOTAL (18,800 on the Free plan, whose limit
 # is 20,000 files per site; the app itself is about 610 files, so this leaves
@@ -104,7 +104,10 @@ jobs:
           ENTITY_CORPUS_DIR: .seo-corpus
           ENTITY_MAX_TOTAL: '18800'
           ENTITY_MAX_LINKED: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.new_pages) || '3000' }}
-          ENTITY_REFRESH: '1000'
+          # 4,000 a night (was 1,000): the site is at its 18,800-page cap, so no new
+          # pages are added and the time goes to re-rendering; a new page wording
+          # (2026-11-23, JioSaavn-style) reaches every page in about five nights.
+          ENTITY_REFRESH: '4000'
           ENTITY_BUDGET_MS: '2400000'
         run: npm run build
 

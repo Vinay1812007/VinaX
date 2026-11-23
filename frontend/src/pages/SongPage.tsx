@@ -32,7 +32,7 @@ export default function SongPage() {
   usePageMeta({
     // The prerendered page's words (utils/songSeo.ts), so the tab and search results agree.
     title: song ? songTitle(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language) : undefined,
-    description: song ? songDesc(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language) : undefined,
+    description: song ? songDesc(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language, song.year, song.duration) : undefined,
     image: song ? bestImage(song.images, 500) : undefined,
     type: 'music.song',
     canonicalPath,

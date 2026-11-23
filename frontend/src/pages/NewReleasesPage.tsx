@@ -1,4 +1,6 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePageMeta } from '@/hooks/usePageMeta';
+import { LIST_PAGE_SEO } from '@/constants/seoPages';
 import { PageHeader } from '@/components/PageHeader';
 import { MediaCard } from '@/components/MediaCard';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -49,6 +51,8 @@ function FallbackSongs({ language }: { language: string }) {
  */
 export default function NewReleasesPage() {
   usePageTitle('New Releases');
+  // SEO 2026-11-23: the prerendered page's title and description (constants/seoPages.ts); usePageTitle keeps the short name for the top bar.
+  usePageMeta({ title: LIST_PAGE_SEO['/new-releases'].t, description: LIST_PAGE_SEO['/new-releases'].d, canonicalPath: '/new-releases/' });
   const langs = usePinnedFeedLangs();
   const feed = useNewReleasesPage();
   const albums = feed.data?.albums ?? [];

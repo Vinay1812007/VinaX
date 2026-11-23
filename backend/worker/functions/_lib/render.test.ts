@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { albumDesc, albumTitle, artistDesc, artistTitle, entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
+import { albumDesc, albumTitle, artistDesc, artistTitle, entityPage, fitDesc, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -37,7 +37,7 @@ describe('renderEntity — song', () => {
     const res = await renderEntity('song', 'chukkala-chunni-abc123', req(), env());
     const html = await res.text();
 
-    expect(html).toContain('<title>Chukkala Chunni - Sr Kalyanamandapam | Telugu Song | VinaX</title>');
+    expect(html).toContain('<title>Chukkala Chunni - Song by Anurag Kulkarni | Sr Kalyanamandapam | VinaX</title>');
     expect(html).toContain('Telugu song');
     // The share-card bug: the shell's generic og:title used to survive ahead
     // of ours — crawlers take the FIRST, so shares showed the site card.
@@ -64,7 +64,7 @@ describe('renderEntity — song', () => {
     });
     const res = await renderEntity('song', 'abc123', req(), env());
     const html = await res.text();
-    expect(html).toContain('<title>Chukkala Chunni - Sr Kalyanamandapam | Telugu Song | VinaX</title>');
+    expect(html).toContain('<title>Chukkala Chunni - Song by Anurag Kulkarni | Sr Kalyanamandapam | VinaX</title>');
   });
 
   it('serves the untouched shell when every mirror is down (fail-soft)', async () => {
@@ -273,9 +273,16 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     vi.stubGlobal('fetch', catalog);
     const html = await (await renderEntity('song', 'chukkala-chunni-abc123', req(), env())).text();
     const main = mainOf(html);
-    expect(main).toContain('sung by Anurag Kulkarni with music by Chaitan Bharadwaj and lyrics by Krishna Kanth');
-    expect(main).toContain('released on 6 August 2021 by Aditya Music');
-    expect(main).toContain('<dt>Lyrics</dt><dd>Krishna Kanth</dd>');
+    // SEO 2026-11-23 — JioSaavn's words, then Track details and the questions people ask.
+    expect(main).toContain('Chukkala Chunni is a Telugu language song and is sung by Anurag Kulkarni.');
+    expect(main).toContain('Chukkala Chunni, from the album Sr Kalyanamandapam, was released on 6 August 2021 under the Aditya Music label.');
+    expect(main).toContain('The duration of the song is 4:05.');
+    expect(main).toContain('The music is composed by Chaitan Bharadwaj and the lyrics are written by Krishna Kanth.');
+    expect(main).toContain('<h2>Track details</h2><ul><li><strong>Song:</strong> Chukkala Chunni</li><li><strong>Album:</strong> Sr Kalyanamandapam</li><li><strong>Singer:</strong> Anurag Kulkarni</li>');
+    expect(main).toContain('<li><strong>Lyrics:</strong> Krishna Kanth</li>');
+    expect(main).toContain('<h3>Who sang Chukkala Chunni?</h3><p>Chukkala Chunni is sung by Anurag Kulkarni.</p>');
+    expect(html).toContain('"@type":"FAQPage"');
+    expect(html).toContain('"recordingOf":{"@type":"MusicComposition","name":"Chukkala Chunni","composer":[{"@type":"Person","name":"Chaitan Bharadwaj"}],"lyricist":[{"@type":"Person","name":"Krishna Kanth"}]}');
     expect(main).toContain('More from Sr Kalyanamandapam');
     expect(main).toContain('href="/song/choosale-kallaraa-s2"');
     expect(main).not.toContain('href="/song/chukkala-chunni-abc123"'); // not listed under itself
@@ -299,7 +306,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
       String(input).includes('/songs/') ? Promise.resolve(Response.json(raw)) : Promise.resolve(new Response('', { status: 500 })));
     const html = await (await renderEntity('song', 'abc123', req(), env())).text();
     expect(html).toContain('property="music:duration" content="245"');
-    expect(mainOf(html)).toContain('with music by Chaitan Bharadwaj');
+    expect(mainOf(html)).toContain('The music is composed by Chaitan Bharadwaj.');
     expect(mainOf(html)).toContain('href="/album/sr-kalyanamandapam-al9"');
   });
 
@@ -317,7 +324,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
       const pending = renderEntity('song', 'abc123', req(), env());
       await vi.advanceTimersByTimeAsync(10_000);
       const html = await (await pending).text();
-      expect(mainOf(html)).toContain('Song details');
+      expect(mainOf(html)).toContain('Track details');
       expect(mainOf(html)).not.toContain('More from');
     } finally {
       vi.useRealTimers();
@@ -387,26 +394,41 @@ describe('songIdOf — song ids may contain a dash', () => {
   });
 });
 
-describe('SEO 2026-11 — song titles say the film, as people search for it', () => {
-  it('puts the film or album after the song', () => {
-    expect(songTitle('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Gangs Of Godavari | Telugu Song | VinaX');
+describe('SEO 2026-11-23 — song pages are worded like JioSaavn\'s', () => {
+  it('names the song, who sang it and its film', () => {
+    expect(songTitle('Raavana', 'Jai Lava Kusa', 'Divya Kumar', 'telugu')).toBe('Raavana - Song by Divya Kumar | Jai Lava Kusa | VinaX');
+    expect(songTitle('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Song by Anurag Kulkarni | Gangs Of Godavari | VinaX');
   });
   it('reads the film out of a "(From …)" album, and keeps a name that already says it', () => {
-    expect(songTitle('Suttamla Soosi - Official Remix', 'Suttamla Soosi - Official Remix (From "Gangs Of Godavari")', 'Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Official Remix - Gangs Of Godavari | VinaX'); // 72 characters with the language, so it is dropped
-    expect(songTitle('Mahi (From "Deewana")', 'Evergreen Bangla Romantic Movie Songs', 'Prasenjit Mallick', 'bengali')).toBe('Mahi (From "Deewana") | Bengali Song | VinaX');
+    expect(songTitle('Suttamla Soosi - Official Remix', 'Suttamla Soosi - Official Remix (From "Gangs Of Godavari")', 'Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Official Remix | Gangs Of Godavari | VinaX');
+    expect(songTitle('Mahi (From "Deewana")', 'Evergreen Bangla Romantic Movie Songs', 'Prasenjit Mallick', 'bengali')).toBe('Mahi (From "Deewana") - Song by Prasenjit Mallick | VinaX') // 71 with the language;
+    expect(songTitle('Coolie Disco (From "Coolie")', 'Coolie Disco (From "Coolie")', 'Anirudh Ravichander', 'tamil')).toBe('Coolie Disco (From "Coolie") - Song by Anirudh Ravichander | VinaX'); // the singer stays, the language goes
   });
-  it('names the lead singer when the album is the song itself', () => {
-    expect(songTitle('Aaho Raja', 'Aaho Raja', 'Anirudh Ravichander, Arivu', 'tamil')).toBe('Aaho Raja - Anirudh Ravichander | Tamil Song | VinaX');
+  it('says the language when the album is the song itself, and skips an album name with no word in it', () => {
+    expect(songTitle('Aaho Raja', 'Aaho Raja', 'Anirudh Ravichander, Arivu', 'tamil')).toBe('Aaho Raja - Song by Anirudh Ravichander and Arivu | Tamil Song | VinaX');
+    expect(songTitle('Shape of You', '÷', 'Ed Sheeran', 'english')).toBe('Shape of You - Song by Ed Sheeran | English Song | VinaX');
   });
-  it('drops the language when the title would run long', () => {
+  it('stays within 70 characters', () => {
+    expect(songTitle('Chandaniya (From "Master of Melody") (feat. Ashish Chanchlani and Ruhani Sharma)', 'Master of Melody', 'Sachet Tandon', 'hindi')).toBe('Chandaniya - Song by Sachet Tandon | Master of Melody | VinaX'); // brackets go first
+    expect(songTitle('Bikhre Khwab Hindi Song Sad Love Song Heartbreak Song Broken Heart Lofi Version 2026', 'Bikhre Khwab Hindi Song Sad Love Song Heartbreak Song Broken Heart Lofi Version 2026', 'A', 'hindi')).toBe('Bikhre Khwab Hindi Song Sad Love Song Heartbreak Song… | VinaX');
+    expect(albumTitle('Sita Ram Live Soulful Devotional Bhajan At Shradhanjali Prayer Meet Vol 1 Collection', '2024', 'hindi', false).length).toBeLessThanOrEqual(70);
     const t = songTitle('Shiv Rudrashtakam Stotram (Namami Shamishaan Nirvana Roopam)', 'Shiv Bhajans Collection Vol 2', 'Anup Jalota', 'sanskrit');
-    expect(t).toBe('Shiv Rudrashtakam Stotram (Namami Shamishaan Nirvana Roopam) - Shiv Bhajans Collection Vol 2 | VinaX');
+    expect(t).toBe('Shiv Rudrashtakam Stotram (Namami Shamishaan Nirvana Roopam) | VinaX');
   });
-  it('describes the song the way search results do', () => {
-    expect(songDesc('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe(
-      'Listen to Suttamla Soosi online. Suttamla Soosi is a Telugu song from Gangs Of Godavari, sung by Anurag Kulkarni and Yuvan Shankar Raja. Stream it free on…',
+  it('describes the song as JioSaavn\'s result does', () => {
+    expect(songDesc('Raavana', 'Jai Lava Kusa', 'Divya Kumar', 'telugu', '2017', 258)).toBe(
+      'Listen to Raavana online. Raavana is a Telugu language song and is sung by Divya Kumar. Raavana, from the album Jai Lava Kusa, was released in the year 2017.',
     );
-    expect(songDesc('Aaho Raja', 'Aaho Raja', undefined, undefined)).toBe('Listen to Aaho Raja online. Aaho Raja is a song. Stream it free on VinaX, with lyrics and no subscription.');
+    expect(songDesc('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe(
+      'Listen to Suttamla Soosi online. Suttamla Soosi is a Telugu language song and is sung by Anurag Kulkarni and Yuvan Shankar Raja.',
+    );
+    expect(songDesc('Aaho Raja', 'Aaho Raja', undefined, 'english', 2024, 200)).toBe(
+      'Listen to Aaho Raja online. Aaho Raja is an English language song. It was released in the year 2024. The duration of the song is 3:20.',
+    );
+    for (const d of [songDesc('A', undefined, undefined, undefined), songDesc('X'.repeat(200), 'Y', 'Z', 'hindi', 2020, 100)]) expect(d.length).toBeLessThanOrEqual(160);
+  });
+  it('adds whole sentences only, in a short form when the long one does not fit', () => {
+    expect(fitDesc(['One.', 'Two.', 'x'.repeat(200), ['y'.repeat(200), 'Short.'], 'End.'])).toBe('One. Two. Short. End.');
   });
 });
 
@@ -422,22 +444,22 @@ describe('SEO 2026-11 — album and artist pages say what people search for', ()
   it('treats a single from a film as a song', () => {
     expect(albumTitle('Odahuttidavale (Male) (From "Mahaan")', '2025', 'kannada', false)).toBe('Odahuttidavale (Male) (From "Mahaan") | Kannada Song | VinaX');
     expect(albumDesc('Odahuttidavale (Male) (From "Mahaan")', '2025', 'kannada', false, ['Odahuttidavale (Male) (From "Mahaan")'], ['Arjun Janya'])).toBe(
-      'Listen to Odahuttidavale online. Odahuttidavale is a Kannada song from Mahaan. Music by Arjun Janya. Stream free on VinaX.',
+      'Listen to Odahuttidavale online. Odahuttidavale is a Kannada language song from Mahaan. Music by Arjun Janya. Stream free on VinaX.',
     );
   });
   it('lists the songs and the music director', () => {
     expect(albumDesc('AUJLA SZN 1', '2026', 'punjabi', false, ['Ashke', 'Real Bad Man', 'Straight Up', 'One More'], ['Karan Aujla'])).toBe(
-      'Listen to all 4 AUJLA SZN 1 songs online, a Punjabi album: Ashke, Real Bad Man, Straight Up and more. Music by Karan Aujla. Stream free on VinaX.',
+      'Listen to AUJLA SZN 1 songs online. AUJLA SZN 1 is a Punjabi album released in 2026. There are a total of 4 songs in AUJLA SZN 1. Stream free on VinaX.',
     );
     expect(albumDesc('Gangs Of Godavari', '2024', 'telugu', true, ['Suttamla Soosi', 'Motha'], [])).toBe(
-      'Listen to all 2 Gangs Of Godavari songs online, from the 2024 Telugu movie: Suttamla Soosi and Motha. Stream free on VinaX.',
+      'Listen to Gangs Of Godavari songs online. Gangs Of Godavari is a Telugu movie soundtrack released in 2024. There are a total of 2 songs in Gangs Of Godavari.',
     );
   });
   it('names an artist\'s songs and best-known films', () => {
     expect(artistTitle('Arijit Singh', 'hindi')).toBe('Arijit Singh Songs - Top Hindi Hits | VinaX');
     expect(artistTitle('Arijit Singh', undefined)).toBe('Arijit Singh Songs - Top Hits | VinaX');
     expect(artistDesc('Arijit Singh', 'singer', 'hindi', ['Tu Mil Jaaye (From "KING")', 'Tum Hi Ho', 'Kesariya'], ['Bhediya', 'Aashiqui 2'])).toBe(
-      'Listen to Arijit Singh songs online: Tu Mil Jaaye, Tum Hi Ho, Kesariya and more. Arijit Singh is a Hindi singer known for Bhediya and Aashiqui 2. Stream…', // cut to 160 characters
+      'Listen to Arijit Singh songs online: Tu Mil Jaaye, Tum Hi Ho, Kesariya and more. Arijit Singh is a Hindi singer known for Bhediya and Aashiqui 2.', // whole sentences, within 160
     );
     expect(artistDesc('Sid Sriram', 'singer', 'english', [], [])).toBe('Listen to Sid Sriram songs online. Sid Sriram is an English singer. Stream free on VinaX.');
   });

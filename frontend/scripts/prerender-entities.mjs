@@ -183,6 +183,7 @@ export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS
         lang,
         title: String(s?.name ?? '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#0?39;/g, "'"),
         artist: (s?.artists?.primary ?? []).slice(0, 2).map((a) => String(a?.name ?? '')).filter(Boolean).join(', '),
+        album: String(s?.album?.name ?? '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#0?39;/g, "'"),
         year: Number(s?.year) || 0,
         plays: Number(s?.playCount) || 0,
       });
@@ -307,30 +308,92 @@ export function pruneEntityLinks(html, built) {
 const escHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const capWord = (w) => w.charAt(0).toUpperCase() + w.slice(1);
 
-/** An <ol> of built song pages: "Title — Artist". */
+/** Same script-safe JSON as the renderer's (a song name cannot close the tag). */
+const jsonForScript = (value) =>
+  JSON.stringify(value ?? null)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/[\u2028\u2029]/g, (c) => (c === '\u2028' ? '\\u2028' : '\\u2029'));
+
+/** The film or album a list row names after its singer: never the song itself. */
+export function rowFrom(r) {
+  const album = String(r.album ?? '').replace(/\s*\(From\s+["\u201c][^)]*\)/i, '').trim();
+  const title = String(r.title ?? '').toLowerCase();
+  if (!album || /\(From\s/i.test(r.title ?? '') || title === album.toLowerCase() || title.includes(album.toLowerCase())) return '';
+  return album;
+}
+
+/** An <ol> of built song pages: "Title — Singer · Film", as JioSaavn's lists read. */
 function songOl(rows) {
-  return `<ol>${rows.map((r) => `<li><a href="${r.path}">${escHtml(r.title)}</a>${r.artist ? ` — ${escHtml(r.artist)}` : ''}</li>`).join('')}</ol>`;
+  return `<ol>${rows
+    .map((r) => {
+      const from = rowFrom(r);
+      return `<li><a href="${r.path}">${escHtml(r.title)}</a>${r.artist ? ` — ${escHtml(r.artist)}` : ''}${from ? ` · ${escHtml(from)}` : ''}</li>`;
+    })
+    .join('')}</ol>`;
+}
+
+/** schema.org ItemList for a page's main song list. */
+function itemListLd(name, rows) {
+  return `<script type="application/ld+json">${jsonForScript({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name,
+    numberOfItems: rows.length,
+    itemListElement: rows.map((r, i) => ({ '@type': 'ListItem', position: i + 1, name: r.title, url: `${ORIGIN}${r.path}` })),
+  })}</script>`;
 }
 
 /**
- * The song lists the prerendered Charts, Top Songs, Trending and language
- * pages carry for crawlers (before SEO 2026-11 they linked to no song at
- * all). `rows` are built songs: { path, lang, title, artist, year, plays }.
- * Returns { '/charts': html, ... } keyed by route.
+ * The song lists the prerendered Charts, Top Songs, Trending, New Releases
+ * and language pages carry for crawlers. `rows` are built songs:
+ * { path, lang, title, artist, album, year, plays }. Returns
+ * { '/charts': html, ... } keyed by route.
+ *
+ * SEO 2026-11-23 — worded like JioSaavn's lists: each row names its singer
+ * and film, New Releases lists this year's songs (it had no list), every
+ * language page adds its new songs, and each main list is an ItemList.
  */
 export function songSections(rows, year = new Date().getFullYear()) {
   const byPlays = [...rows].sort((a, b) => b.plays - a.plays);
   const langs = [...new Set(LANGS.filter((l) => byPlays.some((r) => r.lang === l)))];
   const out = {};
   if (!byPlays.length) return out;
-  out['/charts'] = langs
-    .map((l) => `<h2>Top ${capWord(l)} songs</h2>${songOl(byPlays.filter((r) => r.lang === l).slice(0, 10))}<p><a href="/${l}-songs/">More ${capWord(l)} songs</a></p>`)
-    .join('');
-  out['/top-songs'] = `<h2>The 50 most played songs</h2>${songOl(byPlays.slice(0, 50))}`;
-  const fresh = byPlays.filter((r) => r.year >= year - 1).slice(0, 40);
-  if (fresh.length) out['/trending'] = `<h2>Popular new songs from ${year - 1} and ${year}</h2>${songOl(fresh)}`;
+  const ofLang = (list, l) => list.filter((r) => r.lang === l);
+  const fresh = byPlays.filter((r) => r.year >= year - 1);
+  const thisYear = byPlays.filter((r) => r.year >= year);
+  const news = thisYear.length >= 10 ? thisYear : fresh;
+  const newsWhen = news === thisYear ? `of ${year}` : `of ${year - 1} and ${year}`;
+  const byLang = (list, heading, n) =>
+    langs
+      .map((l) => [l, ofLang(list, l).slice(0, n)])
+      .filter(([, list]) => list.length >= 3)
+      .map(([l, list]) => `<h2>${heading(capWord(l))}</h2>${songOl(list)}`)
+      .join('');
+
+  out['/charts'] =
+    langs
+      .map((l) => `<h2>Top 10 ${capWord(l)} songs</h2>${songOl(ofLang(byPlays, l).slice(0, 10))}<p><a href="/${l}-songs/">More ${capWord(l)} songs</a></p>`)
+      .join('') + itemListLd('Top Charts on VinaX', langs.flatMap((l) => ofLang(byPlays, l).slice(0, 10)));
+  const top = byPlays.slice(0, 50);
+  out['/top-songs'] = `<h2>The 50 most played songs right now</h2>${songOl(top)}${itemListLd('Top Songs on VinaX', top)}`;
+  if (fresh.length) {
+    const list = fresh.slice(0, 40);
+    out['/trending'] = `<h2>Trending songs right now</h2>${songOl(list)}${byLang(fresh, (L) => `Trending ${L} songs`, 8)}${itemListLd('Trending Songs on VinaX', list)}`;
+  }
+  if (news.length) {
+    const list = news.slice(0, 40);
+    out['/new-releases'] = `<h2>New songs ${newsWhen}</h2>${songOl(list)}${byLang(news, (L) => `New ${L} songs`, 8)}${itemListLd(`New Songs ${year} on VinaX`, list)}`;
+  }
   for (const l of langs) {
-    out[`/${l}-songs`] = `<h2>Top ${capWord(l)} songs right now</h2>${songOl(byPlays.filter((r) => r.lang === l).slice(0, 30))}`;
+    const L = capWord(l);
+    const list = ofLang(byPlays, l).slice(0, 30);
+    const newL = ofLang(news, l).slice(0, 15);
+    out[`/${l}-songs`] =
+      `<h2>Top ${L} songs right now</h2>${songOl(list)}` +
+      (newL.length >= 3 ? `<h2>New ${L} songs ${newsWhen}</h2>${songOl(newL)}` : '') +
+      itemListLd(`${L} Songs on VinaX`, list);
   }
   return out;
 }

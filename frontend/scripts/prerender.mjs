@@ -37,7 +37,7 @@ const ROUTES = [
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', more: 'Charts, moods, languages and new music, all in one place: pick a language or a mood, see what is new this week, and open playlists and film soundtracks.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/charts/#page', name: 'Top Charts', url: 'https://www.vinaxmusic.online/charts/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/top-songs/#page', name: 'Top Songs on VinaX', url: 'https://www.vinaxmusic.online/top-songs/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
-  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/trending/#page', name: 'Popular Songs on VinaX', url: 'https://www.vinaxmusic.online/trending/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
+  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/trending/#page', name: 'Trending Songs on VinaX', url: 'https://www.vinaxmusic.online/trending/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/most-searched', t: 'Most Searched Songs & Queries', d: 'The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free to stream.', h1: 'Most Searched Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/most-searched/#page', name: 'Most Searched Songs on VinaX', url: 'https://www.vinaxmusic.online/most-searched/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/moods', t: 'Moods', d: 'Music for every moment — romance, workout, chill, party, focus and more.', more: 'Pick a mood and VinaX lines up songs for it. Romantic, sad, party, devotional, melody and workout songs each have their own page in 12 languages.', h1: 'Music for every mood', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/moods/#page', name: 'Music by Mood', url: 'https://www.vinaxmusic.online/moods/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/movies', t: 'Movie Music', d: 'Film soundtracks and hit songs from Telugu, Hindi, Tamil and other Indian movies, free to stream on VinaX.', more: 'Film soundtracks, from this week’s releases to the classics, each with its songs ready to play.', h1: 'Movie soundtracks', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/movies/#page', name: 'Movie Soundtracks', url: 'https://www.vinaxmusic.online/movies/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
@@ -209,6 +209,15 @@ let bodies;
     const { LanguageGuide } = await load('/src/features/discover/LanguageGuide.tsx');
     const { GUIDES, FAQ, SHORTCUTS } = await load('/src/features/help/helpContent.ts');
     const { MOOD_HUBS } = await load('/src/constants/hubs.ts');
+    // SEO 2026-11-23 — Trending, New Releases, Top Songs, Charts and the
+    // language pages take their title, description and heading from the
+    // module the app itself uses, so the crawler and the tab say the same.
+    const { LIST_PAGE_SEO, languagePageSeo } = await load('/src/constants/seoPages.ts');
+    for (const r of ROUTES) {
+      const lang = /^\/([a-z]+)-songs$/.exec(r.p);
+      const seo = LIST_PAGE_SEO[r.p] ?? (lang ? languagePageSeo(lang[1]) : null);
+      if (seo) Object.assign(r, seo);
+    }
 
     const groups = [...new Set(GUIDES.map((g) => g.group))];
     const help =

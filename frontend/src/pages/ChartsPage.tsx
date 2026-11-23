@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePageMeta } from '@/hooks/usePageMeta';
+import { LIST_PAGE_SEO } from '@/constants/seoPages';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { useRegion } from '@/features/location/useRegion';
 import { usePlayerStore } from '@/store/playerStore';
@@ -423,6 +425,8 @@ function CatalogueLists() {
 /** Canvas 4c — Charts & Discover. */
 export default function ChartsPage() {
   usePageTitle('Charts');
+  // SEO 2026-11-23: the prerendered page's title and description (constants/seoPages.ts); usePageTitle keeps the short name for the top bar.
+  usePageMeta({ title: LIST_PAGE_SEO['/charts'].t, description: LIST_PAGE_SEO['/charts'].d, canonicalPath: '/charts/' });
   const regionInfo = useRegion();
   const country = (regionInfo?.country ?? '').toUpperCase();
   const region = /^[A-Z]{2}$/.test(country) ? country : 'IN';
