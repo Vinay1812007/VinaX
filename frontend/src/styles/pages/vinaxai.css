@@ -1700,7 +1700,10 @@ html:not(.hc) .vx-ai.vx-ai-gallery-page { background: rgb(var(--ink-900)); }
 
 /* ------------------------------------------------------------ sidebar */
 html:not(.hc) .vx-ai .vx-ai-side { background: rgb(var(--ink-950)); border-right: 1px solid var(--glass-border); width: 272px; }
-.vx-ai .vx-ai-side::before { display: none; }
+/* 1.21.2 — only where the look gives the column its own fill (not high
+   contrast): with High contrast on, hiding this layer left the phone drawer
+   see-through, the chat printing through the chat list. */
+html:not(.hc) .vx-ai .vx-ai-side::before { display: none; }
 .vx-ai .vx-ai-side-inner { gap: 2px; padding: 8px 8px max(10px, var(--safe-bottom)); }
 .vx-ai .vx-ai-side-head { padding: 0 2px 6px 8px; }
 .vx-ai .vx-ai-side-mark { font-family: var(--vx-ai-serif); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; gap: 10px; }
@@ -1781,7 +1784,7 @@ html:not(.hc) .vx-ai .vx-ai-composer {
   box-shadow: var(--vx-ai-lift-sm);
   transition: border-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
-.vx-ai .vx-ai-composer::before { display: none; }
+html:not(.hc) .vx-ai .vx-ai-composer::before { display: none; }
 html:not(.hc) .vx-ai .vx-ai-composer:focus-within { border-color: rgb(var(--ink-100) / 0.24); box-shadow: var(--vx-ai-lift-sm), 0 0 0 1px rgb(var(--ink-100) / 0.05); }
 .vx-ai .vx-ai-composer textarea { font-size: 1rem; line-height: 1.55; }
 .vx-ai .vx-ai-composer textarea::placeholder { color: rgb(var(--ink-500)); }
