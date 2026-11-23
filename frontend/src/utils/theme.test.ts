@@ -19,13 +19,14 @@ function lastValue(varName: string): string {
   return last;
 }
 
-describe('color tokens (1.15 black and green)', () => {
-  it('brand ramps: green over a black window with #121212 panels', () => {
-    // 1.15 — ember is the green (play, the playing row, switches, the chosen
-    // state); tide is the same green family; the window is true black.
-    expect(lastValue('--ember-400')).toBe('63 228 121');
-    expect(lastValue('--ember-500')).toBe('30 215 96');
-    expect(lastValue('--tide-500')).toBe('30 215 96');
+describe('color tokens (1.15 black; 1.21.1 the logo\'s orange and pink)', () => {
+  it('brand ramps: the logo\'s orange and pink over a black window with #121212 panels', () => {
+    // 1.21.1 — ember is the logo's orange (the playing row, switches, the
+    // chosen state; it was green); tide is the logo's pink; the window is
+    // true black.
+    expect(lastValue('--ember-400')).toBe('255 184 92');
+    expect(lastValue('--ember-500')).toBe('255 164 46');
+    expect(lastValue('--tide-500')).toBe('255 99 132');
     expect(lastValue('--ink-950')).toBe('0 0 0');
     expect(lastValue('--ink-900')).toBe('18 18 18');
     expect(lastValue('--ink-300')).toBe('179 179 179');

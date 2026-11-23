@@ -124,15 +124,16 @@
   --ink-100: 255 255 255;
 
   /* Brand ramps (palette channels — components read the semantic names in
-     styles/tokens.css, not these). ember = the accent, green: play buttons,
-     the playing row, switches, progress on hover. tide = its partner, the
-     same green family, so a gradient reads as one colour. */
-  --ember-600: 29 185 84;
-  --ember-500: 30 215 96;
-  --ember-400: 63 228 121;
-  --ember-300: 120 240 160;
-  --tide-500: 30 215 96;
-  --tide-400: 63 228 121;
+     styles/tokens.css, not these). ember = the accent, the logo's orange
+     (green until 1.21.1): the playing row, switches, progress, the chosen
+     state. tide = its partner, the logo's pink. The look restates these in
+     templates/vinax.css. */
+  --ember-600: 236 132 24;
+  --ember-500: 255 164 46;
+  --ember-400: 255 184 92;
+  --ember-300: 255 204 140;
+  --tide-500: 255 99 132;
+  --tide-400: 255 128 156;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
@@ -149,8 +150,8 @@
 
   /* Aura palette — the home-page hero wash + settings glow. The names are
      historical: "violet" is the Marigold accent, "cyan" its Rose partner. */
-  --aura-violet: 30 215 96;
-  --aura-cyan: 30 215 96;
+  --aura-violet: 255 164 46;
+  --aura-cyan: 255 99 132;
   --aura-lime: 163 230 53;
 
   /* Glass material — ADJUSTABLE frosted translucency (Settings → Glass

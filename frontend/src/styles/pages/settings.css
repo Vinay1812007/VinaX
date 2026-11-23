@@ -386,7 +386,7 @@
   --tp-panel: rgb(30 30 30);
   --tp-ink: rgb(255 255 255 / 0.85);
   --tp-ink-soft: rgb(255 255 255 / 0.28);
-  --tp-play: rgb(30 215 96);
+  --tp-play: rgb(255 164 46);
   position: relative;
   display: block;
   overflow: hidden;
@@ -402,7 +402,7 @@
   --tp-panel: rgb(240 240 240);
   --tp-ink: rgb(18 18 18 / 0.85);
   --tp-ink-soft: rgb(18 18 18 / 0.22);
-  --tp-play: rgb(20 138 60);
+  --tp-play: rgb(226 100 22);
 }
 /* System: the dark picture, with the light one showing through a diagonal half. */
 .vx-theme-opt.is-system .vx-theme-thumb::after {

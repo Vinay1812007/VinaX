@@ -386,5 +386,3 @@ html.light[data-template='vinax'] .vx-rail-card.is-lyrics {
   background: var(--vx-sheen), linear-gradient(rgb(var(--art) / 0.16), rgb(var(--art) / 0.16)), rgb(255 255 255 / 0.34);
   box-shadow: var(--vx-rim);
 }
-/* Liked songs in the library panel wears the logo, as on the Library page. */
-html.light[data-template='vinax'] .vx-lib-glyph.is-liked { background: var(--vx-logo-fill); color: rgb(0 0 0); }
