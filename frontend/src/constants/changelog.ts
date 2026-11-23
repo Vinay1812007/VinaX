@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.2': {
+    title: 'Dark mode wears the VinaX logo colours',
+    changes: [
+      { type: 'improved', text: 'Dark mode\'s green is gone: accents, switches, progress, the chosen chip and the playing song are now the VinaX logo\'s orange.' },
+      { type: 'improved', text: 'Play buttons, the big play in the full player, Start listening and the Free forever badge wear the logo\'s orange-to-pink gradient in dark mode too.' },
+      { type: 'improved', text: 'Liked songs in your library and the theme previews in Settings use the logo colours.' },
+    ],
+  },
   '1.21.1': {
     title: 'Faster on phones, fixed for iPhone, and VinaX AI in glass',
     changes: [
