@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.5': {
+    title: 'Song titles name the singer, not a playlist-style album',
+    changes: [
+      { type: 'fixed', text: 'A compilation album ("World Music Day 2026", "Wedding Love Songs", "Romance Trending Now") is no longer named as a song\'s film; the title names the singer and language instead.' },
+      { type: 'improved', text: 'Descriptions list at most three singers ("A, B, C and more") instead of being cut off mid-list.' },
+      { type: 'improved', text: 'When a description\'s opening sentences run long, "Listen to … online." is dropped before anything is cut.' },
+    ],
+  },
   '1.21.4': {
     title: 'Song, album and chart pages worded like JioSaavn\'s for search',
     changes: [
