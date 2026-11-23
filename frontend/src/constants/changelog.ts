@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.4': {
+    title: 'Song, album and chart pages worded like JioSaavn\'s for search',
+    changes: [
+      { type: 'improved', text: 'Song titles: "Raavana - Song by Divya Kumar | Jai Lava Kusa | VinaX".' },
+      { type: 'improved', text: 'Song descriptions: "Raavana is a Telugu language song and is sung by Divya Kumar. Raavana, from the album Jai Lava Kusa, was released in the year 2017. The duration of the song is 4:18.".' },
+      { type: 'improved', text: 'Song pages: the same paragraph, a Track details list (Song, Movie, Singer, Music, Lyrics, Duration), FAQs with FAQPage JSON-LD, and composer and lyricist in the JSON-LD.' },
+      { type: 'improved', text: 'Album and artist descriptions use whole sentences within 160 characters; overlong names are cut to fit 70.' },
+    ],
+  },
   '1.21.3': {
     title: 'VinaX AI menus fit every screen, a professional Settings page, and High contrast fixed',
     changes: [
