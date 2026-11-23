@@ -75,7 +75,8 @@ html.light[data-template='vinax']:root {
 }
 
 /* ---------------------------------------------------------------- window */
-/* The meadow, fixed behind everything; it breathes very slowly. It is
+/* The meadow, fixed behind everything and still (1.21.1: it used to
+   breathe, which made every blurred bar re-blur each frame). It is
    coloured, never plain green: with nothing playing it wears the logo's
    colours (orange sweeping into pink), and while a song plays it takes the
    song's colour (--art, set on <html> by the player). The colour is laid
@@ -102,18 +103,11 @@ html.light[data-template='vinax'] {
 html.light[data-template='vinax'][style*='--art:'] { --vx-song-a: rgb(var(--art) / 0.85); --vx-song-b: rgb(var(--art) / 0.85); }
 html.light[data-template='vinax']:root .vx-shell { background: rgb(240 206 186); }
 html.light[data-template='vinax'] .vx-shell::before {
-  inset: -5%;
+  inset: 0;
   background:
     linear-gradient(150deg, var(--vx-song-a) 10%, var(--vx-song-b) 90%),
     url('/bg/meadow.svg') center 42% / cover no-repeat;
   background-blend-mode: color, normal;
-}
-@keyframes vx-meadow-breathe {
-  from { transform: scale(1.02) translate3d(-1%, 0, 0); }
-  to { transform: scale(1.07) translate3d(1.5%, -1%, 0); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  html.light[data-template='vinax']:not(.reduce-motion) .vx-shell::before { animation: vx-meadow-breathe 64s ease-in-out infinite alternate; }
 }
 
 /* ---------------------------------------------------------------- panels */
@@ -130,8 +124,6 @@ html.light[data-template='vinax']:root :is(.vx-workspace, .vx-sidebar, .vx-playi
 html.light[data-template='vinax'] :is(.vx-winbar-search, .vx-winbar-home) {
   background: var(--vx-glass-pill);
   box-shadow: var(--vx-pill-rim);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
 }
 html.light[data-template='vinax'] :is(.vx-winbar-search, .vx-winbar-home):hover { background: var(--vx-glass-pill-hover); }
 html.light[data-template='vinax'] .vx-winbar-search:is(.is-active, :focus-within) { background: rgb(255 255 255 / 0.7); box-shadow: var(--vx-pill-rim), 0 0 0 2px rgb(var(--ink-100) / 0.7); }
@@ -144,8 +136,6 @@ html.light[data-template='vinax'] :is(.vx-topbar-signin, .vxh-guest-card .vxh-pi
   border-color: transparent;
   background: var(--vx-cta);
   box-shadow: var(--vx-cta-edge);
-  -webkit-backdrop-filter: blur(10px) saturate(160%);
-  backdrop-filter: blur(10px) saturate(160%);
   color: rgb(var(--vx-cta-ink));
   font-weight: 700;
 }
@@ -307,27 +297,12 @@ html.light[data-template='vinax'] :is(.vx-np-tools, .vx-np-top .vx-np-icon, .vx-
     background-image: var(--vx-sheen);
     box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.7), 0 10px 26px -20px rgb(70 36 28 / 0.5);
   }
-  html.light[data-template='vinax'] .vx-topbar { gap: 8px; }
-  html.light[data-template='vinax'] .vx-topbar-actions { gap: 6px; }
   html.light[data-template='vinax'] :is(.vx-langbtn, .vx-topbar-feedback, .vx-topbar-actions .vx-icon-btn) {
     min-height: 34px;
     background: var(--vx-glass-pill);
     box-shadow: var(--vx-pill-rim);
-    -webkit-backdrop-filter: blur(12px) saturate(160%);
-    backdrop-filter: blur(12px) saturate(160%);
   }
-  html.light[data-template='vinax'] .vx-topbar-actions .vx-icon-btn { width: 34px; height: 34px; color: rgb(var(--ink-100)); }
-  /* Home also shows the wordmark, so the language button folds to its globe
-     (the language names stay as its accessible name). */
-  html.light[data-template='vinax'] .vx-topbar:has(.vx-wordmark) .vx-langbtn { justify-content: center; width: 34px; padding: 0; }
-  html.light[data-template='vinax'] .vx-topbar:has(.vx-wordmark) .vx-langbtn-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
+  html.light[data-template='vinax'] .vx-topbar-actions .vx-icon-btn { color: rgb(var(--ink-100)); }
   html.light[data-template='vinax'] .vx-avatar { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), 0 4px 10px -4px rgb(200 70 60 / 0.5); }
 
   /* The tab bar floats: a rounded pane of glass, 12px in from the edges. */
@@ -375,33 +350,41 @@ html.light[data-template='vinax'] :is(.vx-np-tools, .vx-np-top .vx-np-icon, .vx-
     color: rgb(var(--ink-100));
     font-weight: 600;
     box-shadow: var(--vx-pill-rim), 0 10px 24px -16px rgb(70 36 28 / 0.5);
-    -webkit-backdrop-filter: blur(12px) saturate(160%);
-    backdrop-filter: blur(12px) saturate(160%);
   }
   html.light[data-template='vinax'] .vx-browse .search-field input::placeholder { color: rgb(var(--ink-400)); font-weight: 600; }
   html.light[data-template='vinax'] .vx-browse .search-field > svg:first-child,
   html.light[data-template='vinax'] .vx-browse .search-field:focus-within > svg:first-child,
   html.light[data-template='vinax'] .vx-browse .search-field .search-field-btn { color: rgb(var(--ink-100)); }
-  /* The glass field is its own layer (backdrop blur), so the icons sit above it. */
+  /* The icons sit above the glass field. */
   html.light[data-template='vinax'] .vx-browse .search-field > svg:first-child { z-index: 2; }
-  html.light[data-template='vinax'] .vx-workspace :is(input[type='text'], input[type='search'], .vx-set-input, .vx-set-select, .vx-lselect) {
-    border-color: transparent;
-    background-color: rgb(255 255 255 / 0.5);
-    box-shadow: var(--vx-pill-rim);
-  }
-
-  /* Cards: glass instead of flat off-white. */
-  html.light[data-template='vinax'] .vx-workspace :is(.vxh-feature, .vxh-shortcut, .vxh-free, .vxh-guide, .vx-lp-tile, .vx-set-rows, .glass-card, .search-trend-chip, .vx-account) {
-    border-color: rgb(255 255 255 / 0.5);
-    background-color: rgb(255 255 255 / 0.34);
-    background-image: var(--vx-sheen);
-    box-shadow: var(--vx-pill-rim);
-  }
-  html.light[data-template='vinax'] .vx-workspace .glass-card { box-shadow: var(--vx-rim), var(--vx-lift); }
-
   /* The back button on a detail page. */
   html.light[data-template='vinax'] .vx-backpill {
     background: rgb(255 255 255 / 0.5);
     box-shadow: var(--vx-pill-rim), 0 8px 18px -12px rgb(70 36 28 / 0.5);
   }
 }
+
+/* ------------------------------------------------------ fields and cards */
+/* At every width (1.21.1; they were glass on a phone only): fields are glass
+   pills and the flat off-white cards are glass on the panel. */
+html.light[data-template='vinax'] .vx-workspace :is(input[type='text'], input[type='search'], .vx-set-input, .vx-set-select, .vx-lselect) {
+  border-color: transparent;
+  background-color: rgb(255 255 255 / 0.5);
+  box-shadow: var(--vx-pill-rim);
+}
+
+/* Cards: glass instead of flat off-white. */
+html.light[data-template='vinax'] .vx-workspace :is(.vxh-feature, .vxh-shortcut, .vxh-free, .vxh-guide, .vx-lp-tile, .vx-set-rows, .glass-card, .search-trend-chip, .vx-account) {
+  border-color: rgb(255 255 255 / 0.5);
+  background-color: rgb(255 255 255 / 0.34);
+  background-image: var(--vx-sheen);
+  box-shadow: var(--vx-pill-rim);
+}
+html.light[data-template='vinax'] .vx-workspace .glass-card { box-shadow: var(--vx-rim), var(--vx-lift); }
+/* The lyrics card in the Now playing panel: glass with a hint of the song. */
+html.light[data-template='vinax'] .vx-rail-card.is-lyrics {
+  background: var(--vx-sheen), linear-gradient(rgb(var(--art) / 0.16), rgb(var(--art) / 0.16)), rgb(255 255 255 / 0.34);
+  box-shadow: var(--vx-rim);
+}
+/* Liked songs in the library panel wears the logo, as on the Library page. */
+html.light[data-template='vinax'] .vx-lib-glyph.is-liked { background: var(--vx-logo-fill); color: rgb(0 0 0); }

@@ -10,7 +10,7 @@
    play is a round green button with a black glyph. Hover is a wash of the
    text colour, never a colour. No accent picker.
    1.15.1 — light and dark (System follows the device), and glass: the
-   window is a slow mesh of the playing artwork's colour and a little green,
+   window is a still mesh of the playing artwork's colour and a little green,
    and the panels, bars, player, menus and sheets are frosted glass over it.
    Settings > Glass effect (--glass-alpha) runs from solid to glass, and at
    solid the mesh is gone too.
@@ -147,19 +147,19 @@ html[data-template='vinax']:root .vx-shell {
     rgb(var(--ink-950));
   transition: background-color var(--dur-slow) var(--ease-standard);
 }
-/* A slow drift of light across the window, under everything. */
+/* Two soft pools of light across the window, under everything. 1.21.1 —
+   still: they used to drift (a 48s animation), but an always-moving layer
+   behind the glass made every blurred bar re-blur on every frame, which
+   dropped frames on a computer and lagged phones (iPhones most). */
 html[data-template='vinax'] .vx-shell::before {
   content: '';
   position: fixed;
   z-index: -1;
-  inset: -20%;
+  inset: 0;
   background:
     radial-gradient(28% 30% at 30% 35%, rgb(var(--art) / calc(var(--vx-mesh-art) * 0.6)), transparent 70%),
     radial-gradient(24% 26% at 72% 62%, rgb(var(--ember-500) / calc(var(--vx-mesh-ember) * 0.8)), transparent 70%);
   pointer-events: none;
-}
-@media (prefers-reduced-motion: no-preference) {
-  html[data-template='vinax']:not(.reduce-motion) .vx-shell::before { animation: vx-mesh-drift 48s ease-in-out infinite alternate; }
 }
 html[data-template='vinax']:root .vx-workspace { background: var(--vx-panel-fill); }
 html[data-template='vinax'] :is(.vx-sidebar, .vx-playing-rail) { background: var(--vx-panel-fill); }

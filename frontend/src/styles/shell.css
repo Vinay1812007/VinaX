@@ -58,12 +58,6 @@
 }
 
 /* ---------------------------------------------------------------- canvas */
-/* 1.15.1 — the slow drift of light behind the glass panels (templates/vinax.css). */
-@keyframes vx-mesh-drift {
-  from { transform: translate3d(-4%, -3%, 0) rotate(0deg); }
-  to { transform: translate3d(5%, 4%, 0) rotate(8deg); }
-}
-
 .vx-shell { background: rgb(var(--ink-950)); }
 @media (max-width: 767px) {
   /* A phone has no panels: the page is the canvas. */
@@ -506,7 +500,15 @@
 @media (prefers-reduced-motion: reduce) { .vx-pmenu { animation: none; } }
 html.reduce-motion .vx-pmenu { animation: none; }
 @media (max-width: 767px) {
-  .vx-topbar { gap: 10px; margin-bottom: 2px; padding: max(8px, var(--safe-top)) var(--vx-gutter) 8px; }
+  .vx-topbar { gap: 8px; margin-bottom: 2px; padding: max(8px, var(--safe-top)) var(--vx-gutter) 8px; }
+  /* 1.21.1 — a compact bar, so Home fits a 375–390px phone: the action
+     buttons are 34px, and since Home also shows the wordmark its language
+     button folds to the globe (the language names stay its accessible
+     name). It ran off the screen and pushed the avatar out of reach. */
+  .vx-topbar-actions { gap: 6px; }
+  .vx-topbar-actions .vx-icon-btn { width: 34px; height: 34px; }
+  .vx-topbar:has(.vx-wordmark) .vx-langbtn { justify-content: center; width: 34px; min-height: 34px; padding: 0; }
+  .vx-topbar:has(.vx-wordmark) .vx-langbtn-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 /* ------------------------------------------------------- phone tab bar */

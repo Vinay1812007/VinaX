@@ -670,7 +670,12 @@
 
 /* ------------------------------------------------------- empty state */
 .vx-ai-main.is-empty .vx-ai-scroll { display: flex; }
-.vx-ai-welcome { display: flex; flex-direction: column; justify-content: center; gap: 14px; min-height: 100%; padding-bottom: calc(24px + var(--vx-ai-kb)); }
+/* 1.21.1 — the parts never shrink and centring is "safe": on a phone the
+   welcome is taller than the screen, and the greeting used to be squeezed to
+   a few pixels and spill up under the header, out of reach. Now the page
+   scrolls instead. */
+.vx-ai-welcome { display: flex; flex-direction: column; justify-content: safe center; gap: 14px; min-height: 100%; padding-bottom: calc(24px + var(--vx-ai-kb)); }
+.vx-ai-welcome > * { flex-shrink: 0; }
 .vx-ai-welcome .vx-ai-empty { min-height: 0; padding: 24px 0 8px; }
 .vx-ai-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
@@ -2179,3 +2184,132 @@ html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
 .vx-ai[data-large='true'] .vx-ai-turn-reply > .vx-ai-md { font-size: 1.1875rem; line-height: 1.75; }
 .vx-ai[data-large='true'] .vx-ai-bubble, .vx-ai[data-large='true'] .vx-ai-composer textarea { font-size: 1.125rem; }
 .vx-ai[data-large='true'] .vx-ai-md :is(h1, h2, h3) { font-size: 1.4em; }
+
+/* ---------------------------------------------------- narrow phone header */
+/* 1.21.1 — up to 430px (every iPhone) the title, the now-playing pill and
+   three buttons did not fit: the pill ran into "VinaX AI". The buttons and
+   gaps tighten so everything fits without hiding anything. */
+@media (max-width: 430px) {
+  .vx-ai .vx-ai-header { gap: 6px; padding-inline: 8px 10px; }
+  .vx-ai .vx-ai-header-end { gap: 2px; }
+  .vx-ai .vx-ai-header :is(.vx-ai-icon-btn, .vx-ai-back, .vx-ai-new) { width: 34px; height: 34px; }
+  .vx-ai .vx-ai-brand { gap: 6px; }
+  .vx-ai .vx-ai-wordmark { font-size: 1.05rem; }
+  .vx-ai .vx-ai-np { gap: 0; }
+  .vx-ai .vx-ai-np :is(.vx-ai-np-ask, .vx-ai-np-toggle) { width: 28px; height: 28px; }
+  .vx-ai .vx-ai-np-open { gap: 4px; padding-right: 2px; }
+}
+/* The narrowest phones (320px): while music plays the title gives way to the
+   now-playing pill (it stays the page heading for screen readers), so
+   every button stays. */
+@media (max-width: 360px) {
+  .vx-ai .vx-ai-header:has(.vx-ai-np) .vx-ai-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* =========================================================================
+   1.21.1 — light: VinaX AI wears the app's liquid glass. The page is clear
+   (the meadow and the panel's frost show through), the sidebar and the
+   cards are glass panes, the composer is a thicker pane, and the accent is
+   the logo's (orange, the send button in its orange-to-pink gradient). The
+   inks are the app's warm near-blacks, darker than the cream look's so they
+   keep AA on clear glass. Dark mode keeps its own palette.
+   ========================================================================= */
+html.light[data-template='vinax']:not(.hc) .vx-ai {
+  --ink-100: 34 24 26;
+  --ink-200: 44 32 34;
+  --ink-300: 52 38 40;
+  --ink-400: 58 43 45;
+  --ink-500: 66 50 52;
+  --ink-600: 150 132 134;
+  --ink-700: 226 216 212;
+  --ink-800: 238 231 228;
+  --ink-850: 244 238 235;
+  --ink-900: 250 246 244;
+  --ink-950: 255 255 255;
+  --ember-600: 200 84 16;
+  --ember-500: 226 100 22;
+  --ember-400: 168 58 16;
+  --ember-300: 184 70 12;
+  --vx-on-accent: rgb(0 0 0);
+  --vx-ai-composer: 255 255 255;
+  --vx-ai-code-bg: 255 250 246;
+  --vx-ai-shadow: 70 36 28;
+  --glass-border: rgb(255 255 255 / 0.55);
+  --vx-ai-hover: rgb(255 255 255 / 0.42);
+  --vx-ai-press: rgb(255 255 255 / 0.58);
+  --vx-ai-glass: rgb(255 255 255 / 0.32);
+  --vx-ai-rim: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.32), inset 0 8px 14px -10px rgb(255 255 255 / 0.7);
+  --vx-ai-sheen: linear-gradient(155deg, rgb(255 255 255 / 0.36) 0%, rgb(255 255 255 / 0.08) 28%, rgb(255 255 255 / 0) 55%, rgb(255 255 255 / 0.12) 100%);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai,
+html.light[data-template='vinax']:not(.hc) .vx-ai.vx-ai-gallery-page { background: transparent; }
+
+/* The sidebar: a pane of glass with a bright inner edge. */
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-side {
+  background: var(--vx-ai-sheen), var(--vx-ai-glass);
+  border-right: 1px solid rgb(255 255 255 / 0.55);
+  box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.3);
+}
+/* As a drawer on a phone it floats over the chat, so it thickens and blurs. */
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-side.is-drawer {
+  background: var(--vx-ai-sheen), rgb(255 255 255 / 0.82);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 18px 0 40px -20px rgb(70 36 28 / 0.45);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai :is(.vx-ai-side-search, .vx-ai-row-link[aria-current='page'], .vx-ai-row-link.is-active) {
+  background: rgb(255 255 255 / 0.5);
+  box-shadow: var(--vx-ai-rim);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-me-initial { background: var(--vx-logo-fill, rgb(var(--ember-500))); color: rgb(0 0 0); }
+
+/* The header's buttons and the now-playing pill are glass pills. */
+html.light[data-template='vinax']:not(.hc) .vx-ai :is(.vx-ai-np, .vx-ai-share-btn) {
+  border-color: transparent;
+  background: rgb(255 255 255 / 0.42);
+  box-shadow: var(--vx-ai-rim);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-np-toggle { background: var(--vx-logo-fill, rgb(var(--ember-500))); color: rgb(0 0 0); }
+
+/* The composer: the thickest pane, lit along the top, a soft warm shadow. */
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-composer {
+  border-color: transparent;
+  background: var(--vx-ai-sheen), rgb(255 255 255 / 0.62);
+  box-shadow: var(--vx-ai-rim), 0 18px 40px -22px rgb(70 36 28 / 0.5);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-composer:focus-within { box-shadow: var(--vx-ai-rim), 0 0 0 2px rgb(var(--ember-500) / 0.45), 0 18px 40px -22px rgb(70 36 28 / 0.5); }
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-composer-tools .vx-ai-icon-btn { border-color: transparent; background: rgb(255 255 255 / 0.5); box-shadow: var(--vx-ai-rim); }
+/* Send wears the logo. */
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-send:not(.is-stop) {
+  background: var(--vx-logo-fill, rgb(var(--ember-500)));
+  color: rgb(0 0 0);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 6px 14px -6px rgb(200 70 60 / 0.55);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-send:not(.is-stop):hover:not(:disabled) { background: var(--vx-logo-fill-hover, rgb(var(--ember-400))); }
+
+/* Messages: your words sit in a glass bubble; code is a light glass block. */
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-bubble {
+  background: var(--vx-ai-sheen), rgb(255 255 255 / 0.55);
+  box-shadow: var(--vx-ai-rim);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai .vx-ai-code {
+  background: rgb(255 255 255 / 0.55);
+  border-color: rgb(255 255 255 / 0.6);
+  box-shadow: var(--vx-ai-rim);
+}
+
+/* The welcome screen's starters and recent chats are glass. */
+html.light[data-template='vinax']:not(.hc) .vx-ai :is(.vx-ai-starter, .vx-ai-recent-card, .vx-ai-proj-card, .vx-ai-gallery-card, .vx-ai-artifact-card) {
+  border-color: transparent;
+  background: var(--vx-ai-sheen), var(--vx-ai-glass);
+  box-shadow: var(--vx-ai-rim);
+}
+html.light[data-template='vinax']:not(.hc) .vx-ai :is(.vx-ai-starter, .vx-ai-recent-card, .vx-ai-proj-card, .vx-ai-gallery-card, .vx-ai-artifact-card):hover { background: var(--vx-ai-sheen), rgb(255 255 255 / 0.52); }
+
+/* Menus and dialogs float over everything: near-solid glass with a blur. */
+html.light[data-template='vinax']:not(.hc) .vx-ai :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog) {
+  background: rgb(255 255 255 / 0.9);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--vx-ai-rim), 0 24px 50px -24px rgb(70 36 28 / 0.55);
+}
