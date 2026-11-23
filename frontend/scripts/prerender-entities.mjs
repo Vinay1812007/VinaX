@@ -113,13 +113,35 @@ export const STATIC_SITEMAPS = [
 
 const enabled = process.env.PRERENDER_ENTITIES === '1' || (process.env.CF_PAGES === '1' && process.env.PRERENDER_ENTITIES !== '0');
 
-function writeSitemap(urls) {
-  const body =
-    '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+const xmlEsc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** A built page's cover art (its og:image), for the image sitemap. */
+export function pageImage(html) {
+  const m = /<meta property="og:image" content="(https:\/\/[^"]+)"/.exec(String(html));
+  return m ? m[1].replace(/&amp;/g, '&') : null;
+}
+
+/**
+ * The entity sitemap. SEO 2026-11-23 — each page lists its cover art
+ * (Google image sitemap extension), so song, album and artist art can show
+ * in Google Images and next to results.
+ */
+export function sitemapXml(urls, images = new Map()) {
+  return (
+    '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' +
     // No per-URL lastmod: it was always "today" (every build), which Google learns to ignore.
-    urls.map((u) => `<url><loc>${ORIGIN}${u}</loc></url>`).join('') +
-    '</urlset>';
-  writeFileSync(join(DIST, 'entity-pages.xml'), body);
+    urls
+      .map((u) => {
+        const img = images.get(u);
+        return `<url><loc>${ORIGIN}${xmlEsc(u)}</loc>${img ? `<image:image><image:loc>${xmlEsc(img)}</image:loc></image:image>` : ''}</url>`;
+      })
+      .join('') +
+    '</urlset>'
+  );
+}
+
+function writeSitemap(urls, images) {
+  writeFileSync(join(DIST, 'entity-pages.xml'), sitemapXml(urls, images));
 }
 
 async function getJson(suffix) {
@@ -618,6 +640,8 @@ async function main() {
   }
   const vite = await createServer({ logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' });
   const urls = [];
+  /** path → cover art, for the image sitemap. */
+  const images = new Map();
   let failed = 0;
   /** How many entity pages the live site lists (null when unknown). */
   let liveCount = null;
@@ -676,6 +700,8 @@ async function main() {
             writeFileSync(file, page.html);
             putStore(store, k, page.path, page.html, Date.now());
             built.set(k, page.path);
+            const img = pageImage(page.html);
+            if (img) images.set(page.path, img);
             linkedEntities(page.html, links);
             rendered++;
           } catch {
@@ -711,6 +737,8 @@ async function main() {
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, html);
       built.set(k, v.path);
+      const img = pageImage(html);
+      if (img) images.set(v.path, img);
       linkedEntities(html, links);
       kept++;
     }
@@ -737,7 +765,7 @@ async function main() {
   } catch (e) {
     console.warn('entity pages: stopped early —', e && e.message);
   } finally {
-    writeSitemap(urls.sort());
+    writeSitemap(urls.sort(), images);
     await vite.close();
   }
   return enabled ? { written: urls.length, live: liveCount } : null;

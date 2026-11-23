@@ -284,6 +284,8 @@ for (const r of ROUTES) {
       `<meta property="og:title" content="${esc(fullTitle(r.t))}"/>` +
       `<meta property="og:description" content="${esc(r.d)}"/>` +
       `<meta property="og:url" content="${ORIGIN}${pageUrl(r.p)}"/>` +
+      `<meta name="twitter:title" content="${esc(fullTitle(r.t))}"/>` +
+      `<meta name="twitter:description" content="${esc(r.d)}"/>` +
       (r.ld ? `<script type="application/ld+json">${jsonForScript(r.ld)}</script>` : '') +
       `</head>`;
     const content =
@@ -295,6 +297,11 @@ for (const r of ROUTES) {
     const html = base
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(fullTitle(r.t))}</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(r.d)}$2`)
+      // SEO 2026-11-23 — the shell's own site-wide title and description tags
+      // go, so each page has ONE og:title / og:description / twitter:title (the
+      // page's), as the song pages already do; crawlers read the first one.
+      .replace(/<meta property="og:(title|description|url)" content="[^"]*"\s*\/?>\s*/g, '')
+      .replace(/<meta name="twitter:(title|description)" content="[^"]*"\s*\/?>\s*/g, '')
       .replace('</head>', head)
       .replace('<div id="seo-slot"></div>', content);
     const out = r.p === '/' ? join(DIST, 'index.html') : join(DIST, r.p.replace(/^\//, ''), 'index.html');

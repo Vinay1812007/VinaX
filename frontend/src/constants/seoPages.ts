@@ -52,3 +52,18 @@ export function languagePageSeo(lang: string): PageSeo {
     h1: `${L} Songs`,
   };
 }
+
+/**
+ * A mood page ("/telugu-romantic-songs"): the same words as moodTitle /
+ * moodDesc in backend/worker/functions/_lib/render.ts (keep in sync). The
+ * title already ends with "| VinaX", so the app does not add it again.
+ */
+export function moodPageSeo(label: string, mood: string, blurb: string, year = SEO_YEAR): { t: string; d: string } {
+  const L = cap(label);
+  const t =
+    [`${L} ${mood} Songs ${year} - Best ${L} ${mood} Hits | VinaX`, `${L} ${mood} Songs ${year} - Best ${mood} Hits | VinaX`].find((x) => x.length <= 70) ??
+    `${L} ${mood} Songs ${year} | VinaX`;
+  const first = `Listen to the best ${L} ${mood.toLowerCase()} songs of ${year} online: ${blurb}.`;
+  const more = 'Stream them free on VinaX, with no subscription.';
+  return { t, d: `${first} ${more}`.length <= 160 ? `${first} ${more}` : first };
+}

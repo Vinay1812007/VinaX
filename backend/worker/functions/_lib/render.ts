@@ -272,6 +272,25 @@ function hubLinks(lang: unknown): string {
   return `<h2>More ${esc(label)} music</h2><p><a href="/${l}-songs/">${esc(label)} songs</a>: trending, new releases, top artists and a guide to ${esc(label)} music. By mood: ${moods}.</p>`;
 }
 
+type QA = [string, string];
+
+/** SEO 2026-11-23 — the questions people ask about a page, as visible text. */
+function faqHtml(heading: string, faq: QA[]): string {
+  return faq.length ? `<h2>${esc(heading)}</h2>${faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}` : '';
+}
+
+/** The same questions as schema.org FAQPage (matches the visible text). */
+function faqLd(faq: QA[]): Array<Record<string, unknown>> {
+  return faq.length
+    ? [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }]
+    : [];
+}
+
+/** A "Track details" style list: <li><strong>Key:</strong> value</li>. */
+function detailsHtml(heading: string, rows: Array<[string, string]>): string {
+  return rows.length ? `<h2>${esc(heading)}</h2><ul>${rows.map(([k, v]) => `<li><strong>${esc(k)}:</strong> ${esc(v)}</li>`).join('')}</ul>` : '';
+}
+
 async function buildMeta(type: string, id: string): Promise<Meta | null> {
   if (type === 'album') {
     const j = await fetchJson(`albums?id=${encodeURIComponent(id)}`);
@@ -308,20 +327,43 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       `${music.length ? ` with music by ${listText(music.slice(0, 3))}` : artist ? ` by ${artist}` : ''}.` +
       (tracks.length ? ` Its ${tracks.length} song${tracks.length === 1 ? '' : 's'}${total ? ` run${tracks.length === 1 ? 's' : ''} about ${Math.max(1, Math.round(total / 60))} minutes in all` : ''}${released ? `, released on ${released}` : ''}${label ? ` by ${label}` : ''}.` : '') +
       (singers.length ? ` The voices on it include ${listText(singers.slice(0, 5))}${lyrics.length ? `, with lyrics by ${listText(lyrics.slice(0, 3))}` : ''}.` : '');
+    // SEO 2026-11-23 — "Album details" and the questions people ask, as on song pages.
+    const short = d.name.replace(SOUNDTRACK, '').trim() || d.name;
+    const L = lang ? capWord(lang) : '';
+    const isFilm = film || SOUNDTRACK.test(d.name);
+    const year = d.year ? String(d.year) : undefined;
     const credits: Array<[string, string]> = [
+      [isFilm ? 'Movie' : 'Album', `${short}${year ? ` (${year})` : ''}`],
+      ...(L ? [['Language', L] as [string, string]] : []),
+      ...(tracks.length ? [['Songs', String(tracks.length)] as [string, string]] : []),
+      ...(total ? [['Total duration', minutes(total)] as [string, string]] : []),
+      ...(released ? [['Release date', released] as [string, string]] : []),
       ...(music.length ? [['Music', listText(music)] as [string, string]] : []),
       ...(singers.length ? [['Singers', listText(singers)] as [string, string]] : []),
       ...(lyrics.length ? [['Lyrics', listText(lyrics)] as [string, string]] : []),
       ...(label ? [['Label', label] as [string, string]] : []),
       ...(copyright ? [['Copyright', copyright] as [string, string]] : []),
     ];
+    const names = tracks.map((t) => shortName(t.title));
+    const faq: QA[] = [
+      ...(tracks.length > 1
+        ? [[`How many songs are there in ${short}?`, `${short} has ${tracks.length} songs: ${listText(names.slice(0, 8))}${names.length > 8 ? ' and more' : ''}.`] as QA]
+        : []),
+      ...(music.length ? [[`Who composed the music for ${short}?`, `The music of ${short} is composed by ${listText(music)}.`] as QA] : []),
+      ...(singers.length ? [[`Who sang the songs in ${short}?`, `The songs in ${short} are sung by ${listText(singers.slice(0, 6))}${singers.length > 6 ? ' and others' : ''}.`] as QA] : []),
+      ...(lyrics.length ? [[`Who wrote the lyrics of ${short}?`, `The lyrics of ${short} are written by ${listText(lyrics.slice(0, 4))}.`] as QA] : []),
+      ...(released || year ? [[`When was ${short} released?`, `${short} was released ${released ? `on ${released}` : `in ${year}`}${label ? ` by ${label}` : ''}.`] as QA] : []),
+      [`Where can I listen to ${short} songs for free?`, `You can listen to all ${short} songs free on VinaX, on the web and in the Android app, with no subscription.`],
+    ];
     const albumSections =
       (trackRows.length ? `<h2>Track list</h2>${songList(trackRows, 40)}` : '') +
-      (credits.length ? `<h2>Credits</h2><dl>${credits.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '') +
+      detailsHtml('Album details', credits) +
+      faqHtml(`${short} songs FAQs`, faq) +
       hubLinks(lang);
     return {
       para: albumPara,
       sections: albumSections,
+      moreLd: faqLd(faq),
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, ...hubCrumbs(d.language), { name: String(d.name) }],
       title: albumTitle(d.name, d.year ? String(d.year) : undefined, lang, film),
       ogType: 'music.album',
@@ -341,7 +383,21 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
         name: d.name,
         image: image || undefined,
         datePublished: d.year ? String(d.year) : undefined,
+        inLanguage: langTag(lang),
         numTracks: tracks.length || undefined,
+        albumProductionType: isFilm ? 'https://schema.org/SoundtrackAlbum' : undefined,
+        // The songs, by name (no links: a song page may not be built).
+        track: tracks.length
+          ? {
+              '@type': 'ItemList',
+              numberOfItems: tracks.length,
+              itemListElement: tracks.slice(0, 40).map((t, i) => ({
+                '@type': 'ListItem',
+                position: i + 1,
+                item: { '@type': 'MusicRecording', name: t.title, duration: isoDuration(t.duration) },
+              })),
+            }
+          : undefined,
         byArtist: artist
           ? {
               '@type': 'MusicGroup',
@@ -366,7 +422,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, { name: String(d.name) }],
       title: `${d.name} — Playlist · VinaX`,
       ogType: 'music.playlist',
-      desc: `${d.name} — a playlist with ${tracks.length || 'many'} songs on VinaX. Free, no login.`,
+      desc: `Listen to ${d.name} online: a playlist of ${tracks.length || 'many'} songs. Stream it free on VinaX, with no subscription.`,
       image,
       h1: d.name,
       sub: `Playlist · ${tracks.length} songs`,
@@ -426,6 +482,15 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       (albums.length ? ` Albums and soundtracks on VinaX include ${listText(albums.slice(0, 3).map((a) => (a.year ? `${a.name} (${a.year})` : a.name)))}.` : '');
     const linkList = (items: Array<{ id: string; name: string; year: string }>, kind: string) =>
       `<ul>${items.map((a) => `<li><a href="/${kind}/${esc(slugify(a.name))}-${esc(a.id)}">${esc(a.name)}</a>${a.year ? ` (${esc(a.year)})` : ''}</li>`).join('')}</ul>`;
+    // SEO 2026-11-23 — the questions people ask about an artist.
+    const topNames = top.slice(0, 5).map((t) => shortName(t.title));
+    const albumNames = albums.slice(0, 5).map((a) => a.name.replace(SOUNDTRACK, '').trim() || a.name);
+    const faq: QA[] = [
+      ...(topNames.length ? [[`What are the top songs of ${d.name}?`, `The top songs of ${d.name} on VinaX include ${listText(topNames)}.`] as QA] : []),
+      ...(albumNames.length ? [[`Which albums and movies has ${d.name} worked on?`, `${d.name}'s albums and soundtracks include ${listText(albumNames)}.`] as QA] : []),
+      ...(main ? [[`In which languages does ${d.name} have songs?`, `${d.name}'s songs are mostly in ${capWord(main)}${others.length ? `, with others in ${listText(others.slice(0, 5))}` : ''}.`] as QA] : []),
+      [`Where can I listen to ${d.name} songs for free?`, `You can listen to ${d.name} songs free on VinaX, on the web and in the Android app, with no subscription.`],
+    ];
     const artistSections =
       (top.length ? `<h2>Top songs</h2>${songList(top, 20)}` : '') +
       (albums.length ? `<h2>Albums</h2>${linkList(albums, 'album')}` : '') +
@@ -434,10 +499,12 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       (similar.length
         ? `<h2>Similar artists</h2><p>${similar.map((a: { id: string; name: string }) => `<a href="/artist/${esc(slugify(a.name))}-${esc(a.id)}">${esc(a.name)}</a>`).join(' \u00b7 ')}</p>`
         : '') +
+      faqHtml(`${d.name} songs FAQs`, faq) +
       hubLinks(main);
     return {
       para: artistPara,
       sections: artistSections,
+      moreLd: faqLd(faq),
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, { name: String(d.name) }],
       title: artistTitle(d.name, main),
       ogType: 'profile',
@@ -452,6 +519,12 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
         '@id': `${ORIGIN}/artist/${slugify(d.name)}-${id}#artist`,
         name: d.name,
         image: image || undefined,
+        description: artistPara,
+        // Their best-known songs and albums, by name (no links: those pages may not be built).
+        track: top.length
+          ? { '@type': 'ItemList', numberOfItems: Math.min(top.length, 10), itemListElement: top.slice(0, 10).map((t, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'MusicRecording', name: t.title } })) }
+          : undefined,
+        album: albums.length ? albums.slice(0, 10).map((a) => ({ '@type': 'MusicAlbum', name: a.name, datePublished: a.year || undefined })) : undefined,
         url: `${ORIGIN}/artist/${slugify(d.name)}-${id}`,
         isPartOf: { '@id': `${ORIGIN}/#website` },
       },
@@ -547,7 +620,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     `<h2>Track details</h2><ul>${rows.map(([k, v]) => `<li><strong>${esc(k)}:</strong> ${esc(v)}</li>`).join('')}</ul>` +
     (albumTracks.length ? `<h2>More from ${esc(album ?? 'this album')}</h2>${songList(albumTracks, 15)}` : '') +
     (artistTracks.length ? `<h2>More by ${esc(prim[0]?.name || artist)}</h2>${songList(artistTracks, 10)}` : '') +
-    `<h2>${esc(short)} song FAQs</h2>${faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}` +
+    faqHtml(`${short} song FAQs`, faq) +
     hubLinks(lang);
   return {
     sections,
@@ -572,13 +645,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     para,
     tracks: [],
     links,
-    moreLd: [
-      {
-        '@context': 'https://schema.org',
-        '@type': 'FAQPage',
-        mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
-      },
-    ],
+    moreLd: faqLd(faq),
     jsonld: {
       '@context': 'https://schema.org',
       '@type': 'MusicRecording',
@@ -586,7 +653,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       name: d.name,
       image: image || undefined,
       duration: isoDuration(duration),
-      datePublished: year,
+      datePublished: /^\d{4}-\d{2}-\d{2}$/.test(String(d.releaseDate ?? mi.release_date ?? '')) ? String(d.releaseDate ?? mi.release_date) : year,
       inLanguage: langTag(lang),
       genre: typeof d.genre === 'string' ? d.genre : undefined,
       byArtist: artist
@@ -635,6 +702,22 @@ const HUB_MOODS: Record<string, { label: string; query: string; blurb: string }>
   melody: { label: 'Melody', query: 'melody hits', blurb: 'timeless melodies, soft and soulful' },
   workout: { label: 'Workout', query: 'workout gym motivation songs', blurb: 'high-energy tracks that keep you moving' },
 };
+
+/**
+ * SEO 2026-11-23 — a mood page's title and description, the year in them as
+ * people search ("telugu romantic songs 2026"). Same words as moodPageSeo in
+ * frontend/src/constants/seoPages.ts (keep in sync).
+ */
+export function moodTitle(label: string, mood: string, year: number): string {
+  const L = capWord(label);
+  for (const t of [`${L} ${mood} Songs ${year} - Best ${L} ${mood} Hits | VinaX`, `${L} ${mood} Songs ${year} - Best ${mood} Hits | VinaX`]) if (t.length <= 70) return t;
+  return `${L} ${mood} Songs ${year} | VinaX`;
+}
+
+export function moodDesc(label: string, mood: string, blurb: string, year: number): string {
+  const L = capWord(label);
+  return fitDesc([`Listen to the best ${L} ${mood.toLowerCase()} songs of ${year} online: ${blurb}.`, 'Stream them free on VinaX, with no subscription.'], 1);
+}
 
 /** /<lang>-<mood>-songs → {lang, mood} when it names a real hub, else null. */
 export function matchHub(pathname: string): { lang: string; mood: string } | null {
@@ -891,8 +974,9 @@ export async function renderHub(
     const path = `/${lang}-${mood}-songs`;
     const j = await fetchJson(`search/songs?query=${encodeURIComponent(`${lang} ${hub.query}`)}&limit=30`);
     const tracks = songRows(j?.data?.results ?? []);
-    const title = `${label} ${hub.label} Songs \u2014 Stream Free | VinaX`;
-    const desc = clampDesc(`The best ${label} ${hub.label.toLowerCase()} songs \u2014 ${hub.blurb}. Stream free on VinaX, no login, tuned to you.`);
+    const year = new Date().getFullYear();
+    const title = moodTitle(label, hub.label, year);
+    const desc = moodDesc(label, hub.label, hub.blurb, year);
     const jsonld = [
       {
         '@context': 'https://schema.org',
@@ -929,6 +1013,8 @@ export async function renderHub(
       `<meta property="og:title" content="${esc(title)}"/>` +
       `<meta property="og:description" content="${esc(desc)}"/>` +
       `<meta property="og:url" content="${ORIGIN}${path}"/>` +
+      `<meta property="og:image" content="${ORIGIN}/icons/icon-512.png"/><meta property="og:image:width" content="512"/><meta property="og:image:height" content="512"/>` +
+      `<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="${esc(title)}"/><meta name="twitter:description" content="${esc(desc)}"/>` +
       `<script type="application/ld+json">${jsonForScript(jsonld)}</script>` +
       `</head>`;
     const list = tracks.length
@@ -940,7 +1026,7 @@ export async function renderHub(
       .join(' \u00b7 ');
     const content =
       `<main id="seo-content"><h1>${esc(label)} ${esc(hub.label)} Songs</h1>` +
-      `<p>${esc(label)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, synced lyrics and offline downloads in the Android app.</p>` +
+      `<p>${esc(label)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX with no subscription, synced lyrics and offline downloads in the Android app.</p>` +
       `<p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label)} first. The <a href="/${lang}-songs/">${esc(label)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label)} music, its composers and its singers.</p>` +
       list +
       `<p>${siblings}</p>` +

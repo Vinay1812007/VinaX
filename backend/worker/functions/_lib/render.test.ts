@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { albumDesc, albumTitle, artistDesc, artistTitle, entityPage, fitDesc, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
+import { albumDesc, albumTitle, artistDesc, artistTitle, entityPage, fitDesc, moodDesc, moodTitle, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -103,7 +103,9 @@ describe('mood x language hubs', () => {
     );
     const res = await renderHub('telugu', 'romantic', new Request('https://www.vinaxmusic.online/telugu-romantic-songs'), env());
     const html = await res.text();
-    expect(html).toContain('<title>Telugu Romantic Songs — Stream Free | VinaX</title>');
+    expect(html).toContain(`<title>Telugu Romantic Songs ${new Date().getFullYear()} - Best Telugu Romantic Hits | VinaX</title>`);
+    expect(html).toContain('property="og:image" content="https://www.vinaxmusic.online/icons/icon-512.png"');
+    expect(html.toLowerCase()).not.toContain('no login');
     expect(html.match(/property="og:title"/g)).toHaveLength(1); // generic tags stripped here too
     expect(html).toContain('"@type":"CollectionPage"');
     expect(html).toContain('"@type":"ItemList"');
@@ -338,7 +340,12 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     expect(main).toContain('Sr Kalyanamandapam is a 2021 Telugu album');
     expect(main).toContain('Its 2 songs run about 8 minutes in all');
     expect(main).toContain('Choosale Kallaraa</a> — Sid Sriram (3:50)');
-    expect(main).toContain('<h2>Credits</h2>');
+    // SEO 2026-11-23 — Album details, FAQs, and the songs in the JSON-LD.
+    expect(main).toContain('<h2>Album details</h2><ul><li><strong>Album:</strong> Sr Kalyanamandapam (2021)</li><li><strong>Language:</strong> Telugu</li><li><strong>Songs:</strong> 2</li>');
+    expect(main).toContain('<h3>How many songs are there in Sr Kalyanamandapam?</h3><p>Sr Kalyanamandapam has 2 songs: Chukkala Chunni and Choosale Kallaraa.</p>');
+    expect(html).toContain('"@type":"FAQPage"');
+    expect(html).toContain('"track":{"@type":"ItemList","numberOfItems":2');
+    expect(html).toContain('"inLanguage":"te"');
   });
 
   it('an artist page has a written intro, albums, biography and similar artists', async () => {
@@ -349,6 +356,11 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     expect(main).toContain('href="/album/ala-vaikunthapurramuloo-al1"');
     expect(main).toContain('A playback singer from Hyderabad.');
     expect(main).toContain('href="/artist/sid-sriram-ar2"');
+    // SEO 2026-11-23 — FAQs, and top songs and albums in the JSON-LD.
+    expect(main).toContain('<h3>In which languages does Anurag Kulkarni have songs?</h3><p>Anurag Kulkarni\'s songs are mostly in Telugu, with others in Kannada.</p>');
+    expect(main).toContain('<h3>Where can I listen to Anurag Kulkarni songs for free?</h3>');
+    expect(html).toContain('"@type":"FAQPage"');
+    expect(html).toContain('"album":[{"@type":"MusicAlbum"');
   });
 });
 
@@ -439,6 +451,16 @@ describe('SEO 2026-11-23 — song pages are worded like JioSaavn\'s', () => {
   });
   it('adds whole sentences only, in a short form when the long one does not fit', () => {
     expect(fitDesc(['One.', 'Two.', 'x'.repeat(200), ['y'.repeat(200), 'Short.'], 'End.'])).toBe('One. Two. Short. End.');
+  });
+});
+
+describe('SEO 2026-11-23 — mood pages say the year', () => {
+  it('fits the title and description, and never promises no login', () => {
+    expect(moodTitle('telugu', 'Romantic', 2026)).toBe('Telugu Romantic Songs 2026 - Best Telugu Romantic Hits | VinaX');
+    expect(moodTitle('malayalam', 'Devotional', 2026)).toBe('Malayalam Devotional Songs 2026 - Best Devotional Hits | VinaX');
+    expect(moodDesc('telugu', 'Romantic', 'love songs and melodies for every heartbeat', 2026)).toBe(
+      'Listen to the best Telugu romantic songs of 2026 online: love songs and melodies for every heartbeat. Stream them free on VinaX, with no subscription.',
+    );
   });
 });
 

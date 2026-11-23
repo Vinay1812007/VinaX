@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, wantedPages, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, rowFrom, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, wantedPages, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, rowFrom, songSections, sitemapXml, pageImage } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -129,6 +129,16 @@ describe('SEO 2026-11 — links lead only to built pages, and the chart pages li
     expect(out['/top-songs']).toContain('"@type":"ItemList"');
     expect(out['/top-songs']).toContain('"url":"https://www.vinaxmusic.online/song/b-2"');
     expect(songSections([])).toEqual({});
+  });
+
+  it('lists each page\'s cover art in the sitemap (Google image extension)', () => {
+    expect(pageImage('<meta property="og:image" content="https://c.saavncdn.com/a/b-500x500.jpg"/>')).toBe('https://c.saavncdn.com/a/b-500x500.jpg');
+    expect(pageImage('<p>none</p>')).toBeNull();
+    const xml = sitemapXml(['/song/a-1', '/album/b-2'], new Map([['/song/a-1', 'https://c.saavncdn.com/x.jpg?a=1&b=2']]));
+    expect(xml).toContain('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"');
+    expect(xml).toContain('<url><loc>https://www.vinaxmusic.online/song/a-1</loc><image:image><image:loc>https://c.saavncdn.com/x.jpg?a=1&amp;b=2</image:loc></image:image></url>');
+    expect(xml).toContain('<url><loc>https://www.vinaxmusic.online/album/b-2</loc></url>');
+    expect(sitemapPaths(xml)).toEqual(['/song/a-1', '/album/b-2']); // image URLs are not pages
   });
 
   it('keeps a song name from closing the list\'s JSON-LD', () => {

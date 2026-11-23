@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { moodPageSeo } from '@/constants/seoPages';
 import { albumDesc, albumTitle, artistDesc, artistTitle, mainLanguage, songDesc, songTitle } from './songSeo';
 
 // The same cases as songTitle/songDesc in backend/worker/functions/_lib/render.test.ts:
@@ -50,5 +51,15 @@ describe('album and artist page titles, as on the prerendered page', () => {
     expect(mainLanguage([{ language: 'hindi' }, { language: 'hindi' }, { language: 'punjabi' }, { language: null }])).toBe('hindi');
     expect(artistTitle('Arijit Singh', 'hindi')).toBe('Arijit Singh Songs - Top Hindi Hits | VinaX');
     expect(artistDesc('Arijit Singh', ['Tu Mil Jaaye (From "KING")', 'Tum Hi Ho'])).toBe('Listen to Arijit Singh songs online: Tu Mil Jaaye, Tum Hi Ho and more. Stream free on VinaX.');
+  });
+});
+
+describe('mood pages, as on the prerendered page', () => {
+  it('uses the same words as render.ts moodTitle/moodDesc', () => {
+    expect(moodPageSeo('Telugu', 'Romantic', 'love songs and melodies for every heartbeat', 2026)).toEqual({
+      t: 'Telugu Romantic Songs 2026 - Best Telugu Romantic Hits | VinaX',
+      d: 'Listen to the best Telugu romantic songs of 2026 online: love songs and melodies for every heartbeat. Stream them free on VinaX, with no subscription.',
+    });
+    expect(moodPageSeo('Malayalam', 'Devotional', 'bhajans and devotional classics', 2026).t).toBe('Malayalam Devotional Songs 2026 - Best Devotional Hits | VinaX');
   });
 });

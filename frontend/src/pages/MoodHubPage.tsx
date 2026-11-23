@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { usePageMeta } from '@/hooks/usePageMeta';
+import { moodPageSeo } from '@/constants/seoPages';
 import { useJsonLd } from '@/hooks/useSeo';
 import { SITE_ORIGIN } from '@/utils/schema';
 import { songPath } from '@/utils/slug';
@@ -34,11 +35,9 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
   const [tone, Icon] = HUB_TONE[mood.slug] ?? [1, MusicIcon];
   const title = `${label} ${mood.label.toLowerCase()} songs`;
 
-  usePageMeta({
-    title: `${label} ${mood.label} Songs — Stream Free`,
-    description: `The best ${label} ${mood.label.toLowerCase()} songs — ${mood.blurb}. Stream free on VinaX, tuned to you.`,
-    canonicalPath: path,
-  });
+  // SEO 2026-11-23: the prerendered page's words (constants/seoPages.ts, render.ts moodTitle/moodDesc).
+  const seo = moodPageSeo(label, mood.label, mood.blurb);
+  usePageMeta({ title: seo.t, description: seo.d, canonicalPath: path });
   useJsonLd(
     songs.length > 0 && {
       '@context': 'https://schema.org',
