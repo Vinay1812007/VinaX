@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.3': {
+    title: 'VinaX AI menus fit every screen, a professional Settings page, and High contrast fixed',
+    changes: [
+      { type: 'fixed', text: 'On a phone, VinaX AI\'s model list and Thinking levels open as a sheet from the bottom of the screen, fully visible and easy to scroll, with the page dimmed behind.' },
+      { type: 'fixed', text: 'On a new chat the model and Thinking menus no longer open off the top of the screen or under the header, on phones or computers.' },
+      { type: 'fixed', text: 'On a phone the Thinking button is a clear icon again instead of a squeezed sliver.' },
+      { type: 'fixed', text: 'Settings is laid out like the rest of the app: the section list sits beside the page title, the section you are in is clearly marked, and each section is a clean card with one consistent button style.' },
+    ],
+  },
   '1.21.2': {
     title: 'Dark mode wears the VinaX logo colours',
     changes: [
