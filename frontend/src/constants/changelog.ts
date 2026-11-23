@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.6': {
+    title: 'Google SEO for album, artist and mood pages, image sitemap and cleaner tags',
+    changes: [
+      { type: 'improved', text: 'Album pages: Album details list, FAQs (how many songs, who composed, who sang, release date) with FAQPage JSON-LD, and the track list, language and SoundtrackAlbum type in the MusicAlbum JSON-LD.' },
+      { type: 'improved', text: 'Artist pages: FAQs (top songs, albums and movies, languages) with FAQPage JSON-LD; top songs, albums and a description in the MusicGroup JSON-LD.' },
+      { type: 'improved', text: 'Mood pages: "Telugu Romantic Songs 2026 - Best Telugu Romantic Hits" titles in the app and the static page, a share image, and no more "no login" claim (also gone from playlist descriptions).' },
+      { type: 'improved', text: 'entity-pages.xml lists each page\'s cover art (Google image sitemap).' },
+    ],
+  },
   '1.21.5': {
     title: 'Song titles name the singer, not a playlist-style album',
     changes: [
