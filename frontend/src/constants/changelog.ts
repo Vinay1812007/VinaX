@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.8': {
+    title: 'Account sync downloads your synced copy only when it has changed',
+    changes: [
+      { type: 'improved', text: 'Signed-in sync now downloads your library and settings only when another device has changed them.' },
+    ],
+  },
   '1.21.7': {
     title: 'Song pages name the right singer and keep films with a year in their name',
     changes: [
