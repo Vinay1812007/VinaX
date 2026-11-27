@@ -451,7 +451,7 @@ One file, `backend/supabase/schema.sql`, **schema version 25** (in `meta.schema`
 
 ### Public routes that read or write it
 
-`/api/events` (consent header), `/api/feedback`, `/api/room`, `/api/push/*`, `/api/auth/*`, `/api/account/data` (`409` on version conflict), `/api/profile*`, `/api/follow`, `/api/shared-playlist*`, `/api/charts/vinax` (`stats_trending`, >= 5 listeners, cached 3 h), `/api/ai/*` data, `/api/username`, plus reads of settings and status. Only `sign_ins` stores an IP (90 days); see [Data and privacy](#data-and-privacy).
+`/api/events` (consent header), `/api/feedback`, `/api/room`, `/api/push/*`, `/api/auth/*`, `/api/account/data` (`409` on version conflict; `GET ?have=<version>` sends the copy only when it is newer, which keeps Supabase egress down), `/api/profile*`, `/api/follow`, `/api/shared-playlist*`, `/api/charts/vinax` (`stats_trending`, >= 5 listeners, cached 3 h), `/api/ai/*` data, `/api/username`, plus reads of settings and status. Only `sign_ins` stores an IP (90 days); see [Data and privacy](#data-and-privacy).
 
 ## Owner console
 

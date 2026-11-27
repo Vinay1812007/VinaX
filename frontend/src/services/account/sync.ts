@@ -151,7 +151,9 @@ async function round(fetchImpl: typeof fetch): Promise<void> {
   setStatus('syncing');
   try {
     // Pull: merge the account's copy when it is newer than what this device saw.
-    const got = await fetchImpl(SYNC_ENDPOINT, { headers: auth, cache: 'no-store' });
+    // 1.21.8 — `have` names that version, so the server sends the ~40 KB copy
+    // only when it is newer (`unchanged` and no backup otherwise).
+    const got = await fetchImpl(`${SYNC_ENDPOINT}?have=${st.version}`, { headers: auth, cache: 'no-store' });
     if (got.status === 401) return setStatus('signed_out');
     if (got.status === 200) {
       const j = (await got.json()) as { version: number; backup: unknown };

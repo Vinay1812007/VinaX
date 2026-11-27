@@ -67,6 +67,29 @@ describe('/api/account/data', () => {
     expect(body.backup).toEqual(BACKUP);
   });
 
+  it('with ?have= the payload comes back only when the stored copy is newer', async () => {
+    fakeDb({ account_backups: [{ account_id: '1001', payload: BACKUP, version: 3, bytes: 10, updated_at: '2026-10-24T09:00:00Z' }] });
+    const get = async (have: string): Promise<Response> => {
+      const base = await req('GET');
+      return onRequestGet({ request: new Request(`https://example.test/api/account/data?have=${have}`, { headers: base.headers }), env: ENV });
+    };
+    const same = await get('3');
+    expect(same.status).toBe(200);
+    expect(await same.json()).toEqual({ version: 3, updatedAt: '2026-10-24T09:00:00Z', unchanged: true });
+    const ahead = await get('5');
+    expect(await ahead.json()).toMatchObject({ version: 3, unchanged: true });
+    const behind = await get('2');
+    expect(await behind.json()).toMatchObject({ version: 3, backup: BACKUP });
+    expect((await (await get('abc')).json()) as object).toMatchObject({ version: 3, backup: BACKUP });
+  });
+
+  it('with ?have= and nothing stored the answer is still 204', async () => {
+    fakeDb();
+    const base = await req('GET');
+    const res = await onRequestGet({ request: new Request('https://example.test/api/account/data?have=0', { headers: base.headers }), env: ENV });
+    expect(res.status).toBe(204);
+  });
+
   it('refuses a body that is not a backup, and one that is too large', async () => {
     fakeDb();
     expect((await onRequestPut({ request: await req('PUT', { version: 0, backup: { format: 'other' } }), env: ENV })).status).toBe(400);

@@ -1,8 +1,9 @@
 /**
  * The signed-in listener's synced data (Authorization: Bearer <session>).
  *
- *   GET /api/account/data
+ *   GET /api/account/data[?have=<version>]
  *     → 200 { version, updatedAt, backup }   the account's copy
+ *     → 200 { version, updatedAt, unchanged } with `have` >= the stored version: no payload
  *     → 204                                   nothing stored yet
  *   PUT /api/account/data { version, backup }
  *     → 200 { version, updatedAt }            stored; `version` is the new one
@@ -29,10 +30,28 @@ const copy = (row: Row) => ({ version: row.version, updatedAt: row.updated_at, b
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, PUT, OPTIONS' } });
 
+/** `?have=<version>`: the copy the device already holds (absent or bad = none). */
+export function haveVersion(request: Request): number | null {
+  const raw = new URL(request.url).searchParams.get('have');
+  if (raw === null || !/^\d{1,9}$/.test(raw)) return null;
+  return Number(raw);
+}
+
 export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const sub = await readSession(ctx.env, bearer(ctx.request));
   if (!sub) return json({ error: 'signed_out' }, 401);
   if (!dbConfigured(ctx.env)) return json({ error: 'unavailable' }, 503);
+  // 1.21.8 — a device that names the version it holds gets the payload only
+  // when the stored copy is newer. Pulls run several times a minute across
+  // listeners and the payload is ~40 KB, so sending it every time was most
+  // of the database's egress. Older apps send no `have` and get the copy.
+  const have = haveVersion(ctx.request);
+  if (have !== null) {
+    const head = await db.one<Row>(ctx.env, 'account_backups', q().eq('account_id', sub).select('version,updated_at'));
+    if (!head.ok) return json({ error: 'unavailable' }, 503);
+    if (!head.value) return new Response(null, { status: 204, headers: CORS });
+    if (head.value.version <= have) return json({ version: head.value.version, updatedAt: head.value.updated_at, unchanged: true });
+  }
   const r = await db.one<Row>(ctx.env, 'account_backups', q().eq('account_id', sub).select('version,updated_at,payload'));
   if (!r.ok) return json({ error: 'unavailable' }, 503);
   if (!r.value) return new Response(null, { status: 204, headers: CORS });
