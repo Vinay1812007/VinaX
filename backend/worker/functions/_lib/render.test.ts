@@ -305,6 +305,9 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     expect(main).toContain('<li><strong>Artist:</strong> Chaitan Bharadwaj</li>');
     expect(main).not.toContain('sung by');
     expect(main).not.toContain('Who sang');
+    // The description search engines show says the same, not only the page body.
+    expect(html).not.toContain('sung by');
+    expect(html).toMatch(/<meta name="description" content="[^"]*Chukkala Chunni is a Telugu language song by Chaitan Bharadwaj\./);
   });
 
   it('reads the raw catalog shape (more_info) too: album, credits and duration survive', async () => {
@@ -439,6 +442,10 @@ describe('SEO 2026-11-23 — song pages are worded like JioSaavn\'s', () => {
     // A year alone is not a compilation: "1942: A Love Story" and "2018" are films.
     expect(songTitle('Ek Ladki Ko Dekha', '1942: A Love Story', 'Kumar Sanu', 'hindi')).toBe('Ek Ladki Ko Dekha - Song by Kumar Sanu | 1942: A Love Story | VinaX');
     expect(songTitle('Vennelave', '2018', 'Kailas Menon', 'malayalam')).toBe('Vennelave - Song by Kailas Menon | 2018 | VinaX');
+    // Without a singer credit the primary artists are named with "by", not "sung by".
+    expect(songDesc('Jai Ho', 'Slumdog Millionaire', 'A. R. Rahman', 'hindi', 2008, 319, false)).toBe(
+      'Listen to Jai Ho online. Jai Ho is a Hindi language song by A. R. Rahman. Jai Ho, from the album Slumdog Millionaire, was released in the year 2008.',
+    );
     expect(songDesc('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe(
       'Listen to Phir Bhi Tumko Chaahunga online. Phir Bhi Tumko Chaahunga is a Hindi language song and is sung by Manoj Muntashir, Mithoon, Arijit Singh and more.',
     );

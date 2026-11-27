@@ -104,6 +104,19 @@ export function fitDesc(sentences: Array<string | string[] | false | undefined |
   return out;
 }
 
+const SINGER_ROLES = ['singer', 'playbacksinger', 'vocals'];
+
+/**
+ * Who a song's description names, as the prerendered page picks them
+ * (creditNames in render.ts): the credited singers, or else the primary
+ * artists, who are often the music director, so `sung` is false.
+ */
+export function songPeople(song: { artists: Array<{ name: string }>; subtitle?: string; credits?: Array<{ name: string; role?: string }> }): { artist: string; sung: boolean } {
+  const singers = [...new Set((song.credits ?? []).filter((c) => SINGER_ROLES.includes(String(c.role ?? '').toLowerCase())).map((c) => c.name).filter(Boolean))];
+  if (singers.length) return { artist: singers.join(', '), sung: true };
+  return { artist: song.artists.map((a) => a.name).join(', ') || song.subtitle || '', sung: false };
+}
+
 export function songDesc(
   name: string,
   album?: string | null,
@@ -111,6 +124,8 @@ export function songDesc(
   lang?: string | null,
   year?: string | number | null,
   duration?: number | null,
+  // false when `artist` is only the primary artists (no singer credit): often the music director, so "by", not "sung by".
+  sung = true,
 ): string {
   const L = lang ? cap(lang) : '';
   const people = artist ? someSingers(artist) : '';
@@ -118,7 +133,7 @@ export function songDesc(
   const own = !al || al.toLowerCase() === name.toLowerCase();
   return fitDesc([
     `Listen to ${name} online.`,
-    `${name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${people ? ` and is sung by ${people}` : ''}.`,
+    `${name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${people ? (sung ? ` and is sung by ${people}` : ` by ${people}`) : ''}.`,
     !own ? (year ? `${name}, from the album ${al}, was released in the year ${year}.` : `${name} is from the album ${al}.`) : year ? `It was released in the year ${year}.` : '',
     duration ? `The duration of the song is ${clock(duration)}.` : '',
     `Stream ${L ? `${L} ` : ''}songs free on VinaX.`,

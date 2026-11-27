@@ -3,7 +3,8 @@ import { albumPath, artistPath, extractSongId, songPath } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildSongBreadcrumbs, buildSongJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
-import { songDesc, songTitle } from '@/utils/songSeo';
+import { songDesc, songPeople, songTitle } from '@/utils/songSeo';
+import type { Song } from '@/types/music';
 import { useSongDetails, useSongSuggestions } from '@/features/player/useSongDetails';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
@@ -20,6 +21,12 @@ import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
 
 
+/** The description the prerendered page has: the singers when credited, else "by" the artists. */
+function descOf(song: Song): string {
+  const { artist, sung } = songPeople(song);
+  return songDesc(song.title, song.album?.name, artist, song.language, song.year, song.duration, sung);
+}
+
 export default function SongPage() {
   const { id: rawId } = useParams();
   const id = extractSongId(rawId);
@@ -32,7 +39,7 @@ export default function SongPage() {
   usePageMeta({
     // The prerendered page's words (utils/songSeo.ts), so the tab and search results agree.
     title: song ? songTitle(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language) : undefined,
-    description: song ? songDesc(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language, song.year, song.duration) : undefined,
+    description: song ? descOf(song) : undefined,
     image: song ? bestImage(song.images, 500) : undefined,
     type: 'music.song',
     canonicalPath,

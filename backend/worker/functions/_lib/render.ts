@@ -641,7 +641,8 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       ...(album ? [['music:album', album] as [string, string]] : []),
       ...(year ? [['music:release_date', year] as [string, string]] : []),
     ],
-    desc: songDesc(d.name, album, artist, lang, year, duration),
+    // The singers when the catalogue credits them, else the primary artists without "sung by".
+    desc: songDesc(d.name, album, singers.length ? singers.join(', ') : artist, lang, year, duration, singers.length > 0),
     image,
     h1: d.name,
     sub: `Song${artist ? ` · ${artist}` : ''}${album ? ` · ${album}` : ''}${lang ? ` · ${capWord(lang)}` : ''}${year ? ` · ${year}` : ''}`,
@@ -861,6 +862,8 @@ export function songDesc(
   lang: string | undefined,
   year?: string | number | null,
   duration?: number | null,
+  // false when `artist` is only the primary artists (no singer credit): often the music director, so "by", not "sung by".
+  sung = true,
 ): string {
   const L = lang ? capWord(lang) : '';
   const people = artist ? someSingers(artist) : '';
@@ -868,7 +871,7 @@ export function songDesc(
   const own = !al || al.toLowerCase() === name.toLowerCase();
   return fitDesc([
     `Listen to ${name} online.`,
-    `${name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${people ? ` and is sung by ${people}` : ''}.`,
+    `${name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${people ? (sung ? ` and is sung by ${people}` : ` by ${people}`) : ''}.`,
     !own ? (year ? `${name}, from the album ${al}, was released in the year ${year}.` : `${name} is from the album ${al}.`) : year ? `It was released in the year ${year}.` : '',
     duration ? `The duration of the song is ${clock(duration)}.` : '',
     `Stream ${L ? `${L} ` : ''}songs free on VinaX.`,

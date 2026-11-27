@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { moodPageSeo } from '@/constants/seoPages';
-import { albumDesc, albumTitle, artistDesc, artistTitle, mainLanguage, songDesc, songTitle } from './songSeo';
+import { albumDesc, albumTitle, artistDesc, artistTitle, mainLanguage, songDesc, songPeople, songTitle } from './songSeo';
 
 // The same cases as songTitle/songDesc in backend/worker/functions/_lib/render.test.ts:
 // the browser and the prerendered page must say the same thing.
@@ -19,6 +19,10 @@ describe('song page title and description', () => {
     // A year alone is not a compilation: "1942: A Love Story" and "2018" are films.
     expect(songTitle('Ek Ladki Ko Dekha', '1942: A Love Story', 'Kumar Sanu', 'hindi')).toBe('Ek Ladki Ko Dekha - Song by Kumar Sanu | 1942: A Love Story | VinaX');
     expect(songTitle('Vennelave', '2018', 'Kailas Menon', 'malayalam')).toBe('Vennelave - Song by Kailas Menon | 2018 | VinaX');
+    // Without a singer credit the primary artists are named with "by", not "sung by".
+    expect(songDesc('Jai Ho', 'Slumdog Millionaire', 'A. R. Rahman', 'hindi', 2008, 319, false)).toBe(
+      'Listen to Jai Ho online. Jai Ho is a Hindi language song by A. R. Rahman. Jai Ho, from the album Slumdog Millionaire, was released in the year 2008.',
+    );
     expect(songDesc('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe(
       'Listen to Phir Bhi Tumko Chaahunga online. Phir Bhi Tumko Chaahunga is a Hindi language song and is sung by Manoj Muntashir, Mithoon, Arijit Singh and more.',
     );
@@ -68,5 +72,18 @@ describe('mood pages, as on the prerendered page', () => {
     const long = moodPageSeo('Bhojpuri', 'Devotional', 'bhajans, aartis, chalisas, Chhath geet, Navratri songs, Shiv bhajans and the devotional classics every home plays', 2026).d;
     expect(long).toBe('Listen to the best Bhojpuri devotional songs of 2026 online: bhajans, aartis, chalisas, Chhath geet, Navratri songs, Shiv bhajans and the devotional…');
     expect(long.length).toBeLessThanOrEqual(160);
+  });
+});
+
+describe('songPeople', () => {
+  it('names the credited singers, like the prerendered page', () => {
+    expect(songPeople({
+      artists: [{ name: 'Manoj Muntashir' }, { name: 'Mithoon' }, { name: 'Arijit Singh' }],
+      credits: [{ name: 'Mithoon', role: 'music' }, { name: 'Arijit Singh', role: 'singer' }, { name: 'Arijit Singh', role: 'singer' }],
+    })).toEqual({ artist: 'Arijit Singh', sung: true });
+  });
+  it('falls back to the artists, without "sung by", when no one is credited as a singer', () => {
+    expect(songPeople({ artists: [{ name: 'A. R. Rahman' }], credits: [{ name: 'A. R. Rahman', role: 'music' }] })).toEqual({ artist: 'A. R. Rahman', sung: false });
+    expect(songPeople({ artists: [], subtitle: 'Various Artists' })).toEqual({ artist: 'Various Artists', sung: false });
   });
 });
