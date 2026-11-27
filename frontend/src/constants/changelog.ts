@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.21.7': {
+    title: 'Song pages name the right singer and keep films with a year in their name',
+    changes: [
+      { type: 'fixed', text: 'Song pages no longer say a music director sang a song when the catalogue has no singer credit.' },
+      { type: 'improved', text: 'Song descriptions in search results name the credited singers, not the composer or lyricist.' },
+      { type: 'improved', text: 'Song titles keep films whose name has a year in it, like "1942: A Love Story" or "2018".' },
+      { type: 'fixed', text: 'The Top Songs page no longer links to mood pages that do not exist.' },
+    ],
+  },
   '1.21.6': {
     title: 'Google SEO for album, artist and mood pages, image sitemap and cleaner tags',
     changes: [
