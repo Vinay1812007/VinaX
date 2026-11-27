@@ -77,16 +77,15 @@ for (const l of HUB_LANGS) {
     t: `${cap(l)} Songs — Latest Hits & Trending`,
     d: `Stream the latest ${cap(l)} songs free on VinaX — trending hits, new releases and evergreen favourites. Free, with no subscription.`,
     h1: `${cap(l)} Songs`,
-    ld: {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      '@id': `${ORIGIN}/${l}-songs#page`,
-      name: `${cap(l)} Songs`,
-      url: `${ORIGIN}/${l}-songs`,
-      isPartOf: { '@id': `${ORIGIN}/#website` },
-    },
+    // The trailing-slash URL, the same as the page's canonical and og:url.
+    ld: collection(`/${l}-songs`, `${cap(l)} Songs`),
   });
 }
+/** 'telugu' for /telugu-songs; null for /top-songs and any other non-language page. */
+const hubLang = (p) => {
+  const m = /^\/([a-z]+)-songs$/.exec(p);
+  return m && HUB_LANGS.includes(m[1]) ? m[1] : null;
+};
 
 const NAV_LINKS = [
   ['/', 'Home'], ['/discover', 'Discover'], ['/charts', 'Charts'], ['/top-songs', 'Top Songs'],
@@ -214,8 +213,8 @@ let bodies;
     // module the app itself uses, so the crawler and the tab say the same.
     const { LIST_PAGE_SEO, languagePageSeo } = await load('/src/constants/seoPages.ts');
     for (const r of ROUTES) {
-      const lang = /^\/([a-z]+)-songs$/.exec(r.p);
-      const seo = LIST_PAGE_SEO[r.p] ?? (lang ? languagePageSeo(lang[1]) : null);
+      const lang = hubLang(r.p);
+      const seo = LIST_PAGE_SEO[r.p] ?? (lang ? languagePageSeo(lang) : null);
       if (seo) Object.assign(r, seo);
     }
 
@@ -267,8 +266,8 @@ function bodyFor(r) {
   // 10.0 — the hero states the promise the app's welcome makes, in the same words.
   if (r.p === '/') return intro + HOME_PROMISE + bodies.home;
   if (r.p === '/help') return intro + bodies.help;
-  const hub = /^\/([a-z]+)-songs$/.exec(r.p);
-  if (hub) return intro + bodies.hub(hub[1], cap(hub[1]));
+  const hub = hubLang(r.p);
+  if (hub) return intro + bodies.hub(hub, cap(hub));
   return intro;
 }
 

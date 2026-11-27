@@ -63,7 +63,15 @@ export function moodPageSeo(label: string, mood: string, blurb: string, year = S
   const t =
     [`${L} ${mood} Songs ${year} - Best ${L} ${mood} Hits | VinaX`, `${L} ${mood} Songs ${year} - Best ${mood} Hits | VinaX`].find((x) => x.length <= 70) ??
     `${L} ${mood} Songs ${year} | VinaX`;
-  const first = `Listen to the best ${L} ${mood.toLowerCase()} songs of ${year} online: ${blurb}.`;
+  const first = clampDesc(`Listen to the best ${L} ${mood.toLowerCase()} songs of ${year} online: ${blurb}.`);
   const more = 'Stream them free on VinaX, with no subscription.';
   return { t, d: `${first} ${more}`.length <= 160 ? `${first} ${more}` : first };
+}
+
+/** Within 160 characters (Bing's limit), cut at a word: clampDesc in render.ts (keep in sync). */
+function clampDesc(s: string): string {
+  if (s.length <= 160) return s;
+  const cut = s.slice(0, 157);
+  const at = cut.lastIndexOf(' ');
+  return `${cut.slice(0, at > 120 ? at : 157)}…`;
 }

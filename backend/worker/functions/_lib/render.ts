@@ -390,7 +390,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
         track: tracks.length
           ? {
               '@type': 'ItemList',
-              numberOfItems: tracks.length,
+              numberOfItems: Math.min(tracks.length, 40),
               itemListElement: tracks.slice(0, 40).map((t, i) => ({
                 '@type': 'ListItem',
                 position: i + 1,
@@ -576,12 +576,15 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
   // ask about a song, answered from the same credits.
   const L = lang ? capWord(lang) : '';
   const short = d.name.replace(FROM, '').trim() || d.name;
-  const voices = singers.length ? singers : prim.map((a) => a.name).filter(Boolean);
+  // Only a singer credit says who sang it: the primary artist is often the
+  // music director, so without one the page says "by" and "Artist" instead.
+  const voices = singers;
+  const makers = voices.length ? [] : prim.map((a) => a.name).filter(Boolean);
   const film = filmOf(d.name) ?? filmOf(album) ?? (album && (starring.length > 0 || SOUNDTRACK.test(album)) ? album.replace(FROM, '').replace(SOUNDTRACK, '').trim() : undefined);
   const ownAlbum = !album || album.toLowerCase() === d.name.toLowerCase();
   const when = released ? `on ${released}` : year ? `in the year ${year}` : '';
   const para = [
-    `${d.name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${voices.length ? ` and is sung by ${listText(voices)}` : ''}.`,
+    `${d.name} is ${aAn(`${L ? `${L} language ` : ''}song`)}${voices.length ? ` and is sung by ${listText(voices)}` : makers.length ? ` by ${listText(makers)}` : ''}.`,
     !ownAlbum ? `${d.name}, from the album ${album}${when ? `, was released ${when}` : ''}${label ? ` under the ${label} label` : ''}.` : when ? `It was released ${when}${label ? ` under the ${label} label` : ''}.` : '',
     duration ? `The duration of the song is ${minutes(duration)}.` : '',
     music.length && lyrics.length
@@ -594,7 +597,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     ['Song', short],
     ...(film ? [['Movie', `${film}${year ? ` (${year})` : ''}`] as [string, string]] : []),
     ...(album && !ownAlbum && (!film || !album.toLowerCase().includes(film.toLowerCase())) ? [['Album', album] as [string, string]] : []),
-    ...(voices.length ? [[voices.length > 1 ? 'Singers' : 'Singer', listText(voices)] as [string, string]] : []),
+    ...(voices.length ? [[voices.length > 1 ? 'Singers' : 'Singer', listText(voices)] as [string, string]] : makers.length ? [['Artist', listText(makers)] as [string, string]] : []),
     ...(music.length ? [['Music', listText(music)] as [string, string]] : []),
     ...(lyrics.length ? [['Lyrics', listText(lyrics)] as [string, string]] : []),
     ...(starring.length ? [['Starring', listText(starring)] as [string, string]] : []),
@@ -764,9 +767,10 @@ const FROM = /\s*\(From\s+["“][^)]*\)/i;
 /**
  * A compilation's name, not a film's: "World Music Day 2026", "Wedding Love
  * Songs", "Romance Trending Now", "Arijit Singh Hits". A title names the singer
- * and language instead.
+ * and language instead. A year alone is not one: "1942: A Love Story"
+ * and "2018" are films; only "Day 2026", "Edition 2024" and the like count.
  */
-const COMPILATION = /\b(?:songs|hits|collection|jukebox|mix|mashup|vol\.?\s*\d+|trending|best of|top \d+|playlist|essentials|lofi|(?:19|20)\d\d)\b/i;
+const COMPILATION = /\b(?:songs|hits|collection|jukebox|mix|mashup|vol\.?\s*\d+|trending|best of|top \d+|playlist|essentials|lofi|(?:day|edition|special|party|countdown|rewind|recap|chart|charts|festival|season)\s+(?:19|20)\d\d)\b/i;
 
 /** "A, B and C"; past three names, "A, B, C and more". */
 function someSingers(artist: string): string {

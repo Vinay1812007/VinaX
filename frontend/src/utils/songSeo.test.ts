@@ -16,6 +16,9 @@ describe('song page title and description', () => {
     expect(songTitle('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe('Phir Bhi Tumko Chaahunga - Song by Manoj Muntashir and Mithoon | VinaX');
     expect(songTitle('Apna Bana Le', 'Wedding Love Songs', 'Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh', 'hindi')).toBe('Apna Bana Le - Song by Amitabh Bhattacharya and Sachin-Jigar | VinaX');
     expect(songTitle('Ve Maahi', 'Romance Trending Now', 'Arijit Singh, Asees Kaur', 'hindi')).toBe('Ve Maahi - Song by Arijit Singh and Asees Kaur | Hindi Song | VinaX');
+    // A year alone is not a compilation: "1942: A Love Story" and "2018" are films.
+    expect(songTitle('Ek Ladki Ko Dekha', '1942: A Love Story', 'Kumar Sanu', 'hindi')).toBe('Ek Ladki Ko Dekha - Song by Kumar Sanu | 1942: A Love Story | VinaX');
+    expect(songTitle('Vennelave', '2018', 'Kailas Menon', 'malayalam')).toBe('Vennelave - Song by Kailas Menon | 2018 | VinaX');
     expect(songDesc('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe(
       'Listen to Phir Bhi Tumko Chaahunga online. Phir Bhi Tumko Chaahunga is a Hindi language song and is sung by Manoj Muntashir, Mithoon, Arijit Singh and more.',
     );
@@ -61,5 +64,9 @@ describe('mood pages, as on the prerendered page', () => {
       d: 'Listen to the best Telugu romantic songs of 2026 online: love songs and melodies for every heartbeat. Stream them free on VinaX, with no subscription.',
     });
     expect(moodPageSeo('Malayalam', 'Devotional', 'bhajans and devotional classics', 2026).t).toBe('Malayalam Devotional Songs 2026 - Best Devotional Hits | VinaX');
+    // A first sentence past 160 characters is cut at a word, as moodDesc's fitDesc cuts it at the edge.
+    const long = moodPageSeo('Bhojpuri', 'Devotional', 'bhajans, aartis, chalisas, Chhath geet, Navratri songs, Shiv bhajans and the devotional classics every home plays', 2026).d;
+    expect(long).toBe('Listen to the best Bhojpuri devotional songs of 2026 online: bhajans, aartis, chalisas, Chhath geet, Navratri songs, Shiv bhajans and the devotional…');
+    expect(long.length).toBeLessThanOrEqual(160);
   });
 });

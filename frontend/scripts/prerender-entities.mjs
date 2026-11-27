@@ -406,7 +406,7 @@ export function songSections(rows, year = new Date().getFullYear()) {
   }
   if (news.length) {
     const list = news.slice(0, 40);
-    out['/new-releases'] = `<h2>New songs ${newsWhen}</h2>${songOl(list)}${byLang(news, (L) => `New ${L} songs`, 8)}${itemListLd(`New Songs ${year} on VinaX`, list)}`;
+    out['/new-releases'] = `<h2>New songs ${newsWhen}</h2>${songOl(list)}${byLang(news, (L) => `New ${L} songs`, 8)}${itemListLd(`New Songs ${newsWhen} on VinaX`, list)}`;
   }
   for (const l of langs) {
     const L = capWord(l);

@@ -42,9 +42,10 @@ const shortName = (t: string): string => t.replace(/\s*[([][^)\]]*[)\]]/g, '').t
 /**
  * A compilation's name, not a film's: "World Music Day 2026", "Wedding Love
  * Songs", "Romance Trending Now", "Arijit Singh Hits". A title names the singer
- * and language instead.
+ * and language instead. A year alone is not one: "1942: A Love Story"
+ * and "2018" are films; only "Day 2026", "Edition 2024" and the like count.
  */
-const COMPILATION = /\b(?:songs|hits|collection|jukebox|mix|mashup|vol\.?\s*\d+|trending|best of|top \d+|playlist|essentials|lofi|(?:19|20)\d\d)\b/i;
+const COMPILATION = /\b(?:songs|hits|collection|jukebox|mix|mashup|vol\.?\s*\d+|trending|best of|top \d+|playlist|essentials|lofi|(?:day|edition|special|party|countdown|rewind|recap|chart|charts|festival|season)\s+(?:19|20)\d\d)\b/i;
 
 /** "A, B and C"; past three names, "A, B, C and more". */
 function someSingers(artist: string): string {

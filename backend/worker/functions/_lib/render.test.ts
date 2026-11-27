@@ -294,6 +294,19 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     expect(words(html)).toBeGreaterThan(90);
   });
 
+  it('a song with no singer credit does not say who sang it', async () => {
+    // The primary artist is often the music director: "sung by" would name the wrong person.
+    const UNSUNG = { data: [{ ...CREDITED.data[0], artists: { primary: [{ id: 'ar8', name: 'Chaitan Bharadwaj' }], all: [{ id: 'ar8', name: 'Chaitan Bharadwaj', role: 'music' }] } }] };
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) =>
+      String(input).includes('/songs/') ? Promise.resolve(Response.json(UNSUNG)) : catalog(input));
+    const html = await (await renderEntity('song', 'chukkala-chunni-abc123', req(), env())).text();
+    const main = mainOf(html);
+    expect(main).toContain('Chukkala Chunni is a Telugu language song by Chaitan Bharadwaj.');
+    expect(main).toContain('<li><strong>Artist:</strong> Chaitan Bharadwaj</li>');
+    expect(main).not.toContain('sung by');
+    expect(main).not.toContain('Who sang');
+  });
+
   it('reads the raw catalog shape (more_info) too: album, credits and duration survive', async () => {
     const raw = {
       data: [{
@@ -423,6 +436,9 @@ describe('SEO 2026-11-23 — song pages are worded like JioSaavn\'s', () => {
     expect(songTitle('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe('Phir Bhi Tumko Chaahunga - Song by Manoj Muntashir and Mithoon | VinaX');
     expect(songTitle('Apna Bana Le', 'Wedding Love Songs', 'Amitabh Bhattacharya, Sachin-Jigar, Arijit Singh', 'hindi')).toBe('Apna Bana Le - Song by Amitabh Bhattacharya and Sachin-Jigar | VinaX');
     expect(songTitle('Ve Maahi', 'Romance Trending Now', 'Arijit Singh, Asees Kaur', 'hindi')).toBe('Ve Maahi - Song by Arijit Singh and Asees Kaur | Hindi Song | VinaX');
+    // A year alone is not a compilation: "1942: A Love Story" and "2018" are films.
+    expect(songTitle('Ek Ladki Ko Dekha', '1942: A Love Story', 'Kumar Sanu', 'hindi')).toBe('Ek Ladki Ko Dekha - Song by Kumar Sanu | 1942: A Love Story | VinaX');
+    expect(songTitle('Vennelave', '2018', 'Kailas Menon', 'malayalam')).toBe('Vennelave - Song by Kailas Menon | 2018 | VinaX');
     expect(songDesc('Phir Bhi Tumko Chaahunga', 'World Music Day 2026', 'Manoj Muntashir, Mithoon, Arijit Singh, Shashaa Tirupati', 'hindi')).toBe(
       'Listen to Phir Bhi Tumko Chaahunga online. Phir Bhi Tumko Chaahunga is a Hindi language song and is sung by Manoj Muntashir, Mithoon, Arijit Singh and more.',
     );
